@@ -89,9 +89,6 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 
 ## Docs
 
-- Rust consumer guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\Rust Consumer.md`
-- .NET consumer guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\DotNET Consumer.md`
-- .NET release guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\Releasing Rheo.Storage for DotNET.md`
 - [dhara_dhbin README](./dhara_dhbin/README.md)
 - [dhara_storage README](./dhara_storage/README.md)
 - [dhara_storage_native README](./dhara_storage_native/README.md)

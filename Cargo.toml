@@ -13,8 +13,8 @@ version = "0.4.0"
 edition = "2024"
 authors = ["Naveen Dharmathunga <dasheenaveen@outlook.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/D-Naveenz/rheo_storage"
-homepage = "https://github.com/D-Naveenz/rheo_storage"
+repository = "https://github.com/D-Naveenz/dhara_storage"
+homepage = "https://github.com/D-Naveenz/dhara_storage"
 
 [workspace.dependencies]
 dhara_dhbin = { version = "0.4.0", path = "dhara_dhbin" }

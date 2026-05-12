@@ -1,21 +1,30 @@
-# Dhara Storage Agents
+# AGENTS.md
+
+This workspace can use MindVault as optional local AI memory. Keep this file short: it is a router and quick reference, not the knowledge base.
+
+## MindVault
+
+- Use `$mindvault` / MindVault MCP to resolve the local vault and workspace evidence.
+- Workspace identity is stored in `mindvault.toml` as `workspace_id`.
+- If MindVault tools are unavailable, continue from repo files only.
+- Store durable lessons and cross-workspace principles in MindVault, not in this repository.
 
 ## Purpose
-- `dhara_storage` is the Rust-first rewrite of `Dhara.Storage`.
-- The workspace now includes the core runtime, the reusable `dhara_tool` platform, and the active .NET/FFI delivery layers.
-- Canonical AI-operational knowledge for this workspace lives in MindVault, not in repo-local notes.
 
-## Vault Location
-- `%USERPROFILE%\OneDrive\Documents\MindVault`
+- `dhara_storage` is the Rust-native core runtime for Dhara Storage.
+- `dhara_storage_native` is the C ABI layer for managed/native hosts.
+- `bindings/dotnet/Dhara.Storage` is the active .NET binding project.
+- `dhara_tool` and `dhara.config.toml` are the supported operator surface for config sync, verification, packaging, and publishing flows.
 
-## Read Order
-1. `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\Home.md`
-2. `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\Overview.md`
-3. `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\Guardrails.md`
+## Local Commands
 
-## Local Caveats
-- Treat repo code, manifests, tests, and workflow files as the source of truth if a vault note drifts.
+- Verify CI-equivalent checks: `cargo run -p dhara_tool -- verify ci`
+- Verify NuGet package shape: `cargo run -p dhara_tool -- verify package`
+- Sync shared config into manifests: `cargo run -p dhara_tool -- config sync`
+
+## Local Guardrails
+
 - Keep `dhara_storage` Rust-native; solve .NET interop constraints in `dhara_storage_native` and `bindings/dotnet/Dhara.Storage`.
-- Keep `dhara_tool` and `dhara.config.toml` as the supported operator surface for config sync, verification, packaging, and publishing flows.
 - Treat Windows as the primary runtime and CI target unless a concrete portability goal says otherwise.
-- Avoid rebuilding repo-local AI docs unless a non-AI publishing or tooling requirement explicitly depends on them.
+- Repo code, manifests, tests, and workflow files win if a vault note drifts.
+- Do not add local private paths or personal vault locations to this file.
