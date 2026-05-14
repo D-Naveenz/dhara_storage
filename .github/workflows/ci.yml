@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  verify:
-    name: verify ci (windows)
+  integrity:
+    name: project integrity (windows)
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -38,8 +38,8 @@ jobs:
       - name: Verify CI
         run: cargo run -p dhara_tool -- verify ci
 
-  docs:
-    name: verify docs (windows)
+  publish-readiness:
+    name: publish readiness (windows)
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -47,8 +47,13 @@ jobs:
         with:
           lfs: true
 
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Add Rust targets
+        run: rustup target add aarch64-pc-windows-msvc
 
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v5
@@ -58,5 +63,17 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build docs for Dhara crates
-        run: cargo run -p dhara_tool -- verify docs
+      - name: Verify publish readiness
+        shell: pwsh
+        run: |
+          $vsInstall = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($vsInstall)) {
+            throw "Visual Studio with x64 and ARM64 MSVC build tools was not found."
+          }
+
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
+          $command = "call `"$vcvars`" x64_arm64 && cargo run -p dhara_tool -- verify release-config && cargo run -p dhara_tool -- verify docs && cargo run -p dhara_tool -- verify package"
+          & cmd.exe /d /c $command
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }

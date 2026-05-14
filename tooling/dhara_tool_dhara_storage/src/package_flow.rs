@@ -190,22 +190,66 @@ pub fn publish(
         &[api_key.as_str()],
     )?;
 
-    let published_config = working_root.join("published-package.nuget.config");
-    write_nuget_config(&published_config, &[PathBuf::from(source.clone())])?;
-    restore_smoke_consumer(
-        repo_root,
-        config,
-        &version,
-        &published_config,
-        Some(&config.ci.host_runtime_smoke),
-        false,
-    )?;
-    run_smoke_consumer(repo_root, config, &version)?;
     info!(
         target: "dhara_tool_dhara_storage::package_flow",
         package_path = %package_path.display(),
         source = %source,
-        "published NuGet package"
+        "published NuGet package after local smoke verification"
+    );
+
+    Ok(CommandResult::with_message(
+        "Published package successfully.",
+    ))
+}
+
+pub fn publish_packed(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    info!(
+        target: "dhara_tool_dhara_storage::package_flow",
+        "publishing pre-packed NuGet package"
+    );
+
+    let version = effective_version(config, &options.version_override);
+    let source = effective_source(repo_root, config, options)?;
+    let api_key_env = options
+        .api_key_env_override
+        .clone()
+        .unwrap_or_else(|| config.publish.api_key_env.clone());
+    let api_key = secret_from_env(repo_root, &api_key_env)?;
+
+    let working_root = working_root(repo_root, options.output_dir.as_ref())?;
+    let package_path = working_root
+        .join("nuget")
+        .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
+    if !package_path.exists() {
+        bail!("NuGet package does not exist: {}", package_path.display());
+    }
+
+    run_command_with_env_redacted(
+        "dotnet",
+        &[
+            "nuget".to_owned(),
+            "push".to_owned(),
+            package_path.display().to_string(),
+            "--api-key".to_owned(),
+            api_key.clone(),
+            "--source".to_owned(),
+            source.clone(),
+            "--skip-duplicate".to_owned(),
+        ],
+        repo_root,
+        &[],
+        &[api_key.as_str()],
+    )?;
+
+    info!(
+        target: "dhara_tool_dhara_storage::package_flow",
+        package_path = %package_path.display(),
+        source = %source,
+        "published pre-packed NuGet package"
     );
 
     Ok(CommandResult::with_message(

@@ -262,6 +262,67 @@ fn ui_for_command(
             quick_run: false,
             supports_cancel: true,
         },
+        "release.run" => CommandUi {
+            description: "Run the Cargo-first release workflow, with optional NuGet publishing.",
+            fields: vec![
+                FieldSpec {
+                    key: "configuration",
+                    label: "Configuration",
+                    help: "Build configuration used when NuGet packaging is enabled.",
+                    kind: FieldKind::Select(CONFIGURATIONS),
+                    binding: ArgBinding::FlagValue("--configuration"),
+                    required: true,
+                    default_value: Some("Release"),
+                },
+                FieldSpec {
+                    key: "source",
+                    label: "Source",
+                    help: "Optional NuGet source URL override.",
+                    kind: FieldKind::Text,
+                    binding: ArgBinding::FlagValue("--source"),
+                    required: false,
+                    default_value: None,
+                },
+                FieldSpec {
+                    key: "api_key_env",
+                    label: "API key env",
+                    help: "Optional environment-variable name containing the NuGet API key.",
+                    kind: FieldKind::Text,
+                    binding: ArgBinding::FlagValue("--api-key-env"),
+                    required: false,
+                    default_value: None,
+                },
+                FieldSpec {
+                    key: "dry_run",
+                    label: "Dry run",
+                    help: "Run Cargo and NuGet release validation without publishing.",
+                    kind: FieldKind::Boolean,
+                    binding: ArgBinding::Switch("--dry-run"),
+                    required: false,
+                    default_value: Some("false"),
+                },
+                FieldSpec {
+                    key: "skip_cargo",
+                    label: "Skip Cargo",
+                    help: "Skip the Cargo release phase when crates were already published.",
+                    kind: FieldKind::Boolean,
+                    binding: ArgBinding::Switch("--skip-cargo"),
+                    required: false,
+                    default_value: Some("false"),
+                },
+                FieldSpec {
+                    key: "skip_nuget",
+                    label: "Skip NuGet",
+                    help: "Publish or dry-run only the Cargo release.",
+                    kind: FieldKind::Boolean,
+                    binding: ArgBinding::Switch("--skip-nuget"),
+                    required: false,
+                    default_value: Some("false"),
+                },
+            ],
+            quick_run: false,
+            supports_cancel: true,
+        },
         _ => CommandUi {
             description: summary,
             fields: {
@@ -405,6 +466,7 @@ mod tests {
         assert!(commands.contains(&"defs.inspect-trid-xml"));
         assert!(commands.contains(&"verify.package"));
         assert!(commands.contains(&"release.publish"));
+        assert!(commands.contains(&"release.run"));
         assert!(
             registry
                 .commands()
