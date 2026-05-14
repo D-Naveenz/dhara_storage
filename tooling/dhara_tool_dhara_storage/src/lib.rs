@@ -42,5 +42,5 @@ pub use runner::{
 };
 pub use support::{
     inspect_package_entries, run_command, run_command_expect_failure, run_command_with_env,
-    write_nuget_config,
+    run_command_with_env_redacted, write_nuget_config,
 };

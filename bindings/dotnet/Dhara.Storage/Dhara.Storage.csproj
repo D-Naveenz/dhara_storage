@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -8,52 +8,46 @@
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
-    <StagedNativeRoot Condition="'$(StagedNativeRoot)' == ''" />
-    <NativeConfiguration Condition="'$(Configuration)' == 'Release'">release</NativeConfiguration>
-    <NativeConfiguration Condition="'$(NativeConfiguration)' == ''">debug</NativeConfiguration>
-    <NativeCargoArgs Condition="'$(Configuration)' == 'Release'">--release</NativeCargoArgs>
+    <StagedNativeRoot Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" />
+    <NativeConfiguration Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">release</NativeConfiguration>
+    <NativeConfiguration Condition="&apos;$(NativeConfiguration)&apos; == &apos;&apos;">debug</NativeConfiguration>
+    <NativeCargoArgs Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">--release</NativeCargoArgs>
     <NativeDllPath>$(RepoRoot)target\$(NativeConfiguration)\dhara_storage_native.dll</NativeDllPath>
-  </PropertyGroup>
-
-  <PropertyGroup>
     <PackageId>Dhara.Storage</PackageId>
     <Version>0.4.0</Version>
     <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
     <RepositoryUrl>https://github.com/D-Naveenz/dhara_storage</RepositoryUrl>
     <PackageProjectUrl>https://github.com/D-Naveenz/dhara_storage</PackageProjectUrl>
     <Authors>Naveen Dharmathunga</Authors>
-    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageTags>storage;ffi;rust;analysis;file-handling;directory-management;watching</PackageTags>
+    <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
   </PropertyGroup>
-  
-  <ItemGroup Condition="'$(StagedNativeRoot)' != ''">
-    <None Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" Pack="true" Visible="false" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" />
+  <PropertyGroup>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+  <ItemGroup Condition="&apos;$(StagedNativeRoot)&apos; != &apos;&apos;">
+    <None PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Pack="true" Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" Visible="false" />
   </ItemGroup>
-  
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
   </ItemGroup>
-  
-  <Target BeforeTargets="BeforeBuild" Condition="'$(StagedNativeRoot)' == ''" Name="BuildNativeLibrary">
-    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dhara_storage_native $(NativeCargoArgs)" />
+  <Target BeforeTargets="BeforeBuild" Name="BuildNativeLibrary" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+    <Exec Command="cargo build -p dhara_storage_native $(NativeCargoArgs)" WorkingDirectory="$(RepoRoot)" />
   </Target>
-  
-  <Target BeforeTargets="Pack" Condition="'$(StagedNativeRoot)' == ''" Name="ValidatePackNativeAssets">
+  <Target BeforeTargets="Pack" Name="ValidatePackNativeAssets" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
     <Error Text="Packing Dhara.Storage requires staged native assets for all supported runtimes. Use the repo packaging flow so both win-x64 and win-arm64 assets are included." />
   </Target>
-  
-  <Target Condition="'$(StagedNativeRoot)' == ''" AfterTargets="Build" Name="CopyNativeLibraryToOutput">
-    <Copy SkipUnchangedFiles="true" DestinationFolder="$(OutDir)" SourceFiles="$(NativeDllPath)" />
+  <Target Name="CopyNativeLibraryToOutput" AfterTargets="Build" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+    <Copy DestinationFolder="$(OutDir)" SourceFiles="$(NativeDllPath)" SkipUnchangedFiles="true" />
   </Target>
-  
   <ItemGroup>
-    <None Include="..\..\..\..\..\Dhara.AI\assets\branding\dhara-logo-colored_sm.png">
-      <Pack>True</Pack>
-      <PackagePath>\</PackagePath>
-    </None>
-    <None Include="build\Dhara.Storage.targets" Pack="True" PackagePath="build\" />
-    <None Include="README.md" Pack="true" PackagePath="\" />
+    <None Include="build\Dhara.Storage.targets" PackagePath="build\" Pack="True" />
+  </ItemGroup>
+  <ItemGroup>
+    <None PackagePath="\" Pack="true" Include="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Pack="true" Include="..\..\..\assets\branding\dhara-logo-colored_sm.png" PackagePath="\" />
   </ItemGroup>
 </Project>

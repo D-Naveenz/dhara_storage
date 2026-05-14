@@ -51,11 +51,22 @@ pub fn run_command_with_env(
     cwd: &Path,
     envs: &[(&str, &str)],
 ) -> Result<()> {
-    emit_stdout_line(format!("> {}", command_display(program, args)));
+    run_command_with_env_redacted(program, args, cwd, envs, &[])
+}
+
+pub fn run_command_with_env_redacted(
+    program: &str,
+    args: &[String],
+    cwd: &Path,
+    envs: &[(&str, &str)],
+    redacted_values: &[&str],
+) -> Result<()> {
+    let display_args = redact_args(args, redacted_values);
+    emit_stdout_line(format!("> {}", command_display(program, &display_args)));
     info!(
         target: "dhara_tool_dhara_storage::support",
         program,
-        args = args.join(" "),
+        args = display_args.join(" "),
         cwd = %cwd.display(),
         env_count = envs.len(),
         "running command with environment overrides"
@@ -65,7 +76,7 @@ pub fn run_command_with_env(
         bail!(
             "command failed with status {}: {}",
             status,
-            command_display(program, args)
+            command_display(program, &display_args)
         );
     }
     debug!(
@@ -75,6 +86,21 @@ pub fn run_command_with_env(
         "command completed successfully"
     );
     Ok(())
+}
+
+fn redact_args(args: &[String], redacted_values: &[&str]) -> Vec<String> {
+    args.iter()
+        .map(|arg| {
+            if redacted_values
+                .iter()
+                .any(|value| !value.is_empty() && arg == value)
+            {
+                "<redacted>".to_owned()
+            } else {
+                arg.clone()
+            }
+        })
+        .collect()
 }
 
 pub fn run_command_expect_failure(
