@@ -335,7 +335,8 @@ fn restore_smoke_consumer(
         publish_aot,
         "restoring smoke consumer"
     );
-    remove_global_package_cache(&config.nuget.package_id, version)?;
+    remove_package_cache(repo_root, &config.nuget.package_id, version)?;
+    reset_smoke_consumer_outputs(repo_root, config)?;
     let mut args = vec![
         "restore".to_owned(),
         config.ci.smoke_project.clone(),
@@ -346,6 +347,7 @@ fn restore_smoke_consumer(
     if let Some(runtime) = runtime {
         args.push("--runtime".to_owned());
         args.push(runtime.to_owned());
+        args.push(format!("-p:Platform={}", platform(runtime)?));
         args.push(format!("-p:PlatformTarget={}", platform_target(runtime)?));
     }
     if publish_aot {
@@ -371,6 +373,7 @@ fn run_smoke_consumer(repo_root: &Path, config: &DharaRepoConfig, version: &str)
             "Release".to_owned(),
             "--runtime".to_owned(),
             config.ci.host_runtime_smoke.clone(),
+            format!("-p:Platform={}", platform(&config.ci.host_runtime_smoke)?),
             format!(
                 "-p:PlatformTarget={}",
                 platform_target(&config.ci.host_runtime_smoke)?
@@ -395,7 +398,7 @@ fn verify_unsupported_runtime_rejected(
         unsupported_runtime = "win-x86",
         "verifying unsupported runtime rejection"
     );
-    remove_global_package_cache(&config.nuget.package_id, version)?;
+    remove_package_cache(repo_root, &config.nuget.package_id, version)?;
     run_command_expect_failure(
         "dotnet",
         &[
@@ -405,6 +408,7 @@ fn verify_unsupported_runtime_rejected(
             "Release".to_owned(),
             "--runtime".to_owned(),
             "win-x86".to_owned(),
+            "-p:Platform=x86".to_owned(),
             "-p:PlatformTarget=x86".to_owned(),
             format!("--configfile={}", nuget_config.display()),
             format!("-p:DharaStoragePackageVersion={version}"),
@@ -439,6 +443,7 @@ fn publish_aot_smoke_consumer(
             "Release".to_owned(),
             "--runtime".to_owned(),
             runtime.to_owned(),
+            format!("-p:Platform={}", platform(runtime)?),
             format!("-p:PlatformTarget={}", platform_target(runtime)?),
             "--self-contained".to_owned(),
             "true".to_owned(),
@@ -459,6 +464,65 @@ fn publish_aot_smoke_consumer(
         &[],
         repo_root,
     )
+}
+
+fn remove_package_cache(repo_root: &Path, package_id: &str, version: &str) -> Result<()> {
+    let mut package_roots = Vec::new();
+    if let Some(path) = std::env::var_os("NUGET_PACKAGES") {
+        package_roots.push(PathBuf::from(path));
+    }
+    if let Some(path) = std::env::var_os("DOTNET_CLI_HOME") {
+        package_roots.push(PathBuf::from(path).join(".nuget").join("packages"));
+    }
+    if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        package_roots.push(PathBuf::from(home).join(".nuget").join("packages"));
+    }
+    package_roots.push(repo_root.join(".dotnet").join(".nuget").join("packages"));
+
+    package_roots.sort();
+    package_roots.dedup();
+
+    for package_root in package_roots {
+        let package_path = package_root
+            .join(package_id.to_ascii_lowercase())
+            .join(version);
+        if package_path.exists() {
+            fs::remove_dir_all(&package_path).with_context(|| {
+                format!(
+                    "failed to remove stale package cache at {}",
+                    package_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn reset_smoke_consumer_outputs(repo_root: &Path, config: &DharaRepoConfig) -> Result<()> {
+    let project_path = repo_root.join(&config.ci.smoke_project);
+    let project_dir = project_path.parent().with_context(|| {
+        format!(
+            "smoke project path must have a parent: {}",
+            project_path.display()
+        )
+    })?;
+    for directory in ["bin", "obj"] {
+        let path = project_dir.join(directory);
+        if path.exists() {
+            fs::remove_dir_all(&path)
+                .with_context(|| format!("failed to remove {}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+fn platform(runtime: &str) -> Result<&'static str> {
+    match runtime {
+        "win-x64" => Ok("x64"),
+        "win-arm64" => Ok("ARM64"),
+        "win-x86" => Ok("x86"),
+        _ => bail!("unsupported runtime for Platform inference: {runtime}"),
+    }
 }
 
 fn platform_target(runtime: &str) -> Result<&'static str> {
