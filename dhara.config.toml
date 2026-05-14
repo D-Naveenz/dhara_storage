@@ -1,5 +1,5 @@
 [versions]
-workspace = "0.4.0"
+workspace = "0.4.4"
 
 [nuget]
 package_id = "Dhara.Storage"

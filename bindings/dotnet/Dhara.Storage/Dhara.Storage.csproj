@@ -14,7 +14,7 @@
     <NativeCargoArgs Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">--release</NativeCargoArgs>
     <NativeDllPath>$(RepoRoot)target\$(NativeConfiguration)\dhara_storage_native.dll</NativeDllPath>
     <PackageId>Dhara.Storage</PackageId>
-    <Version>0.4.0</Version>
+    <Version>0.4.4</Version>
     <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/D-Naveenz/dhara_storage</RepositoryUrl>
