@@ -36,5 +36,5 @@ invocation receives a UTF-8 JSON record with:
 
 ## Related Docs
 
-- Core runtime: <https://github.com/D-Naveenz/rheo_storage/tree/main/dhara_storage>
-- .NET wrapper: <https://github.com/D-Naveenz/rheo_storage/tree/main/bindings/dotnet/Dhara.Storage>
+- Core runtime: <https://github.com/D-Naveenz/dhara_storage/tree/main/dhara_storage>
+- .NET wrapper: <https://github.com/D-Naveenz/dhara_storage/tree/main/bindings/dotnet/Dhara.Storage>

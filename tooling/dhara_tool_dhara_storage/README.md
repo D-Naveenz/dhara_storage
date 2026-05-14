@@ -37,5 +37,5 @@ only start-or-fail breadcrumbs.
 
 ## Related Docs
 
-- Workspace root: <https://github.com/D-Naveenz/rheo_storage#readme>
-- Tool shell: <https://github.com/D-Naveenz/rheo_storage/tree/main/tooling/dhara_tool>
+- Workspace root: <https://github.com/D-Naveenz/dhara_storage#readme>
+- Tool shell: <https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool>

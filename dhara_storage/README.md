@@ -1,5 +1,7 @@
 # dhara_storage
 
+[![crates.io](https://img.shields.io/crates/v/dhara_storage)](https://crates.io/crates/dhara_storage)
+
 `dhara_storage` is the Rust-native runtime crate for Dhara Storage.
 
 It owns the core behavior for:
@@ -18,7 +20,7 @@ should stay thin and delegate behavior back to this crate.
 
 ```toml
 [dependencies]
-dhara_storage = "0.4.0"
+dhara_storage = "0.4.4"
 ```
 
 ## Quick Start
@@ -75,6 +77,5 @@ Applications can install any standard `tracing` subscriber before calling into t
 
 ## Related Docs
 
-- Workspace overview: <https://github.com/D-Naveenz/rheo_storage>
-- Rust consumer guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\Rust Consumer.md`
-- Native ABI wrapper: <https://github.com/D-Naveenz/rheo_storage/tree/main/dhara_storage_native>
+- Workspace overview: <https://github.com/D-Naveenz/dhara_storage>
+- Native ABI wrapper: <https://github.com/D-Naveenz/dhara_storage/tree/main/dhara_storage_native>

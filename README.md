@@ -1,12 +1,16 @@
 # Dhara Storage
 
-![Crates.io Version](https://img.shields.io/crates/v/:crate)
+[![dhara_storage on crates.io](https://img.shields.io/crates/v/dhara_storage?label=dhara_storage)](https://crates.io/crates/dhara_storage)
+[![dhara_dhbin on crates.io](https://img.shields.io/crates/v/dhara_dhbin?label=dhara_dhbin)](https://crates.io/crates/dhara_dhbin)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 
 Dhara Storage is a Rust-first storage runtime with a Windows-first delivery story.
 It combines definition-driven file analysis, path-based file and directory operations,
 debounced watching, a reusable `DHBIN` package format, and a managed .NET wrapper over
 the native core.
+
+Rust crates are already available on crates.io and are being advanced from `0.4.0`
+to `0.4.4`. The first `Dhara.Storage` NuGet package is prepared for `0.4.4`.
 
 ## Workspace
 
@@ -32,6 +36,11 @@ the native core.
 
 Rust runtime:
 
+```toml
+[dependencies]
+dhara_storage = "0.4.4"
+```
+
 ```rust
 use dhara_storage::{FileStorage, analyze_path};
 
@@ -41,6 +50,10 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 ```
 
 .NET wrapper:
+
+```powershell
+dotnet add package Dhara.Storage --version 0.4.4
+```
 
 ```csharp
 using Microsoft.Extensions.Logging;
@@ -85,13 +98,11 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - Shared release metadata lives in [dhara.config.toml](./dhara.config.toml).
 - Local secrets belong in [.env.local](./.env.example), created from the example file.
 - [tooling/dhara_tool](./tooling/dhara_tool/README.md) is the supported operator surface for config sync, verification, packaging, and publish flows.
+- `cargo run -p dhara_tool -- release publish --dry-run` verifies the `0.4.4` NuGet package locally without publishing.
 - NuGet verification checks that both `runtimes/win-x64/native/dhara_storage_native.dll` and `runtimes/win-arm64/native/dhara_storage_native.dll` are present in the package.
 
 ## Docs
 
-- Rust consumer guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\Rust Consumer.md`
-- .NET consumer guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\DotNET Consumer.md`
-- .NET release guide: `%USERPROFILE%\OneDrive\Documents\MindVault\AI\Workspaces\rheo-storage\References\Releasing Rheo.Storage for DotNET.md`
 - [dhara_dhbin README](./dhara_dhbin/README.md)
 - [dhara_storage README](./dhara_storage/README.md)
 - [dhara_storage_native README](./dhara_storage_native/README.md)

@@ -59,6 +59,12 @@ jobs:
           INPUT_DRY_RUN: ${{ inputs.dry_run }}
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
+          $vsInstall = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
+          if ([string]::IsNullOrWhiteSpace($vsInstall)) {
+            throw "Visual Studio with x64 and ARM64 MSVC build tools was not found."
+          }
+
+          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
           $arguments = @("run", "-p", "dhara_tool", "--", "release", "publish")
 
           if ($env:INPUT_VERSION) {
@@ -72,4 +78,8 @@ jobs:
             $arguments += "--execute"
           }
 
-          & cargo @arguments
+          $command = "call `"$vcvars`" x64_arm64 && cargo " + ($arguments -join " ")
+          & cmd.exe /d /c $command
+          if ($LASTEXITCODE -ne 0) {
+            exit $LASTEXITCODE
+          }

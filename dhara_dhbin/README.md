@@ -1,5 +1,7 @@
 # dhara_dhbin
 
+[![crates.io](https://img.shields.io/crates/v/dhara_dhbin)](https://crates.io/crates/dhara_dhbin)
+
 `dhara_dhbin` is the shared `DHBIN` v2 container crate used across the Dhara workspace.
 
 It stores MessagePack payloads together with:
@@ -13,7 +15,7 @@ It stores MessagePack payloads together with:
 
 ```toml
 [dependencies]
-dhara_dhbin = "0.4.0"
+dhara_dhbin = "0.4.4"
 ```
 
 ## Quick Start

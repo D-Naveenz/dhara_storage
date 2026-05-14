@@ -99,7 +99,7 @@ pub fn load_env(repo_root: &Path) -> Result<BTreeMap<String, String>> {
 pub fn show(repo_root: &Path) -> Result<String> {
     let output = ShowOutput {
         config: load_config(repo_root)?,
-        env: load_env(repo_root)?,
+        env: masked_env(load_env(repo_root)?),
     };
     toml::to_string_pretty(&output).context("failed to serialize configuration")
 }
@@ -223,20 +223,24 @@ pub fn sync_csproj(content: &str, config: &DharaRepoConfig) -> Result<String> {
     if let Some(icon) = &config.nuget.icon {
         set_or_add_property(property_group, "PackageIcon", file_name(icon)?);
     }
+    dedupe_managed_package_properties(&mut project);
 
     let readme_file = file_name(&config.nuget.readme)?.to_owned();
+    let readme_include =
+        project_relative_include(&config.nuget.readme, &config.ci.package_project)?;
     normalize_pack_none_item(
         &mut project,
         &[config.nuget.readme.as_str(), readme_file.as_str()],
-        &readme_file,
+        &readme_include,
         "\\",
     );
     if let Some(icon) = &config.nuget.icon {
         let icon_file = file_name(icon)?.to_owned();
+        let icon_include = project_relative_include(icon, &config.ci.package_project)?;
         normalize_pack_none_item(
             &mut project,
             &[icon.as_str(), icon_file.as_str()],
-            &icon_file,
+            &icon_include,
             "\\",
         );
     }
@@ -271,6 +275,24 @@ pub fn parse_env_content(content: &str) -> Result<BTreeMap<String, String>> {
         values.insert(key.trim().to_owned(), value.trim().to_owned());
     }
     Ok(values)
+}
+
+fn masked_env(values: BTreeMap<String, String>) -> BTreeMap<String, String> {
+    values
+        .into_iter()
+        .map(|(key, value)| {
+            let upper_key = key.to_ascii_uppercase();
+            if upper_key.contains("KEY")
+                || upper_key.contains("TOKEN")
+                || upper_key.contains("SECRET")
+                || upper_key.contains("PASSWORD")
+            {
+                (key, "<redacted>".to_owned())
+            } else {
+                (key, value)
+            }
+        })
+        .collect()
 }
 
 pub fn validate_config(repo_root: &Path, config: &DharaRepoConfig) -> Result<()> {
@@ -342,6 +364,48 @@ fn file_name(path: &str) -> Result<&str> {
         .with_context(|| format!("path must end with a file name: {path}"))
 }
 
+fn project_relative_include(asset_path: &str, project_path: &str) -> Result<String> {
+    let asset = Path::new(asset_path);
+    if asset.is_absolute() {
+        bail!("repo-managed package assets must use repository-relative paths: {asset_path}");
+    }
+
+    let project_dir = Path::new(project_path)
+        .parent()
+        .with_context(|| format!("package project path must have a parent: {project_path}"))?;
+    let project_parts = path_parts(project_dir);
+    let asset_parts = path_parts(asset);
+
+    let common_len = project_parts
+        .iter()
+        .zip(asset_parts.iter())
+        .take_while(|(left, right)| left.eq_ignore_ascii_case(right))
+        .count();
+
+    let mut relative = Vec::new();
+    relative.extend(std::iter::repeat_n(
+        "..".to_owned(),
+        project_parts.len() - common_len,
+    ));
+    relative.extend(asset_parts[common_len..].iter().cloned());
+
+    if relative.is_empty() {
+        bail!("package asset path cannot point at the package project directory");
+    }
+
+    Ok(relative.join("\\"))
+}
+
+fn path_parts(path: &Path) -> Vec<String> {
+    path.components()
+        .filter_map(|component| match component {
+            std::path::Component::Normal(value) => Some(value.to_string_lossy().to_string()),
+            std::path::Component::ParentDir => Some("..".to_owned()),
+            _ => None,
+        })
+        .collect()
+}
+
 fn write_config(repo_root: &Path, config: &DharaRepoConfig) -> Result<()> {
     validate_config(repo_root, config)?;
     let content = toml::to_string_pretty(config).context("failed to serialize config")?;
@@ -399,6 +463,11 @@ fn normalize_pack_none_item(
     include: &str,
     package_path: &str,
 ) {
+    let include_file_name = Path::new(include)
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or(include);
+
     for child in &mut project.children {
         let XMLNode::Element(group) = child else {
             continue;
@@ -407,17 +476,9 @@ fn normalize_pack_none_item(
             continue;
         }
 
-        group.children.retain(|item| {
-            !matches!(
-                item,
-                XMLNode::Element(entry)
-                    if entry.name == "None"
-                        && entry
-                            .attributes
-                            .get("Include")
-                            .is_some_and(|candidate| aliases.contains(&candidate.as_str()))
-            )
-        });
+        group
+            .children
+            .retain(|item| !is_pack_none_alias(item, aliases, include_file_name, package_path));
     }
 
     let mut none = Element::new("None");
@@ -430,6 +491,81 @@ fn normalize_pack_none_item(
     let mut group = Element::new("ItemGroup");
     group.children.push(XMLNode::Element(none));
     project.children.push(XMLNode::Element(group));
+}
+
+fn is_pack_none_alias(
+    item: &XMLNode,
+    aliases: &[&str],
+    include_file_name: &str,
+    package_path: &str,
+) -> bool {
+    let XMLNode::Element(entry) = item else {
+        return false;
+    };
+    if entry.name != "None" {
+        return false;
+    }
+
+    let Some(candidate) = entry.attributes.get("Include") else {
+        return false;
+    };
+    if aliases.contains(&candidate.as_str()) {
+        return true;
+    }
+
+    let candidate_file_name = Path::new(candidate)
+        .file_name()
+        .and_then(|value| value.to_str());
+    candidate_file_name == Some(include_file_name)
+        && item_metadata(entry, "PackagePath").is_some_and(|candidate| candidate == package_path)
+}
+
+fn item_metadata(entry: &Element, name: &str) -> Option<String> {
+    if let Some(value) = entry.attributes.get(name) {
+        return Some(value.clone());
+    }
+
+    entry.children.iter().find_map(|child| match child {
+        XMLNode::Element(element) if element.name == name => {
+            element.get_text().map(|value| value.into_owned())
+        }
+        _ => None,
+    })
+}
+
+fn dedupe_managed_package_properties(project: &mut Element) {
+    const MANAGED: &[&str] = &[
+        "PackageId",
+        "Version",
+        "Description",
+        "PackageReadmeFile",
+        "PackageIcon",
+        "RepositoryUrl",
+        "PackageProjectUrl",
+        "Authors",
+        "PackageTags",
+    ];
+
+    let mut found_first_group = false;
+    for child in &mut project.children {
+        let XMLNode::Element(group) = child else {
+            continue;
+        };
+        if group.name != "PropertyGroup" {
+            continue;
+        }
+        if !found_first_group {
+            found_first_group = true;
+            continue;
+        }
+
+        group.children.retain(|item| {
+            !matches!(
+                item,
+                XMLNode::Element(entry) if MANAGED.contains(&entry.name.as_str())
+            )
+        });
+    }
 }
 
 fn prune_empty_item_groups(project: &mut Element) {
@@ -548,6 +684,24 @@ mod tests {
     }
 
     #[test]
+    fn masked_env_redacts_secret_like_keys() {
+        let mut values = BTreeMap::new();
+        values.insert("NUGET_API_KEY".to_owned(), "secret".to_owned());
+        values.insert(
+            "NUGET_SOURCE".to_owned(),
+            "https://api.nuget.org/v3/index.json".to_owned(),
+        );
+
+        let masked = masked_env(values);
+
+        assert_eq!(masked.get("NUGET_API_KEY"), Some(&"<redacted>".to_owned()));
+        assert_eq!(
+            masked.get("NUGET_SOURCE"),
+            Some(&"https://api.nuget.org/v3/index.json".to_owned())
+        );
+    }
+
+    #[test]
     fn sync_cargo_toml_updates_workspace_version() {
         let updated = sync_cargo_toml(
             "[workspace]\n[workspace.package]\nversion = \"0.1.0\"\n[workspace.dependencies]\ndhara_dhbin = { version = \"0.1.0\", path = \"dhara_dhbin\" }\ndhara_storage = { version = \"0.1.0\", path = \"dhara_storage\" }\ndhara_tool_dhara_storage = { version = \"0.1.0\", path = \"tooling/dhara_tool_dhara_storage\" }\n",
@@ -580,6 +734,30 @@ mod tests {
         assert!(updated.contains("<Version>0.2.0</Version>"));
         assert!(updated.contains("<PackageTags>storage;ffi</PackageTags>"));
         assert!(updated.contains("<PackageReadmeFile>README.md</PackageReadmeFile>"));
+    }
+
+    #[test]
+    fn sync_csproj_uses_project_relative_root_assets() {
+        let mut config = sample_config();
+        config.nuget.icon = Some("assets/branding/dhara-logo-colored_sm.png".to_owned());
+        let updated = sync_csproj(
+            r#"<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageIcon>old.png</PackageIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="..\..\..\..\..\Dhara.AI\assets\branding\dhara-logo-colored_sm.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+</Project>"#,
+            &config,
+        )
+        .unwrap();
+
+        assert!(updated.contains("..\\..\\..\\assets\\branding\\dhara-logo-colored_sm.png"));
+        assert!(!updated.contains("Dhara.AI"));
     }
 
     #[test]

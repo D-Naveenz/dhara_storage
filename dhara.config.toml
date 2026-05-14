@@ -1,5 +1,5 @@
 [versions]
-workspace = "0.4.0"
+workspace = "0.4.4"
 
 [nuget]
 package_id = "Dhara.Storage"
@@ -16,9 +16,9 @@ tags = [
     "watching",
 ]
 readme = "bindings/dotnet/Dhara.Storage/README.md"
-icon = "bindings/dotnet/Dhara.Storage/icon-small.png"
-repository_url = "https://github.com/D-Naveenz/rheo_storage"
-project_url = "https://github.com/D-Naveenz/rheo_storage"
+icon = "assets/branding/dhara-logo-colored_sm.png"
+repository_url = "https://github.com/D-Naveenz/dhara_storage"
+project_url = "https://github.com/D-Naveenz/dhara_storage"
 
 [ci]
 smoke_project = "bindings/dotnet/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj"

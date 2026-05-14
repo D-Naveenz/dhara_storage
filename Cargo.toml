@@ -9,17 +9,17 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.4.0"
+version = "0.4.4"
 edition = "2024"
 authors = ["Naveen Dharmathunga <dasheenaveen@outlook.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/D-Naveenz/rheo_storage"
-homepage = "https://github.com/D-Naveenz/rheo_storage"
+repository = "https://github.com/D-Naveenz/dhara_storage"
+homepage = "https://github.com/D-Naveenz/dhara_storage"
 
 [workspace.dependencies]
-dhara_dhbin = { version = "0.4.0", path = "dhara_dhbin" }
-dhara_storage = { version = "0.4.0", path = "dhara_storage" }
-dhara_tool_dhara_storage = { version = "0.4.0", path = "tooling/dhara_tool_dhara_storage" }
+dhara_dhbin = { version = "0.4.4", path = "dhara_dhbin" }
+dhara_storage = { version = "0.4.4", path = "dhara_storage" }
+dhara_tool_dhara_storage = { version = "0.4.4", path = "tooling/dhara_tool_dhara_storage" }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]
