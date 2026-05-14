@@ -20,6 +20,7 @@ pub struct ReleaseOptions {
     pub api_key_env_override: Option<String>,
     pub output_dir: Option<PathBuf>,
     pub dry_run: bool,
+    pub publish_cargo: bool,
     pub publish_nuget: bool,
 }
 
@@ -31,6 +32,7 @@ pub fn run(
     info!(
         target: "dhara_tool_dhara_storage::release_flow",
         dry_run = options.dry_run,
+        publish_cargo = options.publish_cargo,
         publish_nuget = options.publish_nuget,
         "running release flow"
     );
@@ -39,7 +41,15 @@ pub fn run(
     validate_versions_synced(repo_root, config)?;
     ensure_release_secrets(repo_root, config, options)?;
 
-    run_cargo_release(repo_root, options.dry_run)?;
+    if options.publish_cargo {
+        run_cargo_release(repo_root, options.dry_run)?;
+    }
+
+    if !options.publish_cargo && !options.publish_nuget {
+        return Ok(CommandResult::with_message(
+            "Release flow completed with Cargo and NuGet publishing skipped.",
+        ));
+    }
 
     if !options.publish_nuget {
         return Ok(CommandResult::with_message(if options.dry_run {
@@ -60,17 +70,21 @@ pub fn run(
 
     if options.dry_run {
         package_flow::publish(repo_root, config, &package_options)?;
-        return Ok(CommandResult::with_message(
-            "Cargo and NuGet release dry run completed.",
-        ));
+        return Ok(CommandResult::with_message(if options.publish_cargo {
+            "Cargo and NuGet release dry run completed."
+        } else {
+            "NuGet release dry run completed. Cargo release was skipped."
+        }));
     }
 
     package_flow::pack(repo_root, config, &package_options)?;
     package_flow::publish_packed(repo_root, config, &package_options)?;
 
-    Ok(CommandResult::with_message(
-        "Cargo and NuGet release completed successfully.",
-    ))
+    Ok(CommandResult::with_message(if options.publish_cargo {
+        "Cargo and NuGet release completed successfully."
+    } else {
+        "NuGet release completed successfully. Cargo release was skipped."
+    }))
 }
 
 fn run_cargo_release(repo_root: &Path, dry_run: bool) -> Result<()> {
@@ -103,7 +117,9 @@ fn ensure_release_secrets(
         return Ok(());
     }
 
-    ensure_secret(repo_root, CARGO_REGISTRY_TOKEN_ENV)?;
+    if options.publish_cargo {
+        ensure_secret(repo_root, CARGO_REGISTRY_TOKEN_ENV)?;
+    }
     if options.publish_nuget {
         let nuget_key = options
             .api_key_env_override

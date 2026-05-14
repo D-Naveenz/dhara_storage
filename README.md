@@ -101,6 +101,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - [tooling/dhara_tool](./tooling/dhara_tool/README.md) is the supported operator surface for config sync, verification, packaging, and publish flows.
 - `cargo run -p dhara_tool -- release run --dry-run` validates the Cargo-first release flow without publishing.
 - `cargo run -p dhara_tool -- release run` publishes Cargo first, then publishes the `Dhara.Storage` NuGet package.
+- `cargo run -p dhara_tool -- release run --skip-cargo` publishes only the NuGet package when the Rust crates for the current version already exist.
 - NuGet verification checks that both `runtimes/win-x64/native/dhara_storage_native.dll` and `runtimes/win-arm64/native/dhara_storage_native.dll` are present in the package.
 
 ## Docs

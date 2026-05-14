@@ -205,7 +205,7 @@ impl DharaStorageCapability {
                 "release.run",
                 &["release", "run"],
                 "Run the Cargo-first release workflow",
-                "[--configuration <name>] [--source <url>] [--api-key-env <name>] [--dry-run] [--skip-nuget]",
+                "[--configuration <name>] [--source <url>] [--api-key-env <name>] [--dry-run] [--skip-cargo] [--skip-nuget]",
                 "release",
                 release_run_command,
             ),
@@ -296,6 +296,8 @@ struct ReleaseRunArgs {
     api_key_env: Option<String>,
     #[arg(long, action = ArgAction::SetTrue)]
     dry_run: bool,
+    #[arg(long, action = ArgAction::SetTrue)]
+    skip_cargo: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     skip_nuget: bool,
 }
@@ -388,6 +390,7 @@ fn release_options(args: ReleaseRunArgs, context: &ToolContext) -> crate::Releas
         api_key_env_override: args.api_key_env,
         output_dir: context.output_dir.clone(),
         dry_run: args.dry_run,
+        publish_cargo: !args.skip_cargo,
         publish_nuget: !args.skip_nuget,
     }
 }
@@ -644,21 +647,27 @@ mod tests {
         let options = release_options(args, &test_context());
 
         assert!(!options.dry_run);
+        assert!(options.publish_cargo);
         assert!(options.publish_nuget);
         assert_eq!(options.configuration, "Release");
     }
 
     #[test]
-    fn release_run_supports_dry_run_and_skip_nuget() {
+    fn release_run_supports_dry_run_and_skips() {
         let args = parse_args::<ReleaseRunArgs>(
             "release run",
-            &["--dry-run".to_owned(), "--skip-nuget".to_owned()],
+            &[
+                "--dry-run".to_owned(),
+                "--skip-cargo".to_owned(),
+                "--skip-nuget".to_owned(),
+            ],
         )
         .unwrap()
         .unwrap();
         let options = release_options(args, &test_context());
 
         assert!(options.dry_run);
+        assert!(!options.publish_cargo);
         assert!(!options.publish_nuget);
     }
 }

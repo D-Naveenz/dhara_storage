@@ -8,6 +8,11 @@ on:
         required: true
         default: false
         type: boolean
+      publish_cargo:
+        description: Publish Rust crates before NuGet
+        required: true
+        default: true
+        type: boolean
       publish_nuget:
         description: Publish the Dhara.Storage NuGet package after Cargo release
         required: true
@@ -80,6 +85,10 @@ jobs:
 
           if ("${{ inputs.dry_run }}" -eq "true") {
             $arguments += "--dry-run"
+          }
+
+          if ("${{ inputs.publish_cargo }}" -ne "true") {
+            $arguments += "--skip-cargo"
           }
 
           if ("${{ inputs.publish_nuget }}" -ne "true") {

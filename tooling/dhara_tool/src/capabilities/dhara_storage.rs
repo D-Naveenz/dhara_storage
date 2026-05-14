@@ -302,6 +302,15 @@ fn ui_for_command(
                     default_value: Some("false"),
                 },
                 FieldSpec {
+                    key: "skip_cargo",
+                    label: "Skip Cargo",
+                    help: "Skip the Cargo release phase when crates were already published.",
+                    kind: FieldKind::Boolean,
+                    binding: ArgBinding::Switch("--skip-cargo"),
+                    required: false,
+                    default_value: Some("false"),
+                },
+                FieldSpec {
                     key: "skip_nuget",
                     label: "Skip NuGet",
                     help: "Publish or dry-run only the Cargo release.",
