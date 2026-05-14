@@ -32,22 +32,22 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
   </ItemGroup>
-  <Target BeforeTargets="BeforeBuild" Name="BuildNativeLibrary" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
-    <Exec Command="cargo build -p dhara_storage_native $(NativeCargoArgs)" WorkingDirectory="$(RepoRoot)" />
+  <Target Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" BeforeTargets="BeforeBuild" Name="BuildNativeLibrary">
+    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dhara_storage_native $(NativeCargoArgs)" />
   </Target>
-  <Target BeforeTargets="Pack" Name="ValidatePackNativeAssets" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+  <Target Name="ValidatePackNativeAssets" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" BeforeTargets="Pack">
     <Error Text="Packing Dhara.Storage requires staged native assets for all supported runtimes. Use the repo packaging flow so both win-x64 and win-arm64 assets are included." />
   </Target>
-  <Target Name="CopyNativeLibraryToOutput" AfterTargets="Build" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+  <Target AfterTargets="Build" Name="CopyNativeLibraryToOutput" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
     <Copy DestinationFolder="$(OutDir)" SourceFiles="$(NativeDllPath)" SkipUnchangedFiles="true" />
   </Target>
   <ItemGroup>
-    <None Include="build\Dhara.Storage.targets" PackagePath="build\" Pack="True" />
+    <None PackagePath="build\" Pack="True" Include="build\Dhara.Storage.targets" />
   </ItemGroup>
   <ItemGroup>
     <None PackagePath="\" Pack="true" Include="README.md" />
   </ItemGroup>
   <ItemGroup>
-    <None Pack="true" Include="..\..\..\assets\branding\dhara-logo-colored_sm.png" PackagePath="\" />
+    <None Include="..\..\..\assets\branding\dhara-logo-colored_sm.png" PackagePath="\" Pack="true" />
   </ItemGroup>
 </Project>

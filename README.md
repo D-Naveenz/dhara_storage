@@ -72,6 +72,7 @@ Tooling:
 ```powershell
 cargo run -p dhara_tool -- verify ci
 cargo run -p dhara_tool -- verify package
+cargo run -p dhara_tool -- release run --dry-run
 ```
 
 ## Support Matrix
@@ -98,7 +99,8 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - Shared release metadata lives in [dhara.config.toml](./dhara.config.toml).
 - Local secrets belong in [.env.local](./.env.example), created from the example file.
 - [tooling/dhara_tool](./tooling/dhara_tool/README.md) is the supported operator surface for config sync, verification, packaging, and publish flows.
-- `cargo run -p dhara_tool -- release publish --dry-run` verifies the `0.4.4` NuGet package locally without publishing.
+- `cargo run -p dhara_tool -- release run --dry-run` validates the Cargo-first release flow without publishing.
+- `cargo run -p dhara_tool -- release run` publishes Cargo first, then publishes the `Dhara.Storage` NuGet package.
 - NuGet verification checks that both `runtimes/win-x64/native/dhara_storage_native.dll` and `runtimes/win-arm64/native/dhara_storage_native.dll` are present in the package.
 
 ## Docs

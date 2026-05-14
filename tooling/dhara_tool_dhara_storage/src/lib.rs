@@ -6,6 +6,7 @@ pub mod interface;
 pub mod logging;
 pub mod output;
 pub mod package_flow;
+pub mod release_flow;
 pub mod runner;
 pub mod support;
 pub mod verify;
@@ -18,10 +19,10 @@ pub use builder::{
 };
 pub use capability::DharaStorageCapability;
 pub use config::{
-    CONFIG_PATH, DharaRepoConfig, ENV_EXAMPLE_PATH, ENV_LOCAL_PATH, NuGetConfig, PublishConfig,
-    ROOT_CARGO_TOML_PATH, ShowOutput, TargetsConfig, VersionConfig, VersionPart, bump_version,
-    init_env, load_config, load_env, parse_env_content, set_version, show, sync, sync_cargo_toml,
-    sync_csproj, validate_config, verify_release,
+    CONFIG_PATH, CiConfig, DharaRepoConfig, ENV_EXAMPLE_PATH, ENV_LOCAL_PATH, NuGetConfig,
+    PublishConfig, ROOT_CARGO_TOML_PATH, ShowOutput, TargetsConfig, VersionConfig, VersionPart,
+    bump_version, init_env, load_config, load_env, parse_env_content, set_version, show, sync,
+    sync_cargo_toml, sync_csproj, validate_config, verify_release,
 };
 pub use defs::{
     DefsCommand, DefsPaths, default_embedded_sync_paths, execute as execute_defs, print_defs_help,
@@ -36,6 +37,7 @@ pub use output::{
     emit_stdout_line,
 };
 pub use package_flow::{PackageOptions, pack as pack_package, publish as publish_package};
+pub use release_flow::{ReleaseOptions, run as run_release};
 pub use runner::{
     BuilderAction, CommandReport, ReportField as BuilderReportField, ReportStatus, execute_action,
     print_report,

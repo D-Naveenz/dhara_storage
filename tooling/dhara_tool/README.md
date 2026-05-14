@@ -15,7 +15,7 @@ It acts as the front door for:
 ```powershell
 cargo run -p dhara_tool -- verify ci
 cargo run -p dhara_tool -- verify package
-cargo run -p dhara_tool -- release publish --dry-run
+cargo run -p dhara_tool -- release run --dry-run
 ```
 
 Launching `dhara_tool` without a subcommand in an interactive terminal opens the

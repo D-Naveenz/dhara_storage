@@ -6,7 +6,7 @@ use clap::{ArgAction, Parser, ValueEnum};
 use crate::{
     CommandResult, CommandSpec, DefsCommand, PackageOptions, SectionSpec, ToolContext, VersionPart,
     bump_version, execute_defs, init_env, load_config, pack_package, print_defs_help,
-    publish_package, set_version, show, sync,
+    publish_package, run_release, set_version, show, sync,
 };
 
 pub struct DharaStorageCapability;
@@ -201,6 +201,14 @@ impl DharaStorageCapability {
                 "release",
                 release_publish_command,
             ),
+            command(
+                "release.run",
+                &["release", "run"],
+                "Run the Cargo-first release workflow",
+                "[--configuration <name>] [--source <url>] [--api-key-env <name>] [--dry-run] [--skip-nuget]",
+                "release",
+                release_run_command,
+            ),
         ]
     }
 }
@@ -276,6 +284,20 @@ struct PublishArgs {
     dry_run: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     execute: bool,
+}
+
+#[derive(Debug, Parser)]
+struct ReleaseRunArgs {
+    #[arg(long, default_value = "Release")]
+    configuration: String,
+    #[arg(long)]
+    source: Option<String>,
+    #[arg(long)]
+    api_key_env: Option<String>,
+    #[arg(long, action = ArgAction::SetTrue)]
+    dry_run: bool,
+    #[arg(long, action = ArgAction::SetTrue)]
+    skip_nuget: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -357,6 +379,17 @@ fn publish_options(args: PublishArgs, context: &ToolContext) -> Result<PackageOp
         output_dir: context.output_dir.clone(),
         execute_publish: args.execute && !args.dry_run,
     })
+}
+
+fn release_options(args: ReleaseRunArgs, context: &ToolContext) -> crate::ReleaseOptions {
+    crate::ReleaseOptions {
+        configuration: args.configuration,
+        source_override: args.source,
+        api_key_env_override: args.api_key_env,
+        output_dir: context.output_dir.clone(),
+        dry_run: args.dry_run,
+        publish_nuget: !args.skip_nuget,
+    }
 }
 
 fn config_show(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
@@ -551,9 +584,20 @@ fn release_publish_command(context: &ToolContext, args: &[String]) -> Result<Com
     )
 }
 
+fn release_run_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
+    let Some(args) = parse_args::<ReleaseRunArgs>("release run", args)? else {
+        return Ok(CommandResult::success());
+    };
+    let config = current_config(context)?;
+    run_release(&context.repo_root, &config, &release_options(args, context))
+}
+
 #[cfg(test)]
 mod tests {
-    use super::DharaStorageCapability;
+    use std::path::PathBuf;
+
+    use super::{DharaStorageCapability, ReleaseRunArgs, parse_args, release_options};
+    use crate::ToolContext;
 
     #[test]
     fn registration_adds_expected_sections_and_commands() {
@@ -578,5 +622,43 @@ mod tests {
         assert!(commands.contains(&"defs.inspect-trid-xml"));
         assert!(commands.contains(&"verify.package"));
         assert!(commands.contains(&"release.publish"));
+        assert!(commands.contains(&"release.run"));
+    }
+
+    fn test_context() -> ToolContext {
+        ToolContext {
+            repo_root: PathBuf::from("."),
+            silent: false,
+            verbose: 0,
+            package_dir: None,
+            output_dir: None,
+            logs_dir: None,
+        }
+    }
+
+    #[test]
+    fn release_run_defaults_to_execute_with_nuget() {
+        let args = parse_args::<ReleaseRunArgs>("release run", &[])
+            .unwrap()
+            .unwrap();
+        let options = release_options(args, &test_context());
+
+        assert!(!options.dry_run);
+        assert!(options.publish_nuget);
+        assert_eq!(options.configuration, "Release");
+    }
+
+    #[test]
+    fn release_run_supports_dry_run_and_skip_nuget() {
+        let args = parse_args::<ReleaseRunArgs>(
+            "release run",
+            &["--dry-run".to_owned(), "--skip-nuget".to_owned()],
+        )
+        .unwrap()
+        .unwrap();
+        let options = release_options(args, &test_context());
+
+        assert!(options.dry_run);
+        assert!(!options.publish_nuget);
     }
 }
