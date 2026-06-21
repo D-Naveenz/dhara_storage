@@ -9,5 +9,5 @@ indent_style = space
 indent_size = 2
 
 # Visual Studio project files
-[*.{csproj,vcxproj,vcxproj.filters}]
+[*.{csproj,vcxproj,vcxproj.filters,.targets}]
 indent_size = 2

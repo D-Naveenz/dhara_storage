@@ -1,4 +1,5 @@
 <Project>
+  <!-- Run immediately after NuGet evaluates the final target platform features -->
   <Target Name="DharaStorageEnforce64BitArchitecture" BeforeTargets="BeforeBuild;CoreCompile">
     <Error Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-x86')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-x86-')))"
            Text="Dhara.Storage does not support 32-bit runtime identifier '$(RuntimeIdentifier)'. Use an x64 or arm64 runtime." />
