@@ -8,7 +8,7 @@ repository.workspace = true
 homepage.workspace = true
 description = "Unified operator CLI for Dhara definitions, verification, packaging, and release workflows."
 readme = "README.md"
-documentation = "https://github.com/D-Naveenz/rheo_storage/tree/main/tooling/dhara_tool"
+documentation = "https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool"
 keywords = ["tooling", "release", "nuget", "verification", "defs"]
 categories = ["command-line-utilities", "development-tools"]
 publish = false
@@ -16,7 +16,7 @@ publish = false
 [dependencies]
 anyhow = "1.0"
 crossterm = "0.29"
-dhara_tool_dhara_storage.workspace = true
+dhara_storage_ops.workspace = true
 ratatui = { version = "0.30.0", default-features = false, features = ["crossterm"] }
 shlex = "2.0"
 tracing = "0.1"

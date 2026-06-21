@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use dhara_tool_dhara_storage::{
+use dhara_storage_ops::{
     CommandResult as RepoCommandResult, DharaStorageCapability, ReportField as RepoReportField,
     StructuredReport as RepoStructuredReport, ToolContext as RepoToolContext,
 };

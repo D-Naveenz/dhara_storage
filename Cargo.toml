@@ -1,10 +1,10 @@
 [workspace]
 members = [
-    "dhara_dhbin",
-    "dhara_storage",
-    "dhara_storage_native",
+    "src/static/dhara_dhbin",
+    "src/static/dhara_storage",
+    "src/dynamic/dharastorage",
     "tooling/dhara_tool",
-    "tooling/dhara_tool_dhara_storage",
+    "tooling/dhara_storage_ops",
 ]
 resolver = "3"
 
@@ -17,9 +17,9 @@ repository = "https://github.com/D-Naveenz/dhara_storage"
 homepage = "https://github.com/D-Naveenz/dhara_storage"
 
 [workspace.dependencies]
-dhara_dhbin = { version = "0.4.4", path = "dhara_dhbin" }
-dhara_storage = { version = "0.4.4", path = "dhara_storage" }
-dhara_tool_dhara_storage = { version = "0.4.4", path = "tooling/dhara_tool_dhara_storage" }
+dhara_dhbin = { version = "0.4.4", path = "src/static/dhara_dhbin" }
+dhara_storage = { version = "0.4.4", path = "src/static/dhara_storage" }
+dhara_storage_ops = { version = "0.4.4", path = "tooling/dhara_storage_ops" }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    <IsAotCompatible>true</IsAotCompatible>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
+    <StagedNativeRoot Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" />
+    <NativeConfiguration Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">release</NativeConfiguration>
+    <NativeConfiguration Condition="&apos;$(NativeConfiguration)&apos; == &apos;&apos;">debug</NativeConfiguration>
+    <NativeCargoArgs Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">--release</NativeCargoArgs>
+    <NativeDllPath>$(RepoRoot)target\$(NativeConfiguration)\dharastorage.dll</NativeDllPath>
+    <PackageId>Dhara.Storage</PackageId>
+    <Version>0.4.4</Version>
+    <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/D-Naveenz/dhara_storage</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/D-Naveenz/dhara_storage</PackageProjectUrl>
+    <Authors>Naveen Dharmathunga</Authors>
+    <PackageTags>storage;ffi;rust;analysis;file-handling;directory-management;watching</PackageTags>
+    <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+  </PropertyGroup>
+  <ItemGroup Condition="&apos;$(StagedNativeRoot)&apos; != &apos;&apos;">
+    <None Pack="true" Visible="false" Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.8" />
+  </ItemGroup>
+  <Target BeforeTargets="BeforeBuild" Name="BuildNativeLibrary" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dharastorage $(NativeCargoArgs)" />
+  </Target>
+  <Target Name="ValidatePackNativeAssets" BeforeTargets="Pack" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+    <Error Text="Packing Dhara.Storage requires staged native assets for all supported runtimes. Use the repo packaging flow so both win-x64 and win-arm64 assets are included." />
+  </Target>
+  <Target Name="CopyNativeLibraryToOutput" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" AfterTargets="Build">
+    <Copy DestinationFolder="$(OutDir)" SourceFiles="$(NativeDllPath)" SkipUnchangedFiles="true" />
+  </Target>
+  <ItemGroup>
+    <None PackagePath="build\" Include="build\Dhara.Storage.targets" Pack="True" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Pack="true" Include="README.md" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\assets\branding\dhara-logo-colored_sm.png" PackagePath="\" Pack="true" />
+  </ItemGroup>
+</Project>

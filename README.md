@@ -16,12 +16,12 @@ to `0.4.4`. The first `Dhara.Storage` NuGet package is prepared for `0.4.4`.
 
 | Project                            | Purpose                                                                                               |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `dhara_dhbin`                      | Shared `DHBIN` v2 container crate for MessagePack payloads, optional metadata, and integrity sections |
-| `dhara_storage`                    | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
-| `dhara_storage_native`             | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
-| `bindings/dotnet/Dhara.Storage`    | `net10.0` wrapper over `dhara_storage_native`                                                         |
-| `tooling/dhara_tool`               | Operator CLI for verification, packaging, release, and defs workflows                                 |
-| `tooling/dhara_tool_dhara_storage` | Repository-specific capability pack used by `dhara_tool`                                              |
+| `src/static/dhara_dhbin`       | Shared `DHBIN` v2 container crate for MessagePack payloads, optional metadata, and integrity sections |
+| `src/static/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
+| `src/dynamic/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
+| `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |
+| `tooling/dhara_tool`           | Operator CLI for verification, packaging, release, and defs workflows                                 |
+| `tooling/dhara_storage_ops`    | Repository-specific capability pack used by `dhara_tool`                                             |
 
 ## Highlights
 
@@ -29,7 +29,7 @@ to `0.4.4`. The first `Dhara.Storage` NuGet package is prepared for `0.4.4`.
 - Bundled `filedefs.dhbin` runtime package for content-based file analysis
 - File and directory operations that keep the simple path fast and opt into progress only when needed
 - Debounced directory watching for stable change notifications
-- Structured logging with `tracing` in Rust, native log forwarding through `dhara_storage_native`, and host integration through `Microsoft.Extensions.Logging`
+- Structured logging with `tracing` in Rust, native log forwarding through `dharastorage`, and host integration through `Microsoft.Extensions.Logging`
 - Multi-runtime NuGet packaging for Windows `win-x64` and `win-arm64`
 
 ## Quick Start
@@ -81,7 +81,7 @@ cargo run -p dhara_tool -- release run --dry-run
 | ----------------------------- | ------------------------------------------------------------------------------- |
 | `dhara_dhbin`                 | Portable Rust crate                                                             |
 | `dhara_storage`               | Windows-first runtime; portable where the underlying functionality naturally is |
-| `dhara_storage_native`        | Windows-first native ABI                                                        |
+| `dharastorage`                 | Windows-first native ABI                                                        |
 | `Dhara.Storage` NuGet package | Windows `win-x64` and `win-arm64` only                                          |
 
 The NuGet package now fails clearly during package consumption for unsupported RIDs such as `win-x86`,
@@ -90,9 +90,9 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 ## Logging
 
 - Rust crates emit structured `tracing` events for analysis, metadata loading, operations, watching, package verification, and release flows.
-- `dhara_storage_native` exposes a native logger registration API that forwards JSON log records across the ABI.
+- `dharastorage` exposes a native logger registration API that forwards JSON log records across the ABI.
 - `Dhara.Storage` forwards both managed wrapper logs and native runtime logs into a host `ILoggerFactory`.
-- `dhara_tool` and `dhara_tool_dhara_storage` now emit richer command, configuration, transfer, and verification logs for release diagnostics.
+- `dhara_tool` and `dhara_storage_ops` now emit richer command, configuration, transfer, and verification logs for release diagnostics.
 
 ## Release Flow
 
@@ -102,11 +102,11 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - `cargo run -p dhara_tool -- release run --dry-run` validates the Cargo-first release flow without publishing.
 - `cargo run -p dhara_tool -- release run` publishes Cargo first, then publishes the `Dhara.Storage` NuGet package.
 - `cargo run -p dhara_tool -- release run --skip-cargo` publishes only the NuGet package when the Rust crates for the current version already exist.
-- NuGet verification checks that both `runtimes/win-x64/native/dhara_storage_native.dll` and `runtimes/win-arm64/native/dhara_storage_native.dll` are present in the package.
+- NuGet verification checks that both `runtimes/win-x64/native/dharastorage.dll` and `runtimes/win-arm64/native/dharastorage.dll` are present in the package.
 
 ## Docs
 
-- [dhara_dhbin README](./dhara_dhbin/README.md)
-- [dhara_storage README](./dhara_storage/README.md)
-- [dhara_storage_native README](./dhara_storage_native/README.md)
-- [Dhara.Storage README](./bindings/dotnet/Dhara.Storage/README.md)
+- [dhara_dhbin README](./src/static/dhara_dhbin/README.md)
+- [dhara_storage README](./src/static/dhara_storage/README.md)
+- [dharastorage README](./src/dynamic/dharastorage/README.md)
+- [Dhara.Storage README](./src/bindings/Dhara.Storage/README.md)
