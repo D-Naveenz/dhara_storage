@@ -7,10 +7,11 @@ use dhara_storage::{DirectoryStorage, StorageChangeEvent, StorageError, StorageW
 use crate::abi::{DharaStatus, NativeWatchHandle, with_watch_handle};
 use crate::errors::FfiFailure;
 use crate::marshal::{
-    execute_json, execute_unit, parse_path_arg, reset_buffer_out, validate_buffer_out,
-    write_error_only, write_error_payload,
+    execute_json, execute_result_handle, execute_unit, parse_path_arg, reset_buffer_out,
+    validate_buffer_out, write_error_only, write_error_payload,
 };
 use crate::models::StorageChangeEventDto;
+use crate::typed::{NativeWatchEvent, watch_event_to_native};
 
 #[unsafe(no_mangle)]
 /// Creates a directory-watch handle for debounced filesystem notifications.
@@ -94,6 +95,28 @@ pub unsafe extern "C" fn dhara_watch_try_recv_json(
 }
 
 #[unsafe(no_mangle)]
+/// Attempts to receive the next watch event without blocking and returns a typed event when available.
+///
+/// # Safety
+///
+/// `handle`, `out_event`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. A non-null returned event must be freed with `dhara_watch_event_free`.
+pub unsafe extern "C" fn dhara_watch_try_recv_event_v2(
+    handle: *mut NativeWatchHandle,
+    out_event: *mut *mut NativeWatchEvent,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_watch_receive_typed(
+        handle,
+        out_event,
+        out_error_ptr,
+        out_error_len,
+        |watch| watch.try_recv(),
+    ))
+}
+
+#[unsafe(no_mangle)]
 /// Blocks until the next watch event is available and returns it as JSON.
 ///
 /// # Safety
@@ -111,6 +134,28 @@ pub unsafe extern "C" fn dhara_watch_recv_json(
         handle,
         out_json_ptr,
         out_json_len,
+        out_error_ptr,
+        out_error_len,
+        |watch| watch.recv().map(Some),
+    ))
+}
+
+#[unsafe(no_mangle)]
+/// Blocks until the next watch event is available and returns it as a typed event.
+///
+/// # Safety
+///
+/// `handle`, `out_event`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. The returned event must be freed with `dhara_watch_event_free`.
+pub unsafe extern "C" fn dhara_watch_recv_event_v2(
+    handle: *mut NativeWatchHandle,
+    out_event: *mut *mut NativeWatchEvent,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_watch_receive_typed(
+        handle,
+        out_event,
         out_error_ptr,
         out_error_len,
         |watch| watch.recv().map(Some),
@@ -136,6 +181,29 @@ pub unsafe extern "C" fn dhara_watch_recv_json_timeout(
         handle,
         out_json_ptr,
         out_json_len,
+        out_error_ptr,
+        out_error_len,
+        |watch| watch.recv_timeout(Duration::from_millis(timeout_ms)),
+    ))
+}
+
+#[unsafe(no_mangle)]
+/// Waits up to `timeout_ms` for the next watch event and returns a typed event when available.
+///
+/// # Safety
+///
+/// `handle`, `out_event`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. A non-null returned event must be freed with `dhara_watch_event_free`.
+pub unsafe extern "C" fn dhara_watch_recv_event_timeout_v2(
+    handle: *mut NativeWatchHandle,
+    timeout_ms: u64,
+    out_event: *mut *mut NativeWatchEvent,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_watch_receive_typed(
+        handle,
+        out_event,
         out_error_ptr,
         out_error_len,
         |watch| watch.recv_timeout(Duration::from_millis(timeout_ms)),
@@ -213,4 +281,30 @@ unsafe fn execute_watch_receive(
             })
         },
     )
+}
+
+unsafe fn execute_watch_receive_typed(
+    handle: *mut NativeWatchHandle,
+    out_event: *mut *mut NativeWatchEvent,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+    receive: impl FnOnce(
+        &dhara_storage::DirectoryWatchHandle,
+    ) -> Result<Option<StorageChangeEvent>, StorageError>,
+) -> DharaStatus {
+    execute_result_handle(out_event, out_error_ptr, out_error_len, || {
+        with_watch_handle(handle, |watch_handle| {
+            let slot = watch_handle
+                .handle
+                .lock()
+                .unwrap_or_else(|p| p.into_inner());
+            let watch = slot
+                .as_ref()
+                .ok_or_else(|| FfiFailure::error("watch handle has already been stopped"))?;
+            Ok(receive(watch)
+                .map_err(FfiFailure::from)?
+                .map(watch_event_to_native)
+                .unwrap_or_else(ptr::null_mut))
+        })
+    })
 }

@@ -19,6 +19,20 @@ public sealed class StorageFileTests
     }
 
     [Fact]
+    public void RefreshInformation_WithAnalysis_ReturnsTypedAnalysis()
+    {
+        using var temp = new TemporaryDirectory();
+        var path = temp.PathFor("sample.txt");
+        System.IO.File.WriteAllText(path, "typed analysis");
+        var file = DharaStorage.File(path);
+
+        var info = file.RefreshInformation(includeAnalysis: true);
+
+        Assert.NotNull(info.Analysis);
+        Assert.True(info.Analysis.BytesScanned > 0);
+    }
+
+    [Fact]
     public async Task CopyAsync_ReportsProgress_AndCreatesDestination()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

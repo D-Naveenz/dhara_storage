@@ -12,19 +12,49 @@ internal static partial class NativeQueries
     internal static partial NativeStatus dhara_analyze_path(string path, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NativeStatus dhara_analyze_path_v2(string path, out nint report, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_get_file_info(string path, byte includeAnalysis, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NativeStatus dhara_get_file_info_v2(string path, byte includeAnalysis, out nint info, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_get_directory_info(string path, byte includeSummary, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NativeStatus dhara_get_directory_info_v2(string path, byte includeSummary, out nint info, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_list_files(string path, byte recursive, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NativeStatus dhara_list_files_v2(string path, byte recursive, out nint entries, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_list_directories(string path, byte recursive, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NativeStatus dhara_list_directories_v2(string path, byte recursive, out nint entries, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_list_entries(string path, byte recursive, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
+    internal static partial NativeStatus dhara_list_entries_v2(string path, byte recursive, out nint entries, out nint errorPtr, out nuint errorLen);
+
+    [LibraryImport(LibraryName)]
+    internal static partial void dhara_analysis_report_free(nint report);
+
+    [LibraryImport(LibraryName)]
+    internal static partial void dhara_file_info_free(nint info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial void dhara_directory_info_free(nint info);
+
+    [LibraryImport(LibraryName)]
+    internal static partial void dhara_storage_entry_list_free(nint entries);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_read_file(string path, out nint bytesPtr, out nuint bytesLen, out nint errorPtr, out nuint errorLen);
@@ -71,44 +101,62 @@ internal static partial class NativeQueries
 
 internal static class NativeQueryInvoker
 {
-    internal static AnalysisReport AnalyzePath(string path) =>
-        NativeCallInvoker.InvokeJson<NativeAnalysisReportDto>(
-            (out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen) =>
-                NativeQueries.dhara_analyze_path(path, out dataPtr, out dataLen, out errorPtr, out errorLen))
-        .ToModel();
+    internal static AnalysisReport AnalyzePath(string path)
+    {
+        NativeHelpers.EnsureSupportedPlatform();
+        var status = NativeQueries.dhara_analyze_path_v2(path, out var report, out var errorPtr, out var errorLen);
+        NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
+        try
+        {
+            return NativeTyped.ToAnalysisReport(report);
+        }
+        finally
+        {
+            NativeQueries.dhara_analysis_report_free(report);
+        }
+    }
 
-    internal static FileInformation GetFileInformation(string path, bool includeAnalysis) =>
-        NativeCallInvoker.InvokeJson<NativeFileInformationDto>(
-            (out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen) =>
-                NativeQueries.dhara_get_file_info(path, NativeHelpers.ToNativeBool(includeAnalysis), out dataPtr, out dataLen, out errorPtr, out errorLen))
-        .ToModel();
+    internal static FileInformation GetFileInformation(string path, bool includeAnalysis)
+    {
+        NativeHelpers.EnsureSupportedPlatform();
+        var status = NativeQueries.dhara_get_file_info_v2(path, NativeHelpers.ToNativeBool(includeAnalysis), out var info, out var errorPtr, out var errorLen);
+        NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
+        try
+        {
+            return NativeTyped.ToFileInformation(info);
+        }
+        finally
+        {
+            NativeQueries.dhara_file_info_free(info);
+        }
+    }
 
-    internal static DirectoryInformation GetDirectoryInformation(string path, bool includeSummary) =>
-        NativeCallInvoker.InvokeJson<NativeDirectoryInformationDto>(
-            (out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen) =>
-                NativeQueries.dhara_get_directory_info(path, NativeHelpers.ToNativeBool(includeSummary), out dataPtr, out dataLen, out errorPtr, out errorLen))
-        .ToModel();
+    internal static DirectoryInformation GetDirectoryInformation(string path, bool includeSummary)
+    {
+        NativeHelpers.EnsureSupportedPlatform();
+        var status = NativeQueries.dhara_get_directory_info_v2(path, NativeHelpers.ToNativeBool(includeSummary), out var info, out var errorPtr, out var errorLen);
+        NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
+        try
+        {
+            return NativeTyped.ToDirectoryInformation(info);
+        }
+        finally
+        {
+            NativeQueries.dhara_directory_info_free(info);
+        }
+    }
 
     internal static IReadOnlyList<StorageEntry> ListFiles(string path, bool recursive) =>
-        NativeCallInvoker.InvokeJson<NativeStorageEntryDto[]>(
-            (out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen) =>
-                NativeQueries.dhara_list_files(path, NativeHelpers.ToNativeBool(recursive), out dataPtr, out dataLen, out errorPtr, out errorLen))
-        .Select(static entry => entry.ToModel())
-        .ToArray();
+        InvokeEntryList((out nint entries, out nint errorPtr, out nuint errorLen) =>
+            NativeQueries.dhara_list_files_v2(path, NativeHelpers.ToNativeBool(recursive), out entries, out errorPtr, out errorLen));
 
     internal static IReadOnlyList<StorageEntry> ListDirectories(string path, bool recursive) =>
-        NativeCallInvoker.InvokeJson<NativeStorageEntryDto[]>(
-            (out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen) =>
-                NativeQueries.dhara_list_directories(path, NativeHelpers.ToNativeBool(recursive), out dataPtr, out dataLen, out errorPtr, out errorLen))
-        .Select(static entry => entry.ToModel())
-        .ToArray();
+        InvokeEntryList((out nint entries, out nint errorPtr, out nuint errorLen) =>
+            NativeQueries.dhara_list_directories_v2(path, NativeHelpers.ToNativeBool(recursive), out entries, out errorPtr, out errorLen));
 
     internal static IReadOnlyList<StorageEntry> ListEntries(string path, bool recursive) =>
-        NativeCallInvoker.InvokeJson<NativeStorageEntryDto[]>(
-            (out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen) =>
-                NativeQueries.dhara_list_entries(path, NativeHelpers.ToNativeBool(recursive), out dataPtr, out dataLen, out errorPtr, out errorLen))
-        .Select(static entry => entry.ToModel())
-        .ToArray();
+        InvokeEntryList((out nint entries, out nint errorPtr, out nuint errorLen) =>
+            NativeQueries.dhara_list_entries_v2(path, NativeHelpers.ToNativeBool(recursive), out entries, out errorPtr, out errorLen));
 
     internal static byte[] ReadFileBytes(string path) =>
         NativeCallInvoker.InvokeBytes(
@@ -180,4 +228,21 @@ internal static class NativeQueryInvoker
 
     internal static void DeleteDirectory(string path, bool recursive) =>
         NativeCallInvoker.InvokeUnit((out nint errorPtr, out nuint errorLen) => NativeQueries.dhara_delete_directory(path, NativeHelpers.ToNativeBool(recursive), out errorPtr, out errorLen));
+
+    private delegate NativeStatus NativeEntryListCall(out nint entries, out nint errorPtr, out nuint errorLen);
+
+    private static IReadOnlyList<StorageEntry> InvokeEntryList(NativeEntryListCall call)
+    {
+        NativeHelpers.EnsureSupportedPlatform();
+        var status = call(out var entries, out var errorPtr, out var errorLen);
+        NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
+        try
+        {
+            return NativeTyped.ToStorageEntries(entries);
+        }
+        finally
+        {
+            NativeQueries.dhara_storage_entry_list_free(entries);
+        }
+    }
 }

@@ -30,12 +30,21 @@ internal sealed class NativeWatchHandle : IDisposable
     {
         ThrowIfDisposed();
         NativeHelpers.EnsureSupportedPlatform();
-        var status = NativeWatching.dhara_watch_recv_json_timeout(_handle, (ulong)Math.Max(0, timeout.TotalMilliseconds), out var jsonPtr, out var jsonLen, out var errorPtr, out var errorLen);
+        var status = NativeWatching.dhara_watch_recv_event_timeout_v2(_handle, (ulong)Math.Max(0, timeout.TotalMilliseconds), out var eventPtr, out var errorPtr, out var errorLen);
         NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
-        var json = NativeMemory.ReadUtf8AndFree(jsonPtr, jsonLen);
-        return string.IsNullOrWhiteSpace(json) || string.Equals(json, "null", StringComparison.OrdinalIgnoreCase)
-            ? null
-            : NativeJson.Deserialize<NativeWatchEventDto>(json).ToModel();
+        if (eventPtr == 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            return NativeTyped.ToWatchEvent(eventPtr);
+        }
+        finally
+        {
+            NativeWatching.dhara_watch_event_free(eventPtr);
+        }
     }
 
     internal void Stop()

@@ -22,6 +22,20 @@ public sealed class StorageDirectoryTests
     }
 
     [Fact]
+    public void RefreshInformation_WithSummary_ReturnsTypedSummary()
+    {
+        using var temp = new TemporaryDirectory();
+        System.IO.Directory.CreateDirectory(temp.PathFor("docs"));
+        System.IO.File.WriteAllText(temp.PathFor("docs", "a.txt"), "A");
+        var directory = DharaStorage.Directory(temp.PathFor("docs"));
+
+        var info = directory.RefreshInformation(includeSummary: true);
+
+        Assert.NotNull(info.Summary);
+        Assert.True(info.Summary.FileCount >= 1);
+    }
+
+    [Fact]
     public async Task CopyAsync_CopiesDirectoryTree()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

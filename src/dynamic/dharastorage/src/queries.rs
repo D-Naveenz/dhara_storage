@@ -10,11 +10,16 @@ use dhara_storage::{
 use crate::abi::DharaStatus;
 use crate::errors::FfiFailure;
 use crate::marshal::{
-    execute_bytes, execute_json, execute_string, execute_unit, parse_bytes_arg, parse_path_arg,
-    parse_string_arg,
+    execute_bytes, execute_json, execute_result_handle, execute_string, execute_unit,
+    parse_bytes_arg, parse_path_arg, parse_string_arg,
 };
 use crate::models::{
     AnalysisReportDto, DirectoryInfoDto, EntryKind, FileInfoDto, list_entries_json, path_to_string,
+};
+use crate::typed::{
+    NativeAnalysisReport, NativeDirectoryInformation, NativeFileInformation,
+    NativeStorageEntryList, analysis_report_to_native, directory_info_to_native,
+    file_info_to_native, storage_entries_to_native,
 };
 
 #[unsafe(no_mangle)]
@@ -40,6 +45,32 @@ pub unsafe extern "C" fn dhara_analyze_path(
             let path = parse_path_arg(path, "path")?;
             let report = analyze_path(&path).map_err(FfiFailure::from)?;
             Ok(AnalysisReportDto::from(report))
+        }
+    ))
+}
+
+#[unsafe(no_mangle)]
+/// Analyzes a file path immediately and returns a typed native analysis report.
+///
+/// # Safety
+///
+/// `path`, `out_report`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned report
+/// must be freed with `dhara_analysis_report_free`.
+pub unsafe extern "C" fn dhara_analyze_path_v2(
+    path: *const c_char,
+    out_report: *mut *mut NativeAnalysisReport,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_result_handle(
+        out_report,
+        out_error_ptr,
+        out_error_len,
+        || {
+            let path = parse_path_arg(path, "path")?;
+            let report = analyze_path(&path).map_err(FfiFailure::from)?;
+            Ok(analysis_report_to_native(report))
         }
     ))
 }
@@ -79,6 +110,39 @@ pub unsafe extern "C" fn dhara_get_file_info(
 }
 
 #[unsafe(no_mangle)]
+/// Reads file metadata and optionally analysis data, returning typed native file information.
+///
+/// # Safety
+///
+/// `path`, `out_info`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned file
+/// information must be freed with `dhara_file_info_free`.
+pub unsafe extern "C" fn dhara_get_file_info_v2(
+    path: *const c_char,
+    include_analysis: u8,
+    out_info: *mut *mut NativeFileInformation,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_result_handle(
+        out_info,
+        out_error_ptr,
+        out_error_len,
+        || {
+            let path = parse_path_arg(path, "path")?;
+            let info = if include_analysis != 0 {
+                FileInfo::from_path_with_analysis(&path)
+            } else {
+                FileInfo::from_path(&path)
+            }
+            .map_err(FfiFailure::from)?;
+
+            file_info_to_native(info, include_analysis != 0)
+        }
+    ))
+}
+
+#[unsafe(no_mangle)]
 /// Reads directory metadata and optionally directory-summary data, returning JSON.
 ///
 /// # Safety
@@ -113,6 +177,39 @@ pub unsafe extern "C" fn dhara_get_directory_info(
 }
 
 #[unsafe(no_mangle)]
+/// Reads directory metadata and optionally summary data, returning typed native directory information.
+///
+/// # Safety
+///
+/// `path`, `out_info`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned directory
+/// information must be freed with `dhara_directory_info_free`.
+pub unsafe extern "C" fn dhara_get_directory_info_v2(
+    path: *const c_char,
+    include_summary: u8,
+    out_info: *mut *mut NativeDirectoryInformation,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_result_handle(
+        out_info,
+        out_error_ptr,
+        out_error_len,
+        || {
+            let path = parse_path_arg(path, "path")?;
+            let info = if include_summary != 0 {
+                DirectoryInfo::from_path_with_summary(&path)
+            } else {
+                DirectoryInfo::from_path(&path)
+            }
+            .map_err(FfiFailure::from)?;
+
+            directory_info_to_native(info, include_summary != 0)
+        }
+    ))
+}
+
+#[unsafe(no_mangle)]
 /// Lists child files for a directory and returns the result as JSON.
 ///
 /// # Safety
@@ -135,6 +232,36 @@ pub unsafe extern "C" fn dhara_list_files(
         || {
             let path = parse_path_arg(path, "path")?;
             list_entries_json(&path, recursive != 0, EntryKind::Files)
+        }
+    ))
+}
+
+#[unsafe(no_mangle)]
+/// Lists child files for a directory and returns a typed native entry list.
+///
+/// # Safety
+///
+/// `path`, `out_entries`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned entry list
+/// must be freed with `dhara_storage_entry_list_free`.
+pub unsafe extern "C" fn dhara_list_files_v2(
+    path: *const c_char,
+    recursive: u8,
+    out_entries: *mut *mut NativeStorageEntryList,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_result_handle(
+        out_entries,
+        out_error_ptr,
+        out_error_len,
+        || {
+            let path = parse_path_arg(path, "path")?;
+            Ok(storage_entries_to_native(list_entries_json(
+                &path,
+                recursive != 0,
+                EntryKind::Files,
+            )?))
         }
     ))
 }
@@ -167,6 +294,36 @@ pub unsafe extern "C" fn dhara_list_directories(
 }
 
 #[unsafe(no_mangle)]
+/// Lists child directories for a directory and returns a typed native entry list.
+///
+/// # Safety
+///
+/// `path`, `out_entries`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned entry list
+/// must be freed with `dhara_storage_entry_list_free`.
+pub unsafe extern "C" fn dhara_list_directories_v2(
+    path: *const c_char,
+    recursive: u8,
+    out_entries: *mut *mut NativeStorageEntryList,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_result_handle(
+        out_entries,
+        out_error_ptr,
+        out_error_len,
+        || {
+            let path = parse_path_arg(path, "path")?;
+            Ok(storage_entries_to_native(list_entries_json(
+                &path,
+                recursive != 0,
+                EntryKind::Directories,
+            )?))
+        }
+    ))
+}
+
+#[unsafe(no_mangle)]
 /// Lists both files and directories for a directory and returns the result as JSON.
 ///
 /// # Safety
@@ -189,6 +346,36 @@ pub unsafe extern "C" fn dhara_list_entries(
         || {
             let path = parse_path_arg(path, "path")?;
             list_entries_json(&path, recursive != 0, EntryKind::All)
+        }
+    ))
+}
+
+#[unsafe(no_mangle)]
+/// Lists child files and directories for a directory and returns a typed native entry list.
+///
+/// # Safety
+///
+/// `path`, `out_entries`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned entry list
+/// must be freed with `dhara_storage_entry_list_free`.
+pub unsafe extern "C" fn dhara_list_entries_v2(
+    path: *const c_char,
+    recursive: u8,
+    out_entries: *mut *mut NativeStorageEntryList,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+) -> DharaStatus {
+    ffi_fn!(execute_result_handle(
+        out_entries,
+        out_error_ptr,
+        out_error_len,
+        || {
+            let path = parse_path_arg(path, "path")?;
+            Ok(storage_entries_to_native(list_entries_json(
+                &path,
+                recursive != 0,
+                EntryKind::All,
+            )?))
         }
     ))
 }

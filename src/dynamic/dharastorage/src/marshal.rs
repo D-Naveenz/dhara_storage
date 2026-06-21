@@ -143,6 +143,39 @@ pub(crate) unsafe fn execute_operation_handle_creation(
     }
 }
 
+pub(crate) unsafe fn execute_result_handle<T>(
+    out_handle: *mut *mut T,
+    out_error_ptr: *mut *mut u8,
+    out_error_len: *mut usize,
+    operation: impl FnOnce() -> Result<*mut T, FfiFailure>,
+) -> DharaStatus {
+    if out_handle.is_null() {
+        return write_error_only(
+            out_error_ptr,
+            out_error_len,
+            FfiFailure::invalid_argument("out_handle", "output handle pointer must not be null"),
+        );
+    }
+
+    if let Err(failure) = validate_buffer_out(out_error_ptr, out_error_len) {
+        return failure.status;
+    }
+
+    *out_handle = ptr::null_mut();
+    reset_buffer_out(out_error_ptr, out_error_len);
+
+    match operation() {
+        Ok(handle) => {
+            *out_handle = handle;
+            DharaStatus::Ok
+        }
+        Err(failure) => {
+            write_error_payload(out_error_ptr, out_error_len, &failure);
+            failure.status
+        }
+    }
+}
+
 pub(crate) unsafe fn validate_buffer_out(
     ptr_out: *mut *mut u8,
     len_out: *mut usize,

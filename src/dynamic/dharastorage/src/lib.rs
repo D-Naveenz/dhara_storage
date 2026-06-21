@@ -24,6 +24,7 @@ mod models;
 mod operations;
 mod queries;
 mod sessions;
+mod typed;
 mod watching;
 
 pub use abi::{DharaOperationSnapshot, DharaOperationState, DharaStatus};
@@ -31,6 +32,7 @@ pub use logging::*;
 pub use operations::*;
 pub use queries::*;
 pub use sessions::*;
+pub use typed::*;
 pub use watching::*;
 
 /// Frees a UTF-8 string buffer previously returned by the native ABI.

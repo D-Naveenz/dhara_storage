@@ -15,6 +15,14 @@ internal static partial class NativeWatching
     [LibraryImport(LibraryName)]
     internal static partial NativeStatus dhara_watch_recv_json_timeout(nint handle, ulong timeoutMs, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
     [LibraryImport(LibraryName)]
+    internal static partial NativeStatus dhara_watch_try_recv_event_v2(nint handle, out nint eventPtr, out nint errorPtr, out nuint errorLen);
+    [LibraryImport(LibraryName)]
+    internal static partial NativeStatus dhara_watch_recv_event_v2(nint handle, out nint eventPtr, out nint errorPtr, out nuint errorLen);
+    [LibraryImport(LibraryName)]
+    internal static partial NativeStatus dhara_watch_recv_event_timeout_v2(nint handle, ulong timeoutMs, out nint eventPtr, out nint errorPtr, out nuint errorLen);
+    [LibraryImport(LibraryName)]
+    internal static partial void dhara_watch_event_free(nint eventPtr);
+    [LibraryImport(LibraryName)]
     internal static partial NativeStatus dhara_watch_stop(nint handle, out nint errorPtr, out nuint errorLen);
     [LibraryImport(LibraryName)]
     internal static partial void dhara_watch_free(nint handle);

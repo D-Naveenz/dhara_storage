@@ -3,9 +3,12 @@ use std::ptr;
 use std::slice;
 
 use dharastorage::{
-    DharaStatus, dhara_analyze_path, dhara_bytes_free, dhara_create_directory_all,
-    dhara_delete_file, dhara_get_directory_info, dhara_get_file_info, dhara_list_entries,
-    dhara_read_file, dhara_rename_file, dhara_string_free, dhara_write_file_text,
+    DharaStatus, NativeAnalysisReport, NativeFileInformation, NativeStorageEntryList,
+    dhara_analysis_report_free, dhara_analyze_path, dhara_analyze_path_v2, dhara_bytes_free,
+    dhara_create_directory_all, dhara_delete_file, dhara_file_info_free, dhara_get_directory_info,
+    dhara_get_file_info, dhara_get_file_info_v2, dhara_list_entries, dhara_list_entries_v2,
+    dhara_read_file, dhara_rename_file, dhara_storage_entry_list_free, dhara_string_free,
+    dhara_write_file_text,
 };
 use tempfile::tempdir;
 
@@ -56,6 +59,48 @@ fn analyze_path_returns_json() {
     assert!(err_ptr.is_null());
     let json = string_from_output(out_ptr, out_len);
     assert!(json.contains("\"top_mime_type\":\"application/pdf\""));
+}
+
+#[test]
+fn analyze_path_v2_returns_typed_report() {
+    let fixture = std::fs::canonicalize(fixture_path()).unwrap();
+    let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
+    let mut report: *mut NativeAnalysisReport = ptr::null_mut();
+    let mut err_ptr: *mut u8 = ptr::null_mut();
+    let mut err_len = 0;
+
+    let status =
+        unsafe { dhara_analyze_path_v2(fixture.as_ptr(), &mut report, &mut err_ptr, &mut err_len) };
+
+    assert_eq!(status, DharaStatus::Ok);
+    assert!(err_ptr.is_null());
+    assert!(!report.is_null());
+    let report_ref = unsafe { &*report };
+    assert!(report_ref.matches_len > 0);
+    assert!(report_ref.file_size > 0);
+    assert!(!report_ref.matches_ptr.is_null());
+    unsafe { dhara_analysis_report_free(report) };
+}
+
+#[test]
+fn file_info_v2_returns_optional_analysis_pointer() {
+    let fixture = std::fs::canonicalize(fixture_path()).unwrap();
+    let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
+    let mut info: *mut NativeFileInformation = ptr::null_mut();
+    let mut err_ptr: *mut u8 = ptr::null_mut();
+    let mut err_len = 0;
+
+    let status = unsafe {
+        dhara_get_file_info_v2(fixture.as_ptr(), 1, &mut info, &mut err_ptr, &mut err_len)
+    };
+
+    assert_eq!(status, DharaStatus::Ok);
+    assert!(err_ptr.is_null());
+    assert!(!info.is_null());
+    let info_ref = unsafe { &*info };
+    assert!(info_ref.size > 0);
+    assert!(!info_ref.analysis.is_null());
+    unsafe { dhara_file_info_free(info) };
 }
 
 #[test]
@@ -185,6 +230,28 @@ fn write_read_list_and_delete_round_trip_non_ascii_paths() {
     let delete_status =
         unsafe { dhara_delete_file(renamed_c.as_ptr(), &mut err_ptr, &mut err_len) };
     assert_eq!(delete_status, DharaStatus::Ok);
+}
+
+#[test]
+fn list_entries_v2_returns_typed_entries() {
+    let temp = tempdir().unwrap();
+    std::fs::write(temp.path().join("entry.txt"), "typed").unwrap();
+    let temp_c = CString::new(temp.path().to_string_lossy().as_bytes()).unwrap();
+    let mut entries: *mut NativeStorageEntryList = ptr::null_mut();
+    let mut err_ptr: *mut u8 = ptr::null_mut();
+    let mut err_len = 0;
+
+    let status = unsafe {
+        dhara_list_entries_v2(temp_c.as_ptr(), 0, &mut entries, &mut err_ptr, &mut err_len)
+    };
+
+    assert_eq!(status, DharaStatus::Ok);
+    assert!(err_ptr.is_null());
+    assert!(!entries.is_null());
+    let entries_ref = unsafe { &*entries };
+    assert!(entries_ref.entries_len >= 1);
+    assert!(!entries_ref.entries_ptr.is_null());
+    unsafe { dhara_storage_entry_list_free(entries) };
 }
 
 #[test]
