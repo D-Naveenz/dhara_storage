@@ -458,7 +458,7 @@ fn verify_unsupported_runtime_rejected(
             format!("-p:DharaStoragePackageVersion={version}"),
         ],
         repo_root,
-        "supports only win-x64 and win-arm64 runtime identifiers",
+        "does not support 32-bit runtime identifier",
     )
 }
 

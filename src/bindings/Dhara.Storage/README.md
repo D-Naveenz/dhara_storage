@@ -10,14 +10,17 @@ The first NuGet release is prepared as `Dhara.Storage` `0.4.4`.
 
 ## Supported Platforms
 
-`Dhara.Storage` NuGet packages support:
+`Dhara.Storage` uses a native Rust backend. The managed assembly is platform
+neutral in principle, but a matching native asset must exist for the runtime.
+
+The current NuGet package ships native assets for:
 
 - Windows `win-x64`
 - Windows `win-arm64`
 
 Unsupported platforms are rejected in two places:
 
-- at package-consumption time through a transitive `.targets` file for explicit unsupported RIDs such as `win-x86`
+- at package-consumption time through a transitive `.targets` file for 32-bit runtime identifiers, 32-bit build platforms, and `Prefer32Bit=true`
 - at runtime through a managed `PlatformNotSupportedException` guard
 
 ## Install
