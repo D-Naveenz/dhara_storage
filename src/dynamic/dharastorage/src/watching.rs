@@ -71,13 +71,14 @@ pub unsafe extern "C" fn dhara_watch_create(
 }
 
 #[unsafe(no_mangle)]
+#[deprecated(note = "legacy JSON ABI; use the typed dhara_watch_try_recv_event export instead")]
 /// Attempts to receive the next watch event without blocking and returns JSON when one is available.
 ///
 /// # Safety
 ///
 /// `handle`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow
 /// the Dhara Storage FFI pointer contracts.
-pub unsafe extern "C" fn dhara_watch_try_recv_json(
+pub unsafe extern "C" fn dhara_watch_try_recv_json_old(
     handle: *mut NativeWatchHandle,
     out_json_ptr: *mut *mut u8,
     out_json_len: *mut usize,
@@ -101,7 +102,7 @@ pub unsafe extern "C" fn dhara_watch_try_recv_json(
 ///
 /// `handle`, `out_event`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
 /// pointer contracts. A non-null returned event must be freed with `dhara_watch_event_free`.
-pub unsafe extern "C" fn dhara_watch_try_recv_event_v2(
+pub unsafe extern "C" fn dhara_watch_try_recv_event(
     handle: *mut NativeWatchHandle,
     out_event: *mut *mut NativeWatchEvent,
     out_error_ptr: *mut *mut u8,
@@ -117,13 +118,14 @@ pub unsafe extern "C" fn dhara_watch_try_recv_event_v2(
 }
 
 #[unsafe(no_mangle)]
+#[deprecated(note = "legacy JSON ABI; use the typed dhara_watch_recv_event export instead")]
 /// Blocks until the next watch event is available and returns it as JSON.
 ///
 /// # Safety
 ///
 /// `handle`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow
 /// the Dhara Storage FFI pointer contracts.
-pub unsafe extern "C" fn dhara_watch_recv_json(
+pub unsafe extern "C" fn dhara_watch_recv_json_old(
     handle: *mut NativeWatchHandle,
     out_json_ptr: *mut *mut u8,
     out_json_len: *mut usize,
@@ -147,7 +149,7 @@ pub unsafe extern "C" fn dhara_watch_recv_json(
 ///
 /// `handle`, `out_event`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
 /// pointer contracts. The returned event must be freed with `dhara_watch_event_free`.
-pub unsafe extern "C" fn dhara_watch_recv_event_v2(
+pub unsafe extern "C" fn dhara_watch_recv_event(
     handle: *mut NativeWatchHandle,
     out_event: *mut *mut NativeWatchEvent,
     out_error_ptr: *mut *mut u8,
@@ -163,13 +165,14 @@ pub unsafe extern "C" fn dhara_watch_recv_event_v2(
 }
 
 #[unsafe(no_mangle)]
+#[deprecated(note = "legacy JSON ABI; use the typed dhara_watch_recv_event_timeout export instead")]
 /// Waits up to `timeout_ms` for the next watch event and returns it as JSON when available.
 ///
 /// # Safety
 ///
 /// `handle`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow
 /// the Dhara Storage FFI pointer contracts.
-pub unsafe extern "C" fn dhara_watch_recv_json_timeout(
+pub unsafe extern "C" fn dhara_watch_recv_json_timeout_old(
     handle: *mut NativeWatchHandle,
     timeout_ms: u64,
     out_json_ptr: *mut *mut u8,
@@ -194,7 +197,7 @@ pub unsafe extern "C" fn dhara_watch_recv_json_timeout(
 ///
 /// `handle`, `out_event`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
 /// pointer contracts. A non-null returned event must be freed with `dhara_watch_event_free`.
-pub unsafe extern "C" fn dhara_watch_recv_event_timeout_v2(
+pub unsafe extern "C" fn dhara_watch_recv_event_timeout(
     handle: *mut NativeWatchHandle,
     timeout_ms: u64,
     out_event: *mut *mut NativeWatchEvent,

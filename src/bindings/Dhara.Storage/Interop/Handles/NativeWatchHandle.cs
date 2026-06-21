@@ -30,7 +30,7 @@ internal sealed class NativeWatchHandle : IDisposable
     {
         ThrowIfDisposed();
         NativeHelpers.EnsureSupportedPlatform();
-        var status = NativeWatching.dhara_watch_recv_event_timeout_v2(_handle, (ulong)Math.Max(0, timeout.TotalMilliseconds), out var eventPtr, out var errorPtr, out var errorLen);
+        var status = NativeWatching.dhara_watch_recv_event_timeout(_handle, (ulong)Math.Max(0, timeout.TotalMilliseconds), out var eventPtr, out var errorPtr, out var errorLen);
         NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
         if (eventPtr == 0)
         {

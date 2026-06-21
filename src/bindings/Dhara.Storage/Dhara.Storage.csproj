@@ -27,27 +27,27 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup Condition="&apos;$(StagedNativeRoot)&apos; != &apos;&apos;">
-    <None Pack="true" Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Visible="false" />
+    <None Pack="true" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Visible="false" Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Version="10.0.8" Include="Microsoft.Extensions.Logging.Abstractions" />
   </ItemGroup>
-  <Target Name="BuildNativeLibrary" BeforeTargets="BeforeBuild" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;">
+  <Target Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" BeforeTargets="BeforeBuild" Name="BuildNativeLibrary">
     <Exec Command="cargo build -p dharastorage $(NativeCargoArgs)" WorkingDirectory="$(RepoRoot)" />
   </Target>
-  <Target Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" BeforeTargets="Pack" Name="ValidatePackNativeAssets">
+  <Target Name="ValidatePackNativeAssets" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" BeforeTargets="Pack">
     <Error Text="Packing Dhara.Storage requires staged native assets for all supported runtimes. Use the repo packaging flow so both win-x64 and win-arm64 assets are included." />
   </Target>
   <Target Name="CopyNativeLibraryToOutput" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" AfterTargets="Build">
     <Copy DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" SourceFiles="$(NativeDllPath)" />
   </Target>
   <ItemGroup>
-    <None Pack="True" PackagePath="build\" Include="build\Dhara.Storage.targets" />
+    <None PackagePath="build\" Pack="True" Include="build\Dhara.Storage.targets" />
   </ItemGroup>
   <ItemGroup>
-    <None PackagePath="\" Pack="true" Include="README.md" />
+    <None Include="README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
   <ItemGroup>
-    <None PackagePath="\" Include="..\..\..\assets\branding\dhara-logo-colored_sm.png" Pack="true" />
+    <None PackagePath="\" Pack="true" Include="..\..\..\assets\branding\dhara-logo-colored_sm.png" />
   </ItemGroup>
 </Project>

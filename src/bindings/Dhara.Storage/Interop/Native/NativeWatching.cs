@@ -8,18 +8,21 @@ internal static partial class NativeWatching
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_watch_create(string path, byte recursive, ulong debounceWindowMs, out nint handle, out nint errorPtr, out nuint errorLen);
+    [Obsolete("Legacy JSON ABI. Use typed dhara_watch_try_recv_event instead.")]
     [LibraryImport(LibraryName)]
-    internal static partial NativeStatus dhara_watch_try_recv_json(nint handle, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_watch_try_recv_json_old(nint handle, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+    [Obsolete("Legacy JSON ABI. Use typed dhara_watch_recv_event instead.")]
     [LibraryImport(LibraryName)]
-    internal static partial NativeStatus dhara_watch_recv_json(nint handle, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_watch_recv_json_old(nint handle, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+    [Obsolete("Legacy JSON ABI. Use typed dhara_watch_recv_event_timeout instead.")]
     [LibraryImport(LibraryName)]
-    internal static partial NativeStatus dhara_watch_recv_json_timeout(nint handle, ulong timeoutMs, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_watch_recv_json_timeout_old(nint handle, ulong timeoutMs, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
     [LibraryImport(LibraryName)]
-    internal static partial NativeStatus dhara_watch_try_recv_event_v2(nint handle, out nint eventPtr, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_watch_try_recv_event(nint handle, out nint eventPtr, out nint errorPtr, out nuint errorLen);
     [LibraryImport(LibraryName)]
-    internal static partial NativeStatus dhara_watch_recv_event_v2(nint handle, out nint eventPtr, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_watch_recv_event(nint handle, out nint eventPtr, out nint errorPtr, out nuint errorLen);
     [LibraryImport(LibraryName)]
-    internal static partial NativeStatus dhara_watch_recv_event_timeout_v2(nint handle, ulong timeoutMs, out nint eventPtr, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_watch_recv_event_timeout(nint handle, ulong timeoutMs, out nint eventPtr, out nint errorPtr, out nuint errorLen);
     [LibraryImport(LibraryName)]
     internal static partial void dhara_watch_event_free(nint eventPtr);
     [LibraryImport(LibraryName)]

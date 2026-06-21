@@ -4,11 +4,15 @@ use std::slice;
 
 use dharastorage::{
     DharaStatus, NativeAnalysisReport, NativeFileInformation, NativeStorageEntryList,
-    dhara_analysis_report_free, dhara_analyze_path, dhara_analyze_path_v2, dhara_bytes_free,
-    dhara_create_directory_all, dhara_delete_file, dhara_file_info_free, dhara_get_directory_info,
-    dhara_get_file_info, dhara_get_file_info_v2, dhara_list_entries, dhara_list_entries_v2,
+    dhara_analysis_report_free, dhara_analyze_path, dhara_bytes_free, dhara_create_directory_all,
+    dhara_delete_file, dhara_file_info_free, dhara_get_file_info, dhara_list_entries,
     dhara_read_file, dhara_rename_file, dhara_storage_entry_list_free, dhara_string_free,
     dhara_write_file_text,
+};
+#[allow(deprecated)]
+use dharastorage::{
+    dhara_analyze_path_json_old, dhara_get_directory_info_json_old, dhara_get_file_info_json_old,
+    dhara_list_entries_json_old,
 };
 use tempfile::tempdir;
 
@@ -37,7 +41,8 @@ fn bytes_from_output(ptr: *mut u8, len: usize) -> Vec<u8> {
 }
 
 #[test]
-fn analyze_path_returns_json() {
+#[allow(deprecated)]
+fn analyze_path_json_old_returns_legacy_json() {
     let fixture = std::fs::canonicalize(fixture_path()).unwrap();
     let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
     let mut out_ptr: *mut u8 = ptr::null_mut();
@@ -46,7 +51,7 @@ fn analyze_path_returns_json() {
     let mut err_len = 0;
 
     let status = unsafe {
-        dhara_analyze_path(
+        dhara_analyze_path_json_old(
             fixture.as_ptr(),
             &mut out_ptr,
             &mut out_len,
@@ -62,7 +67,7 @@ fn analyze_path_returns_json() {
 }
 
 #[test]
-fn analyze_path_v2_returns_typed_report() {
+fn analyze_path_returns_typed_report() {
     let fixture = std::fs::canonicalize(fixture_path()).unwrap();
     let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
     let mut report: *mut NativeAnalysisReport = ptr::null_mut();
@@ -70,7 +75,7 @@ fn analyze_path_v2_returns_typed_report() {
     let mut err_len = 0;
 
     let status =
-        unsafe { dhara_analyze_path_v2(fixture.as_ptr(), &mut report, &mut err_ptr, &mut err_len) };
+        unsafe { dhara_analyze_path(fixture.as_ptr(), &mut report, &mut err_ptr, &mut err_len) };
 
     assert_eq!(status, DharaStatus::Ok);
     assert!(err_ptr.is_null());
@@ -83,16 +88,15 @@ fn analyze_path_v2_returns_typed_report() {
 }
 
 #[test]
-fn file_info_v2_returns_optional_analysis_pointer() {
+fn file_info_returns_optional_analysis_pointer() {
     let fixture = std::fs::canonicalize(fixture_path()).unwrap();
     let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
     let mut info: *mut NativeFileInformation = ptr::null_mut();
     let mut err_ptr: *mut u8 = ptr::null_mut();
     let mut err_len = 0;
 
-    let status = unsafe {
-        dhara_get_file_info_v2(fixture.as_ptr(), 1, &mut info, &mut err_ptr, &mut err_len)
-    };
+    let status =
+        unsafe { dhara_get_file_info(fixture.as_ptr(), 1, &mut info, &mut err_ptr, &mut err_len) };
 
     assert_eq!(status, DharaStatus::Ok);
     assert!(err_ptr.is_null());
@@ -104,6 +108,7 @@ fn file_info_v2_returns_optional_analysis_pointer() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn file_info_and_directory_info_include_optional_payloads() {
     let fixture = std::fs::canonicalize(fixture_path()).unwrap();
     let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
@@ -116,7 +121,7 @@ fn file_info_and_directory_info_include_optional_payloads() {
     let mut err_len = 0;
 
     let file_status = unsafe {
-        dhara_get_file_info(
+        dhara_get_file_info_json_old(
             fixture.as_ptr(),
             1,
             &mut out_ptr,
@@ -130,7 +135,7 @@ fn file_info_and_directory_info_include_optional_payloads() {
     assert!(json.contains("\"analysis\""));
 
     let directory_status = unsafe {
-        dhara_get_directory_info(
+        dhara_get_directory_info_json_old(
             temp_c.as_ptr(),
             1,
             &mut out_ptr,
@@ -145,6 +150,7 @@ fn file_info_and_directory_info_include_optional_payloads() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn write_read_list_and_delete_round_trip_non_ascii_paths() {
     let temp = tempdir().unwrap();
     let nested = temp.path().join("nested").join("inner");
@@ -199,7 +205,7 @@ fn write_read_list_and_delete_round_trip_non_ascii_paths() {
     assert_eq!(bytes, b"hello from ffi");
 
     let list_status = unsafe {
-        dhara_list_entries(
+        dhara_list_entries_json_old(
             nested_c.as_ptr(),
             0,
             &mut out_ptr,
@@ -233,7 +239,7 @@ fn write_read_list_and_delete_round_trip_non_ascii_paths() {
 }
 
 #[test]
-fn list_entries_v2_returns_typed_entries() {
+fn list_entries_returns_typed_entries() {
     let temp = tempdir().unwrap();
     std::fs::write(temp.path().join("entry.txt"), "typed").unwrap();
     let temp_c = CString::new(temp.path().to_string_lossy().as_bytes()).unwrap();
@@ -241,9 +247,8 @@ fn list_entries_v2_returns_typed_entries() {
     let mut err_ptr: *mut u8 = ptr::null_mut();
     let mut err_len = 0;
 
-    let status = unsafe {
-        dhara_list_entries_v2(temp_c.as_ptr(), 0, &mut entries, &mut err_ptr, &mut err_len)
-    };
+    let status =
+        unsafe { dhara_list_entries(temp_c.as_ptr(), 0, &mut entries, &mut err_ptr, &mut err_len) };
 
     assert_eq!(status, DharaStatus::Ok);
     assert!(err_ptr.is_null());

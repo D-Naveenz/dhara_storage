@@ -539,7 +539,7 @@ fn slice_ptr<T>(slice: &[T]) -> *const T {
 ///
 /// # Safety
 ///
-/// `report` must be null or a pointer returned by `dhara_analyze_path_v2` or another typed
+/// `report` must be null or a pointer returned by `dhara_analyze_path` or another typed
 /// Dhara Storage ABI function that transfers ownership of a `NativeAnalysisReport`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dhara_analysis_report_free(report: *mut NativeAnalysisReport) {
@@ -552,7 +552,7 @@ pub unsafe extern "C" fn dhara_analysis_report_free(report: *mut NativeAnalysisR
 ///
 /// # Safety
 ///
-/// `info` must be null or a pointer returned by `dhara_get_file_info_v2`.
+/// `info` must be null or a pointer returned by `dhara_get_file_info`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dhara_file_info_free(info: *mut NativeFileInformation) {
     if !info.is_null() {
@@ -564,7 +564,7 @@ pub unsafe extern "C" fn dhara_file_info_free(info: *mut NativeFileInformation) 
 ///
 /// # Safety
 ///
-/// `info` must be null or a pointer returned by `dhara_get_directory_info_v2`.
+/// `info` must be null or a pointer returned by `dhara_get_directory_info`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dhara_directory_info_free(info: *mut NativeDirectoryInformation) {
     if !info.is_null() {
