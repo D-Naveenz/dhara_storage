@@ -6,7 +6,7 @@
 It owns:
 
 - TrID XML ingestion from `.xml`, extracted directories, and `.7z` archives
-- normalization and validation of the `filedefs.dhbin` runtime package
+- normalization and validation of the `filedefs.dat` runtime package
 - embedded package sync for the runtime crate
 - repo config and version synchronization
 - NuGet package verification and publish flows for `Dhara.Storage`

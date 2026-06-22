@@ -101,7 +101,7 @@ fn ui_for_command(
             supports_cancel: false,
         },
         "defs.build-trid-xml" => CommandUi {
-            description: "Build a filedefs.dhbin package from TrID XML sources or archives.",
+            description: "Build a filedefs.dat package from TrID XML sources or archives.",
             fields: vec![
                 optional_path(
                     "input",
@@ -120,7 +120,7 @@ fn ui_for_command(
             supports_cancel: false,
         },
         "defs.inspect" => CommandUi {
-            description: "Inspect an encoded DHBIN package and summarize its metadata and counts.",
+            description: "Inspect an encoded FlatBuffers package and summarize its metadata and counts.",
             fields: vec![optional_path(
                 "input",
                 "Input",
@@ -142,7 +142,7 @@ fn ui_for_command(
             supports_cancel: false,
         },
         "defs.normalize" => CommandUi {
-            description: "Normalize an existing DHBIN package into the canonical builder format.",
+            description: "Normalize an existing FlatBuffers package into the canonical builder format.",
             fields: vec![
                 optional_path("input", "Input", "Optional source package path.", "--input"),
                 optional_path(
@@ -156,7 +156,7 @@ fn ui_for_command(
             supports_cancel: false,
         },
         "defs.verify" => CommandUi {
-            description: "Compare two DHBIN packages for semantic equivalence.",
+            description: "Compare two FlatBuffers packages for semantic equivalence.",
             fields: vec![
                 required_path("left", "Left", "Left-hand package path.", "--left"),
                 required_path("right", "Right", "Right-hand package path.", "--right"),
@@ -165,7 +165,7 @@ fn ui_for_command(
             supports_cancel: false,
         },
         "defs.sync-embedded" => CommandUi {
-            description: "Refresh the embedded runtime filedefs.dhbin package from the builder source.",
+            description: "Refresh the embedded runtime filedefs.dat package from the builder source.",
             fields: vec![
                 optional_path(
                     "input",

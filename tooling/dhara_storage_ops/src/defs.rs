@@ -13,7 +13,7 @@ use crate::{
 pub struct DefsPaths {
     /// Source directory or archive root used to discover TrID XML inputs.
     pub package_dir: PathBuf,
-    /// Output directory used for generated `filedefs.dhbin` artifacts.
+    /// Output directory used for generated `filedefs.dat` artifacts.
     pub output_dir: PathBuf,
     /// Directory where defs command log files are written.
     pub logs_dir: PathBuf,
@@ -64,9 +64,9 @@ impl DefsPaths {
         self.package_dir.clone()
     }
 
-    /// Returns the default output path for generated `filedefs.dhbin` files.
+    /// Returns the default output path for generated `filedefs.dat` files.
     pub fn default_package_output_path(&self) -> PathBuf {
-        self.output_dir.join("filedefs.dhbin")
+        self.output_dir.join("filedefs.dat")
     }
 }
 
@@ -182,9 +182,9 @@ pub fn default_embedded_sync_paths(repo_root: &Path) -> (PathBuf, PathBuf) {
         repo_root
             .join("src")
             .join("static")
-            .join("dhara_storage")
+            .join("dhara_storage_dal")
             .join("resources")
-            .join("filedefs.dhbin"),
+            .join("filedefs.dat"),
     )
 }
 

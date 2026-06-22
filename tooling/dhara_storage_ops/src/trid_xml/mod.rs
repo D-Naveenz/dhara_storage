@@ -69,7 +69,7 @@ pub struct TridBuildStats {
     pub final_trimmed: usize,
 }
 
-/// Diagnostics produced while transforming TrID XML definitions into a `dhbin`.
+/// Diagnostics produced while transforming TrID XML definitions into a FlatBuffers package.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct TridTransformReport {
     /// Total parsed TrID definitions before validation.
@@ -88,7 +88,7 @@ pub struct TridTransformReport {
     pub final_kept: usize,
 }
 
-/// The result of building a `dhbin` from TrID XML definitions.
+/// The result of building a FlatBuffers package from TrID XML definitions.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TridBuildOutput {
     /// The transformed definitions package.
@@ -97,7 +97,7 @@ pub struct TridBuildOutput {
     pub report: TridTransformReport,
 }
 
-/// Build a reduced `filedefs.dhbin` package from a TrID XML source.
+/// Build a reduced `filedefs.dat` package from a TrID XML source.
 ///
 /// The source may be a single `.xml` definition file, a directory that contains
 /// extracted TrID XML definitions, or a `.7z` archive containing the XML tree.
@@ -121,7 +121,7 @@ pub fn build_trid_xml_package(source: impl AsRef<Path>) -> Result<DefinitionPack
     Ok(build_trid_xml_package_with_report(source)?.package)
 }
 
-/// Build a reduced `filedefs.dhbin` package from a TrID XML source while reporting progress.
+/// Build a reduced `filedefs.dat` package from a TrID XML source while reporting progress.
 ///
 /// # Returns
 ///
@@ -140,7 +140,7 @@ where
     build_trid_xml_package_with_report_internal(source.as_ref(), &mut progress)
 }
 
-/// Build a reduced `filedefs.dhbin` package from a TrID XML source and return diagnostics.
+/// Build a reduced `filedefs.dat` package from a TrID XML source and return diagnostics.
 ///
 /// # Returns
 ///

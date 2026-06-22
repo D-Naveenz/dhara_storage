@@ -4,9 +4,9 @@
 //!
 //! This crate currently focuses on the first two rewrite milestones:
 //! immutable metadata and content-based analysis backed by the bundled
-//! `filedefs.dhbin` package, plus a Rust-native file and directory operations
+//! `filedefs.dat` package, plus a Rust-native file and directory operations
 //! layer with optional async wrappers. The package loader reads filedefs
-//! packages through the shared `dhara_dhbin` container crate.
+//! packages through the shared `dhara_storage_dal` FlatBuffers crate.
 
 /// Content-based file analysis and heuristic classification helpers.
 pub mod analysis;
@@ -27,7 +27,6 @@ pub use analysis::{AnalysisReport, ContentKind, DetectedDefinition, analyze_path
 pub use definitions::{
     DEFINITION_PACKAGE_ID, DefinitionPackage, DefinitionPackageDecodeError, DefinitionRecord,
     SignatureDefinition, SignaturePattern, bundled_definition_package, decode_definition_package,
-    decode_definition_package_payload, decode_definition_package_with_options,
 };
 pub use error::StorageError;
 pub use info::{DirectoryInfo, DirectorySummary, FileInfo, SizeUnit, StorageMetadata, format_size};

@@ -1,0 +1,37 @@
+namespace dhara.storage.dal;
+
+file_identifier "FDEF";
+file_extension "dat";
+
+table ByteBlob {
+  data:[ubyte];
+}
+
+table SignaturePattern {
+  position:ushort;
+  data:[ubyte];
+}
+
+table SignatureDefinition {
+  patterns:[SignaturePattern];
+  strings:[ByteBlob];
+}
+
+table DefinitionRecord {
+  file_type:string;
+  extensions:[string];
+  mime_type:string;
+  remarks:string;
+  signature:SignatureDefinition;
+  priority_level:int;
+}
+
+table DefinitionPackage {
+  package_version:string;
+  source_version:string;
+  package_revision:ushort;
+  tags:uint;
+  definitions:[DefinitionRecord];
+}
+
+root_type DefinitionPackage;

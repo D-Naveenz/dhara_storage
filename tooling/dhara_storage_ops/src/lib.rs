@@ -12,10 +12,9 @@ pub mod support;
 pub mod verify;
 
 pub use builder::{
-    BuilderError, FiledefsPackageMetadata, LoadedPackage, PackageSummary, SyncEmbeddedOutcome,
-    SyncEmbeddedStatus, TridBuildProgress, TridBuildStage, TridTransformReport, inspect_package,
-    load_bundled_package, load_package, normalize_package, packages_match, sync_embedded_package,
-    write_package, write_package_with_purpose,
+    BuilderError, LoadedPackage, PackageSummary, SyncEmbeddedOutcome, SyncEmbeddedStatus,
+    TridBuildProgress, TridBuildStage, TridTransformReport, inspect_package, load_bundled_package,
+    load_package, normalize_package, packages_match, sync_embedded_package, write_package,
 };
 pub use capability::DharaStorageCapability;
 pub use config::{

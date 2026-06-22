@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "src/static/dhara_dhbin",
+    "src/static/dhara_storage_dal",
     "src/static/dhara_storage",
     "src/dynamic/dharastorage",
     "tooling/dhara_tool",
@@ -17,7 +18,7 @@ repository = "https://github.com/D-Naveenz/dhara_storage"
 homepage = "https://github.com/D-Naveenz/dhara_storage"
 
 [workspace.dependencies]
-dhara_dhbin = { version = "0.4.4", path = "src/static/dhara_dhbin" }
+dhara_storage_dal = { version = "0.4.4", path = "src/static/dhara_storage_dal" }
 dhara_storage = { version = "0.4.4", path = "src/static/dhara_storage" }
 dhara_storage_ops = { version = "0.4.4", path = "tooling/dhara_storage_ops" }
 

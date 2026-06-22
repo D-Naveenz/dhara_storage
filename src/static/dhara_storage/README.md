@@ -6,7 +6,7 @@
 
 It owns the core behavior for:
 
-- content-based file analysis using the bundled `filedefs.dhbin`
+- content-based file analysis using the bundled `filedefs.dat`
 - immutable file and directory information snapshots
 - sync-first file and directory operations with optional progress
 - path-based storage handles for ergonomic navigation

@@ -1,15 +1,10 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dhara_dhbin::{
-    CompressionKind, DhbinReadOptions, DhbinReader, DhbinWriteOptions, DhbinWriter, IntegrityKind,
-    PackagePurpose,
+use dhara_storage::{DefinitionPackage, bundled_definition_package};
+use dhara_storage_dal::{
+    DEFINITION_PACKAGE_IDENTIFIER, decode_definition_package, encode_definition_package,
 };
-use dhara_storage::{
-    DEFINITION_PACKAGE_ID, DefinitionPackage, DefinitionRecord, bundled_definition_package,
-    decode_definition_package_payload,
-};
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tracing::{debug, info};
 
@@ -59,13 +54,9 @@ pub enum BuilderError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageSummary {
     pub(crate) package_id: String,
-    pub(crate) purpose: PackagePurpose,
-    pub(crate) compression: CompressionKind,
-    pub(crate) integrity: IntegrityKind,
     pub(crate) package_version: String,
     pub(crate) source_version: String,
     pub(crate) package_revision: u16,
-    pub(crate) checksum_verified: bool,
     pub(crate) tags: u32,
     pub(crate) definition_count: usize,
 }
@@ -73,14 +64,10 @@ pub struct PackageSummary {
 impl PackageSummary {
     pub(crate) fn from_loaded(loaded: &LoadedPackage) -> Self {
         Self {
-            package_id: loaded.package_id_string(),
-            purpose: loaded.purpose,
-            compression: loaded.compression,
-            integrity: loaded.integrity,
-            package_version: loaded.metadata.package_version.clone(),
-            source_version: loaded.metadata.source_version.clone(),
-            package_revision: loaded.metadata.package_revision,
-            checksum_verified: loaded.checksum_verified,
+            package_id: DEFINITION_PACKAGE_IDENTIFIER.to_owned(),
+            package_version: loaded.package.package_version.clone(),
+            source_version: loaded.package.source_version.clone(),
+            package_revision: loaded.package.package_revision,
             tags: loaded.package.tags,
             definition_count: loaded.package.definitions.len(),
         }
@@ -90,18 +77,6 @@ impl PackageSummary {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadedPackage {
     pub(crate) package: DefinitionPackage,
-    pub(crate) package_id: [u8; 4],
-    pub(crate) purpose: PackagePurpose,
-    pub(crate) compression: CompressionKind,
-    pub(crate) integrity: IntegrityKind,
-    pub(crate) metadata: FiledefsPackageMetadata,
-    pub(crate) checksum_verified: bool,
-}
-
-impl LoadedPackage {
-    fn package_id_string(&self) -> String {
-        String::from_utf8_lossy(&self.package_id).into_owned()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,16 +96,6 @@ pub struct SyncEmbeddedOutcome {
     pub(crate) detail: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FiledefsPackageMetadata {
-    package_version: String,
-    source_version: String,
-    package_revision: u16,
-}
-
-#[derive(Debug, Serialize)]
-struct RawPackageOut(String, String, u16, (), u32, Vec<DefinitionRecord>);
-
 pub fn load_package(path: impl AsRef<Path>) -> Result<LoadedPackage, BuilderError> {
     let path = path.as_ref();
     info!(path = %path.display(), "loading definitions package");
@@ -139,62 +104,10 @@ pub fn load_package(path: impl AsRef<Path>) -> Result<LoadedPackage, BuilderErro
         path: path.to_path_buf(),
         source,
     })?;
-
-    let package = DhbinReader::read_package(
-        &bytes,
-        &DhbinReadOptions {
-            verify_integrity: true,
-            load_metadata: true,
-        },
-    )
-    .map_err(|err| BuilderError::Package {
+    let package = decode_definition_package(&bytes).map_err(|err| BuilderError::Package {
         message: err.to_string(),
     })?;
-    if package.header.package_id != DEFINITION_PACKAGE_ID {
-        return Err(BuilderError::Package {
-            message: format!(
-                "unexpected package identifier '{}'",
-                String::from_utf8_lossy(&package.header.package_id)
-            ),
-        });
-    }
-
-    let metadata = package
-        .metadata
-        .as_deref()
-        .ok_or_else(|| BuilderError::Package {
-            message: "filedefs package is missing metadata".to_string(),
-        })
-        .and_then(|bytes| {
-            rmp_serde::from_slice::<FiledefsPackageMetadata>(bytes).map_err(|err| {
-                BuilderError::Package {
-                    message: err.to_string(),
-                }
-            })
-        })?;
-    let definitions = decode_definition_package_payload(&package.payload).map_err(|err| {
-        BuilderError::Package {
-            message: err.to_string(),
-        }
-    })?;
-    if definitions.package_version != metadata.package_version
-        || definitions.source_version != metadata.source_version
-        || definitions.package_revision != metadata.package_revision
-    {
-        return Err(BuilderError::Package {
-            message: "filedefs payload and metadata version fields do not match".to_string(),
-        });
-    }
-
-    Ok(LoadedPackage {
-        package: definitions,
-        package_id: package.header.package_id,
-        purpose: package.header.purpose,
-        compression: package.header.compression,
-        integrity: package.integrity,
-        metadata,
-        checksum_verified: package.integrity_verified,
-    })
+    Ok(LoadedPackage { package })
 }
 
 pub fn load_bundled_package() -> Result<DefinitionPackage, BuilderError> {
@@ -210,16 +123,8 @@ pub fn write_package(
     package: &DefinitionPackage,
     path: impl AsRef<Path>,
 ) -> Result<PathBuf, BuilderError> {
-    write_package_with_purpose(package, path, PackagePurpose::Standard)
-}
-
-pub fn write_package_with_purpose(
-    package: &DefinitionPackage,
-    path: impl AsRef<Path>,
-    purpose: PackagePurpose,
-) -> Result<PathBuf, BuilderError> {
     let path = path.as_ref().to_path_buf();
-    info!(path = %path.display(), ?purpose, "writing definitions package");
+    info!(path = %path.display(), "writing definitions package");
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| BuilderError::Io {
             operation: "create output directory for",
@@ -228,26 +133,10 @@ pub fn write_package_with_purpose(
         })?;
     }
 
-    let payload = serialize_definition_package_payload(package)?;
-    let metadata = serialize_filedefs_metadata(package)?;
-    let bytes = DhbinWriter::write_payload_bytes(
-        &payload,
-        &DhbinWriteOptions {
-            package_id: DEFINITION_PACKAGE_ID,
-            purpose,
-            compression: CompressionKind::Lz4Frame,
-            flags: 0,
-            metadata: Some(metadata),
-            integrity: IntegrityKind::Sha256,
-        },
-    )
-    .map_err(|err| BuilderError::Package {
-        message: err.to_string(),
-    })?;
+    let bytes = encode_definition_package(package);
     debug!(
         bytes = bytes.len(),
         definitions = package.definitions.len(),
-        ?purpose,
         "encoded definitions package"
     );
     fs::write(&path, bytes).map_err(|source| BuilderError::Io {
@@ -264,7 +153,7 @@ pub fn normalize_package(
 ) -> Result<PathBuf, BuilderError> {
     info!("normalizing definitions package");
     let package = load_package(input)?;
-    write_package_with_purpose(&package.package, output, package.purpose)
+    write_package(&package.package, output)
 }
 
 pub fn packages_match(
@@ -274,12 +163,7 @@ pub fn packages_match(
     info!("comparing definitions packages");
     let left = load_package(left)?;
     let right = load_package(right)?;
-    Ok(left.package == right.package
-        && left.package_id == right.package_id
-        && left.purpose == right.purpose
-        && left.compression == right.compression
-        && left.integrity == right.integrity
-        && left.metadata == right.metadata)
+    Ok(left.package == right.package)
 }
 
 pub fn inspect_package(path: impl AsRef<Path>) -> Result<PackageSummary, BuilderError> {
@@ -344,7 +228,7 @@ pub fn sync_embedded_package(
         });
     }
 
-    write_package_with_purpose(&desired_package, &output, PackagePurpose::Embedded)?;
+    write_package(&desired_package, &output)?;
     Ok(SyncEmbeddedOutcome {
         input,
         output,
@@ -355,61 +239,25 @@ pub fn sync_embedded_package(
 }
 
 fn current_validity_reason(current: &LoadedPackage, desired: &DefinitionPackage) -> Option<String> {
-    if current.package_id != DEFINITION_PACKAGE_ID {
-        return Some(format!(
-            "embedded package id '{}' does not match 'FDEF'",
-            current.package_id_string()
-        ));
-    }
-    if current.purpose != PackagePurpose::Embedded {
-        return Some("embedded package purpose is not Embedded".to_string());
-    }
-    if current.metadata.package_version != desired.package_version {
+    if current.package.package_version != desired.package_version {
         return Some(format!(
             "package version mismatch: current='{}', desired='{}'",
-            current.metadata.package_version, desired.package_version
+            current.package.package_version, desired.package_version
         ));
     }
-    if current.metadata.source_version != desired.source_version {
+    if current.package.source_version != desired.source_version {
         return Some(format!(
             "source version mismatch: current='{}', desired='{}'",
-            current.metadata.source_version, desired.source_version
+            current.package.source_version, desired.source_version
         ));
     }
-    if current.metadata.package_revision != desired.package_revision {
+    if current.package.package_revision != desired.package_revision {
         return Some(format!(
             "package revision mismatch: current='{}', desired='{}'",
-            current.metadata.package_revision, desired.package_revision
+            current.package.package_revision, desired.package_revision
         ));
     }
     None
-}
-
-fn serialize_definition_package_payload(
-    package: &DefinitionPackage,
-) -> Result<Vec<u8>, BuilderError> {
-    rmp_serde::to_vec(&RawPackageOut(
-        package.package_version.clone(),
-        package.source_version.clone(),
-        package.package_revision,
-        (),
-        package.tags,
-        package.definitions.clone(),
-    ))
-    .map_err(|err| BuilderError::Package {
-        message: err.to_string(),
-    })
-}
-
-fn serialize_filedefs_metadata(package: &DefinitionPackage) -> Result<Vec<u8>, BuilderError> {
-    rmp_serde::to_vec(&FiledefsPackageMetadata {
-        package_version: package.package_version.clone(),
-        source_version: package.source_version.clone(),
-        package_revision: package.package_revision,
-    })
-    .map_err(|err| BuilderError::Package {
-        message: err.to_string(),
-    })
 }
 
 #[cfg(test)]
@@ -418,12 +266,11 @@ mod tests {
     use std::path::{Path, PathBuf};
     use std::process::Command;
 
-    use dhara_dhbin::{CompressionKind, IntegrityKind, PackagePurpose};
     use tempfile::tempdir;
 
     use super::{
         PackageSummary, SyncEmbeddedStatus, load_bundled_package, normalize_package,
-        packages_match, sync_embedded_package, trid_xml, write_package, write_package_with_purpose,
+        packages_match, sync_embedded_package, trid_xml, write_package,
     };
 
     fn fixtures_root() -> PathBuf {
@@ -443,8 +290,8 @@ mod tests {
     #[test]
     fn normalize_roundtrip_preserves_semantics() {
         let temp = tempdir().unwrap();
-        let original = temp.path().join("original.dhbin");
-        let normalized = temp.path().join("normalized.dhbin");
+        let original = temp.path().join("original.dat");
+        let normalized = temp.path().join("normalized.dat");
         let package = load_bundled_package().expect("bundled package should load");
         write_package(&package, &original).expect("original package should be written");
 
@@ -549,7 +396,7 @@ mod tests {
     #[test]
     fn builder_writes_full_package_readable_by_runtime() {
         let temp = tempdir().expect("temporary directory should exist");
-        let output_path = temp.path().join("filedefs.dhbin");
+        let output_path = temp.path().join("filedefs.dat");
         let build = trid_xml::build_trid_xml_package_with_report(fixtures_root())
             .expect("fixture should build");
 
@@ -557,30 +404,27 @@ mod tests {
         let loaded = super::load_package(&output_path).expect("package should load");
 
         assert_eq!(loaded.package, build.package);
-        assert_eq!(loaded.purpose, PackagePurpose::Standard);
-        assert_eq!(loaded.compression, CompressionKind::Lz4Frame);
-        assert_eq!(loaded.integrity, IntegrityKind::Sha256);
-        assert!(loaded.checksum_verified);
     }
 
     #[test]
-    fn builder_writes_fast_embedded_packages() {
+    fn builder_writes_flatbuffers_packages_with_identifier() {
         let temp = tempdir().expect("temporary directory should exist");
-        let output_path = temp.path().join("filedefs.dhbin");
+        let output_path = temp.path().join("filedefs.dat");
         let build = trid_xml::build_trid_xml_package_with_report(fixtures_root())
             .expect("fixture should build");
 
-        write_package_with_purpose(&build.package, &output_path, PackagePurpose::Embedded)
-            .expect("embedded package should be written");
+        write_package(&build.package, &output_path).expect("package should be written");
+        let bytes = fs::read(&output_path).expect("package bytes should be readable");
         let loaded = super::load_package(&output_path).expect("package should load");
+
+        assert!(dhara_storage_dal::root_definition_package(&bytes).is_ok());
         assert_eq!(loaded.package, build.package);
-        assert_eq!(loaded.purpose, PackagePurpose::Embedded);
     }
 
     #[test]
-    fn inspect_package_reports_v2_metadata() {
+    fn inspect_package_reports_flatbuffers_metadata() {
         let temp = tempdir().expect("temporary directory should exist");
-        let output_path = temp.path().join("filedefs.dhbin");
+        let output_path = temp.path().join("filedefs.dat");
         let build = trid_xml::build_trid_xml_package_with_report(fixtures_root())
             .expect("fixture should build");
         write_package(&build.package, &output_path).expect("package should be written");
@@ -590,13 +434,9 @@ mod tests {
             summary,
             PackageSummary {
                 package_id: "FDEF".to_string(),
-                purpose: PackagePurpose::Standard,
-                compression: CompressionKind::Lz4Frame,
-                integrity: IntegrityKind::Sha256,
                 package_version: "trid-2.00+dhbn.1".to_string(),
                 source_version: "2.00".to_string(),
                 package_revision: 1,
-                checksum_verified: true,
                 tags: 48,
                 definition_count: 3,
             }
@@ -608,7 +448,7 @@ mod tests {
         let temp = tempdir().expect("temporary directory should exist");
         let outcome = sync_embedded_package(
             temp.path().join("missing.7z"),
-            temp.path().join("filedefs.dhbin"),
+            temp.path().join("filedefs.dat"),
             false,
         )
         .expect("sync should succeed");
@@ -620,7 +460,7 @@ mod tests {
     fn sync_embedded_updates_when_target_is_stale() {
         let temp = tempdir().expect("temporary directory should exist");
         let archive_path = temp.path().join("triddefs_xml.7z");
-        let output_path = temp.path().join("filedefs.dhbin");
+        let output_path = temp.path().join("filedefs.dat");
 
         let status = Command::new("tar")
             .arg("-a")
@@ -633,7 +473,9 @@ mod tests {
             .expect("tar should create the fixture archive");
         assert!(status.success(), "tar should create a 7z archive");
 
-        let package = load_bundled_package().expect("bundled package should load");
+        let mut package =
+            trid_xml::build_trid_xml_package(fixtures_root()).expect("fixture should build");
+        package.package_version = "stale".to_owned();
         write_package(&package, &output_path).expect("stale package should be written");
 
         let outcome =
@@ -641,15 +483,14 @@ mod tests {
         assert_eq!(outcome.status, SyncEmbeddedStatus::Updated);
 
         let loaded = super::load_package(&output_path).expect("updated package should load");
-        assert_eq!(loaded.purpose, PackagePurpose::Embedded);
-        assert_eq!(loaded.metadata.package_version, "trid-2.00+dhbn.1");
+        assert_eq!(loaded.package.package_version, "trid-2.00+dhbn.1");
     }
 
     #[test]
     fn sync_embedded_check_reports_when_update_is_needed() {
         let temp = tempdir().expect("temporary directory should exist");
         let archive_path = temp.path().join("triddefs_xml.7z");
-        let output_path = temp.path().join("filedefs.dhbin");
+        let output_path = temp.path().join("filedefs.dat");
 
         let status = Command::new("tar")
             .arg("-a")

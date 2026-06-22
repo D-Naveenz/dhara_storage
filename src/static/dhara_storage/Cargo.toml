@@ -23,9 +23,7 @@ async-tokio = ["dep:tokio"]
 globset = "0.4"
 notify = "8.2"
 once_cell = "1.21"
-rmp-serde = "1.3"
-dhara_dhbin.workspace = true
-serde = { version = "1.0", features = ["derive"] }
+dhara_storage_dal.workspace = true
 thiserror = "2.0"
 tokio = { version = "1.52", features = ["rt"], optional = true }
 tracing = "0.1"

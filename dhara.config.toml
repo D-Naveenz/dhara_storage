@@ -16,7 +16,7 @@ tags = [
     "watching",
 ]
 readme = "src/bindings/Dhara.Storage/README.md"
-icon = "assets/branding/dhara-logo-colored_sm.png"
+icon = "assets/dhara-logo-colored_sm.png"
 repository_url = "https://github.com/D-Naveenz/dhara_storage"
 project_url = "https://github.com/D-Naveenz/dhara_storage"
 

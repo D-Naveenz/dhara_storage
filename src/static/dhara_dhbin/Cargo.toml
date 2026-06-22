@@ -11,6 +11,7 @@ readme = "README.md"
 documentation = "https://docs.rs/dhara_dhbin"
 keywords = ["dhbin", "messagepack", "container", "lz4"]
 categories = ["encoding", "filesystem"]
+publish = false
 
 [dependencies]
 lz4_flex = "0.13.1"

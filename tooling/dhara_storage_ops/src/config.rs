@@ -188,7 +188,7 @@ pub fn sync_cargo_toml(content: &str, version: &str) -> Result<String> {
         .parse::<DocumentMut>()
         .context("failed to parse Cargo.toml")?;
     document["workspace"]["package"]["version"] = value(version);
-    document["workspace"]["dependencies"]["dhara_dhbin"]["version"] = value(version);
+    document["workspace"]["dependencies"]["dhara_storage_dal"]["version"] = value(version);
     document["workspace"]["dependencies"]["dhara_storage"]["version"] = value(version);
     document["workspace"]["dependencies"]["dhara_storage_ops"]["version"] = value(version);
     Ok(document.to_string())
@@ -704,17 +704,15 @@ mod tests {
     #[test]
     fn sync_cargo_toml_updates_workspace_version() {
         let updated = sync_cargo_toml(
-            "[workspace]\n[workspace.package]\nversion = \"0.1.0\"\n[workspace.dependencies]\ndhara_dhbin = { version = \"0.1.0\", path = \"src/static/dhara_dhbin\" }\ndhara_storage = { version = \"0.1.0\", path = \"src/static/dhara_storage\" }\ndhara_storage_ops = { version = \"0.1.0\", path = \"tooling/dhara_storage_ops\" }\n",
+            "[workspace]\n[workspace.package]\nversion = \"0.1.0\"\n[workspace.dependencies]\ndhara_storage_dal = { version = \"0.1.0\", path = \"src/static/dhara_storage_dal\" }\ndhara_storage = { version = \"0.1.0\", path = \"src/static/dhara_storage\" }\ndhara_storage_ops = { version = \"0.1.0\", path = \"tooling/dhara_storage_ops\" }\n",
             "0.2.0",
         )
         .unwrap();
 
         assert!(updated.contains("version = \"0.2.0\""));
-        assert!(
-            updated.contains(
-                "dhara_dhbin = { version = \"0.2.0\", path = \"src/static/dhara_dhbin\" }"
-            )
-        );
+        assert!(updated.contains(
+            "dhara_storage_dal = { version = \"0.2.0\", path = \"src/static/dhara_storage_dal\" }"
+        ));
         assert!(updated.contains(
             "dhara_storage = { version = \"0.2.0\", path = \"src/static/dhara_storage\" }"
         ));

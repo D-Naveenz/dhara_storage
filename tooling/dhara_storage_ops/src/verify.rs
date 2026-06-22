@@ -13,6 +13,7 @@ pub fn verify_ci(repo_root: &Path, config: &DharaRepoConfig) -> Result<CommandRe
     verify_release_config(repo_root)?;
 
     for package in [
+        "dhara_storage_dal",
         "dhara_storage",
         "dharastorage",
         "dhara_storage_ops",
@@ -44,7 +45,12 @@ pub fn verify_ci(repo_root: &Path, config: &DharaRepoConfig) -> Result<CommandRe
         ],
         repo_root,
     )?;
-    for package in ["dharastorage", "dhara_storage_ops", "dhara_tool"] {
+    for package in [
+        "dhara_storage_dal",
+        "dharastorage",
+        "dhara_storage_ops",
+        "dhara_tool",
+    ] {
         run_command(
             "cargo",
             &[
@@ -70,7 +76,12 @@ pub fn verify_ci(repo_root: &Path, config: &DharaRepoConfig) -> Result<CommandRe
         ],
         repo_root,
     )?;
-    for package in ["dharastorage", "dhara_storage_ops", "dhara_tool"] {
+    for package in [
+        "dhara_storage_dal",
+        "dharastorage",
+        "dhara_storage_ops",
+        "dhara_tool",
+    ] {
         run_command(
             "cargo",
             &["test".to_owned(), "-p".to_owned(), package.to_owned()],
@@ -99,7 +110,12 @@ pub fn verify_docs(repo_root: &Path) -> Result<CommandResult> {
         ],
         repo_root,
     )?;
-    for package in ["dharastorage", "dhara_storage_ops", "dhara_tool"] {
+    for package in [
+        "dhara_storage_dal",
+        "dharastorage",
+        "dhara_storage_ops",
+        "dhara_tool",
+    ] {
         run_command(
             "cargo",
             &[

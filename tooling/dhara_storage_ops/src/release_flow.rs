@@ -163,7 +163,7 @@ fn validate_versions_synced(repo_root: &Path, config: &DharaRepoConfig) -> Resul
         expected,
         "workspace.package.version",
     )?;
-    for dependency in ["dhara_dhbin", "dhara_storage", "dhara_storage_ops"] {
+    for dependency in ["dhara_storage_dal", "dhara_storage", "dhara_storage_ops"] {
         require_toml_version(
             &cargo,
             &["workspace", "dependencies", dependency, "version"],
@@ -291,7 +291,7 @@ mod tests {
 [workspace.package]
 version = "{cargo_version}"
 [workspace.dependencies]
-dhara_dhbin = {{ version = "{cargo_version}", path = "src/static/dhara_dhbin" }}
+dhara_storage_dal = {{ version = "{cargo_version}", path = "src/static/dhara_storage_dal" }}
 dhara_storage = {{ version = "{cargo_version}", path = "src/static/dhara_storage" }}
 dhara_storage_ops = {{ version = "{cargo_version}", path = "tooling/dhara_storage_ops" }}
 "#

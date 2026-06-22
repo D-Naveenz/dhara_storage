@@ -163,20 +163,10 @@ where
                 status: ReportStatus::Success,
                 fields: vec![
                     field("Package Id", summary.package_id),
-                    field("Purpose", format!("{:?}", summary.purpose)),
-                    field("Compression", format!("{:?}", summary.compression)),
-                    field("Integrity", format!("{:?}", summary.integrity)),
+                    field("Format", "FlatBuffers"),
                     field("Package Version", summary.package_version),
                     field("Source Version", summary.source_version),
                     field("Package Revision", summary.package_revision.to_string()),
-                    field(
-                        "Checksum",
-                        if summary.checksum_verified {
-                            "verified"
-                        } else {
-                            "skipped"
-                        },
-                    ),
                     field("Tags", summary.tags.to_string()),
                     field("Definitions", summary.definition_count.to_string()),
                     field("Log", log_path.display().to_string()),

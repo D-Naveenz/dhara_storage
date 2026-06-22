@@ -14,15 +14,12 @@
     <!-- Instruct NuGet to pack the native assets from the runtimes folder -->
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;osx-x64</RuntimeIdentifiers>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
-    <StagedNativeRoot Condition="'$(StagedNativeRoot)' == ''" />
-    <NativeConfiguration Condition="'$(Configuration)' == 'Release'">release</NativeConfiguration>
-    <NativeConfiguration Condition="'$(NativeConfiguration)' == ''">debug</NativeConfiguration>
-    <NativeCargoArgs Condition="'$(Configuration)' == 'Release'">--release</NativeCargoArgs>
+    <StagedNativeRoot Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" />
+    <NativeConfiguration Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">release</NativeConfiguration>
+    <NativeConfiguration Condition="&apos;$(NativeConfiguration)&apos; == &apos;&apos;">debug</NativeConfiguration>
+    <NativeCargoArgs Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">--release</NativeCargoArgs>
     <NativeDllPath>$(RepoRoot)target\$(NativeConfiguration)\dharastorage.dll</NativeDllPath>
-  </PropertyGroup>
-  
-  <!-- Package metadata -->
-  <PropertyGroup>
+    <PackageId>Dhara.Storage</PackageId>
     <Version>0.4.4</Version>
     <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -31,44 +28,44 @@
     <Authors>Naveen Dharmathunga</Authors>
     <PackageTags>storage;ffi;rust;analysis;file-handling;directory-management;watching</PackageTags>
     <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
+  </PropertyGroup>
+  <!-- Package metadata -->
+  <PropertyGroup>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <Copyright>© 2026 Naveen Dharmathunga and contributors</Copyright>
   </PropertyGroup>
   <ItemGroup>
-    <None PackagePath="build\" Include="build\Dhara.Storage.targets" Pack="True" />
+    <None Include="build\Dhara.Storage.targets" Pack="True" PackagePath="build\" />
   </ItemGroup>
-  <ItemGroup>
-    <None PackagePath="\" Include="README.md" Pack="true" />
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="..\..\..\assets\dhara-logo-colored_sm.png" PackagePath="\" Pack="true" />
-  </ItemGroup>
-
   <!-- Dependencies -->
-  <ItemGroup Condition="'$(StagedNativeRoot)' != ''">
-    <None Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" Visible="false" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Pack="true" />
+  <ItemGroup Condition="&apos;$(StagedNativeRoot)&apos; != &apos;&apos;">
+    <None Pack="true" Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" Visible="false" PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Version="10.0.9" Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
   </ItemGroup>
-
   <!-- Enforce 64-bit building during compilation -->
   <Target Name="DharaStorageEnforce64BitArchitecture" BeforeTargets="BeforeBuild;CoreCompile">
-    <Error Text="Dhara.Storage does not support 32-bit runtime identifier '$(RuntimeIdentifier)'. Use an x64 or arm64 runtime." Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-x86')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-x86-')))" />
-    <Error Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-arm')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-arm-')))" Text="Dhara.Storage does not support 32-bit ARM runtime identifier '$(RuntimeIdentifier)'. Use an arm64 runtime." />
-    <Error Text="Dhara.Storage does not support 32-bit x86 processes. Target x64 or arm64." Condition="'$(Platform)' == 'x86' or '$(PlatformTarget)' == 'x86'" />
-    <Error Condition="'$(Platform)' == 'arm' or '$(PlatformTarget)' == 'arm'" Text="Dhara.Storage does not support 32-bit ARM processes. Target arm64." />
-    <Error Text="Dhara.Storage requires a 64-bit process. Disable Prefer 32-bit or target x64/arm64." Condition="'$(Prefer32Bit)' == 'true' and '$(PlatformTarget)' != 'x64' and '$(PlatformTarget)' != 'ARM64'" />
+    <Error Text="Dhara.Storage does not support 32-bit runtime identifier &apos;$(RuntimeIdentifier)&apos;. Use an x64 or arm64 runtime." Condition="&apos;$(RuntimeIdentifier)&apos; != &apos;&apos; and ($([System.String]::Copy(&apos;$(RuntimeIdentifier)&apos;).EndsWith(&apos;-x86&apos;)) or $([System.String]::Copy(&apos;$(RuntimeIdentifier)&apos;).Contains(&apos;-x86-&apos;)))" />
+    <Error Text="Dhara.Storage does not support 32-bit ARM runtime identifier &apos;$(RuntimeIdentifier)&apos;. Use an arm64 runtime." Condition="&apos;$(RuntimeIdentifier)&apos; != &apos;&apos; and ($([System.String]::Copy(&apos;$(RuntimeIdentifier)&apos;).EndsWith(&apos;-arm&apos;)) or $([System.String]::Copy(&apos;$(RuntimeIdentifier)&apos;).Contains(&apos;-arm-&apos;)))" />
+    <Error Text="Dhara.Storage does not support 32-bit x86 processes. Target x64 or arm64." Condition="&apos;$(Platform)&apos; == &apos;x86&apos; or &apos;$(PlatformTarget)&apos; == &apos;x86&apos;" />
+    <Error Text="Dhara.Storage does not support 32-bit ARM processes. Target arm64." Condition="&apos;$(Platform)&apos; == &apos;arm&apos; or &apos;$(PlatformTarget)&apos; == &apos;arm&apos;" />
+    <Error Condition="&apos;$(Prefer32Bit)&apos; == &apos;true&apos; and &apos;$(PlatformTarget)&apos; != &apos;x64&apos; and &apos;$(PlatformTarget)&apos; != &apos;ARM64&apos;" Text="Dhara.Storage requires a 64-bit process. Disable Prefer 32-bit or target x64/arm64." />
   </Target>
-  
   <!-- Include native assets for supported runtimes -->
-  <Target Condition="'$(StagedNativeRoot)' == ''" BeforeTargets="BeforeBuild" Name="BuildNativeLibrary">
-    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dharastorage $(NativeCargoArgs)" />
+  <Target Name="BuildNativeLibrary" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" BeforeTargets="BeforeBuild">
+    <Exec Command="cargo build -p dharastorage $(NativeCargoArgs)" WorkingDirectory="$(RepoRoot)" />
   </Target>
-  <Target BeforeTargets="Pack" Condition="'$(StagedNativeRoot)' == ''" Name="ValidatePackNativeAssets">
+  <Target BeforeTargets="Pack" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" Name="ValidatePackNativeAssets">
     <Error Text="Packing Dhara.Storage requires staged native assets for all supported runtimes. Use the repo packaging flow so both win-x64 and win-arm64 assets are included." />
   </Target>
-  <Target AfterTargets="Build" Condition="'$(StagedNativeRoot)' == ''" Name="CopyNativeLibraryToOutput">
-    <Copy DestinationFolder="$(OutDir)" SourceFiles="$(NativeDllPath)" SkipUnchangedFiles="true" />
+  <Target AfterTargets="Build" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" Name="CopyNativeLibraryToOutput">
+    <Copy DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" SourceFiles="$(NativeDllPath)" />
   </Target>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\assets\dhara-logo-colored_sm.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
 </Project>
