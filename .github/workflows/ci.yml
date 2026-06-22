@@ -17,7 +17,7 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 
@@ -39,11 +39,11 @@ jobs:
         run: cargo run -p dhara_tool -- verify ci
 
   publish-readiness:
-    name: publish readiness (windows)
+    name: DAL/runtime/NuGet publish readiness (windows)
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           lfs: true
 

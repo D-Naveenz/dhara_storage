@@ -1,11 +1,11 @@
 <Solution>
   <Folder Name="/Bindings/" />
-  <Folder Name="/Bindings/Dotnet/">
-    <Project Path="Bindings/Dotnet/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj" />
-    <Project Path="Bindings/Dotnet/Dhara.Storage/Dhara.Storage.csproj" />
+  <Folder Name="/Bindings/Dhara/">
+    <Project Path="src/bindings/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj" />
+    <Project Path="src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj" />
+    <Project Path="src/bindings/Dhara.Storage/Dhara.Storage.csproj" />
   </Folder>
   <Folder Name="/Solution Items/">
     <File Path=".editorconfig" />
   </Folder>
-  <Project Path="bindings/dotnet/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj" />
 </Solution>

@@ -1,0 +1,15 @@
+<Project>
+  <!-- Run immediately after NuGet evaluates the final target platform features -->
+  <Target Name="DharaStorageEnforce64BitArchitecture" BeforeTargets="BeforeBuild;CoreCompile">
+    <Error Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-x86')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-x86-')))"
+           Text="Dhara.Storage does not support 32-bit runtime identifier '$(RuntimeIdentifier)'. Use an x64 or arm64 runtime." />
+    <Error Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-arm')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-arm-')))"
+           Text="Dhara.Storage does not support 32-bit ARM runtime identifier '$(RuntimeIdentifier)'. Use an arm64 runtime." />
+    <Error Condition="'$(Platform)' == 'x86' or '$(PlatformTarget)' == 'x86'"
+           Text="Dhara.Storage does not support 32-bit x86 processes. Target x64 or arm64." />
+    <Error Condition="'$(Platform)' == 'arm' or '$(PlatformTarget)' == 'arm'"
+           Text="Dhara.Storage does not support 32-bit ARM processes. Target arm64." />
+    <Error Condition="'$(Prefer32Bit)' == 'true' and '$(PlatformTarget)' != 'x64' and '$(PlatformTarget)' != 'ARM64'"
+           Text="Dhara.Storage requires a 64-bit process. Disable Prefer 32-bit or target x64/arm64." />
+  </Target>
+</Project>
