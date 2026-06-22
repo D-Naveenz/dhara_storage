@@ -88,12 +88,16 @@ pub fn run(
 }
 
 fn run_cargo_release(repo_root: &Path, dry_run: bool) -> Result<()> {
+    run_command("cargo", &cargo_release_args(dry_run), repo_root)
+}
+
+fn cargo_release_args(dry_run: bool) -> Vec<String> {
     let mut args = vec![
         "release".to_owned(),
         "--workspace".to_owned(),
         "--isolated".to_owned(),
         "--allow-branch".to_owned(),
-        if dry_run { "HEAD" } else { "main" }.to_owned(),
+        if dry_run { "*" } else { "main" }.to_owned(),
         "--tag-name".to_owned(),
         "v{{version}}".to_owned(),
         "--no-confirm".to_owned(),
@@ -105,7 +109,7 @@ fn run_cargo_release(repo_root: &Path, dry_run: bool) -> Result<()> {
         args.push("--execute".to_owned());
     }
 
-    run_command("cargo", &args, repo_root)
+    args
 }
 
 fn ensure_release_secrets(
@@ -341,5 +345,28 @@ dhara_storage_ops = {{ version = "{cargo_version}", path = "tooling/dhara_storag
                 .to_string()
                 .contains("DHARA_TOOL_TEST_MISSING_NUGET_KEY")
         );
+    }
+
+    #[test]
+    fn cargo_release_dry_run_allows_local_validation_state() {
+        let args = cargo_release_args(true);
+
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--allow-branch" && pair[1] == "*")
+        );
+        assert!(args.contains(&"--no-verify".to_owned()));
+        assert!(!args.contains(&"--execute".to_owned()));
+    }
+
+    #[test]
+    fn cargo_release_execute_requires_main_and_execute_flag() {
+        let args = cargo_release_args(false);
+
+        assert!(
+            args.windows(2)
+                .any(|pair| pair[0] == "--allow-branch" && pair[1] == "main")
+        );
+        assert!(args.contains(&"--execute".to_owned()));
     }
 }

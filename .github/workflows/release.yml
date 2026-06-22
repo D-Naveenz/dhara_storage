@@ -9,7 +9,7 @@ on:
         default: false
         type: boolean
       publish_cargo:
-        description: Publish Rust crates before NuGet
+        description: Publish dhara_storage_dal and dhara_storage before NuGet
         required: true
         default: true
         type: boolean
@@ -69,7 +69,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Run release
+      - name: Publish DAL, runtime, and NuGet
         shell: pwsh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}

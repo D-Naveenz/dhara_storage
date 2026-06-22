@@ -9,8 +9,8 @@ It combines definition-driven file analysis, path-based file and directory opera
 debounced watching, a FlatBuffers-backed definitions data layer, and a managed .NET wrapper over
 the native core.
 
-Rust crates are already available on crates.io and are being advanced from `0.4.0`
-to `0.4.4`. The first `Dhara.Storage` NuGet package is prepared for `0.4.4`.
+Rust crates and the `Dhara.Storage` NuGet package are versioned together from
+shared release metadata. The current publish target is `0.6.0`.
 
 ## Workspace
 
@@ -38,7 +38,7 @@ Rust runtime:
 
 ```toml
 [dependencies]
-dhara_storage = "0.4.4"
+dhara_storage = "0.6.0"
 ```
 
 ```rust
@@ -52,7 +52,7 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 .NET wrapper:
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.4.4
+dotnet add package Dhara.Storage --version 0.6.0
 ```
 
 ```csharp
@@ -100,7 +100,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - Local secrets belong in [.env.local](./.env.example), created from the example file.
 - [tooling/dhara_tool](./tooling/dhara_tool/README.md) is the supported operator surface for config sync, verification, packaging, and publish flows.
 - `cargo run -p dhara_tool -- release run --dry-run` validates the Cargo-first release flow without publishing.
-- `cargo run -p dhara_tool -- release run` publishes Cargo first, then publishes the `Dhara.Storage` NuGet package.
+- `cargo run -p dhara_tool -- release run` publishes `dhara_storage_dal` and `dhara_storage` first, then publishes the `Dhara.Storage` NuGet package.
 - `cargo run -p dhara_tool -- release run --skip-cargo` publishes only the NuGet package when the Rust crates for the current version already exist.
 - NuGet verification checks that both `runtimes/win-x64/native/dharastorage.dll` and `runtimes/win-arm64/native/dharastorage.dll` are present in the package.
 

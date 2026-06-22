@@ -6,7 +6,7 @@ runtime.
 It gives .NET applications an object-oriented, path-based API for the Rust core
 without pushing .NET object-shape requirements back into the native runtime.
 
-The first NuGet release is prepared as `Dhara.Storage` `0.4.4`.
+The current NuGet publish target is `Dhara.Storage` `0.6.0`.
 
 ## Supported Platforms
 
@@ -26,7 +26,7 @@ Unsupported platforms are rejected in two places:
 ## Install
 
 ```bash
-dotnet add package Dhara.Storage --version 0.4.4
+dotnet add package Dhara.Storage --version 0.6.0
 ```
 
 ## Quick Start
