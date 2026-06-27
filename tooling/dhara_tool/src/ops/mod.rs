@@ -2,7 +2,6 @@ pub mod builder;
 pub mod capability;
 pub mod config;
 pub mod defs;
-pub mod interface;
 pub mod logging;
 pub mod output;
 pub mod package_flow;
@@ -23,13 +22,7 @@ pub use config::{
     bump_version, init_env, load_config, load_env, parse_env_content, set_version, show, sync,
     sync_cargo_toml, sync_csproj, validate_config, verify_release,
 };
-pub use defs::{
-    DefsCommand, DefsPaths, default_embedded_sync_paths, execute as execute_defs, print_defs_help,
-};
-pub use interface::{
-    CommandHandler, CommandResult, CommandSpec, ReportField, SectionSpec, StructuredReport,
-    ToolContext,
-};
+pub use defs::{DefsCommand, DefsPaths, execute as execute_defs, print_defs_help};
 pub use logging::{LoggingOptions, LoggingRuntime, init_logging, log_file_path};
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,

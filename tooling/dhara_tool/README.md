@@ -32,4 +32,11 @@ Dhara TUI. Explicit subcommands still use the minimal non-TUI execution path.
 - package verification and publish milestones
 - failures and validation details
 
-Repository-specific command implementations live in `tooling/dhara_tool/src/ops`.
+Repository-specific command logic lives in `tooling/dhara_tool/src/ops`. The TUI and CLI registry in `command` and `tui` call into that module through `DharaStorageCapability`.
+
+## Output layout
+
+- `tooling/output/` — generated artifacts (`filedefs.dat`, NuGet packages, logs)
+- `tooling/artifacts/` — gitignored staging for native staging, smoke builds, and local NuGet config during verification
+
+The canonical runtime `filedefs.dat` lives at `tooling/output/filedefs.dat` and is embedded into `dhara_storage_dal` at compile time. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`.

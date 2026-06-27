@@ -16,7 +16,7 @@ shared release metadata. The current publish target is `0.6.0`.
 
 | Project                            | Purpose                                                                                               |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `src/static/dhara_storage_dal` | FlatBuffers data access layer for the internal `filedefs.dat` definitions artifact                    |
+| `src/static/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `tooling/output/filedefs.dat` |
 | `src/static/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
 | `src/dynamic/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
 | `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |

@@ -3,15 +3,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::capabilities::dhara_storage::register_dhara_storage_capability;
-use crate::command::{CommandRegistry, ToolContext};
+use crate::command::{CommandRegistry, ToolCapability, ToolContext};
+use crate::ops::DharaStorageCapability;
 use crate::tui::{can_launch, run_tui};
 
 pub fn run() -> Result<()> {
     let cli = parse_root_args(env::args().skip(1).collect())?;
 
     let mut registry = CommandRegistry::new();
-    register_dhara_storage_capability(&mut registry);
+    DharaStorageCapability.register(&mut registry);
 
     if cli.show_version {
         println!("{}", crate::version());

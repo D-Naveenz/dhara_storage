@@ -4,10 +4,12 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use tracing::{debug, info};
 
+use crate::command::CommandResult;
+use crate::paths::{default_artifacts_dir, resolve_output_dir};
+
 use super::{
-    CommandResult, DharaRepoConfig, inspect_package_entries, load_env, run_command,
-    run_command_expect_failure, run_command_with_env_redacted, sync, verify_release,
-    write_nuget_config,
+    DharaRepoConfig, inspect_package_entries, load_env, run_command, run_command_expect_failure,
+    run_command_with_env_redacted, sync, verify_release, write_nuget_config,
 };
 
 #[derive(Debug, Clone)]
@@ -36,9 +38,10 @@ pub fn pack(
     sync(repo_root)?;
 
     let version = effective_version(config, &options.version_override);
-    let working_root = working_root(repo_root, options.output_dir.as_ref())?;
-    let native_stage_root = working_root.join("native-stage");
-    let nuget_output = working_root.join("nuget");
+    let artifacts_root = artifacts_root(repo_root)?;
+    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let native_stage_root = artifacts_root.join("native-stage");
+    let nuget_output = output_root.join("nuget");
     reset_directory(&native_stage_root)?;
     reset_directory(&nuget_output)?;
 
@@ -90,11 +93,12 @@ pub fn verify(
     pack(repo_root, config, options)?;
 
     let version = effective_version(config, &options.version_override);
-    let working_root = working_root(repo_root, options.output_dir.as_ref())?;
-    let package_path = working_root
+    let artifacts_root = artifacts_root(repo_root)?;
+    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let package_path = output_root
         .join("nuget")
         .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
-    let local_config = working_root.join("local-package.nuget.config");
+    let local_config = artifacts_root.join("local-package.nuget.config");
     let dependency_source = effective_source(repo_root, config, options)?;
     write_nuget_config(
         &local_config,
@@ -129,7 +133,7 @@ pub fn verify(
         repo_root,
         config,
         &version,
-        &working_root.join("smoke-aot"),
+        &artifacts_root.join("smoke-aot"),
         &config.ci.aot_runtime_smoke,
     )?;
     info!(
@@ -168,8 +172,8 @@ pub fn publish(
         .unwrap_or_else(|| config.publish.api_key_env.clone());
     let api_key = secret_from_env(repo_root, &api_key_env)?;
 
-    let working_root = working_root(repo_root, options.output_dir.as_ref())?;
-    let package_path = working_root
+    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let package_path = output_root
         .join("nuget")
         .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
 
@@ -220,8 +224,8 @@ pub fn publish_packed(
         .unwrap_or_else(|| config.publish.api_key_env.clone());
     let api_key = secret_from_env(repo_root, &api_key_env)?;
 
-    let working_root = working_root(repo_root, options.output_dir.as_ref())?;
-    let package_path = working_root
+    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let package_path = output_root
         .join("nuget")
         .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
     if !package_path.exists() {
@@ -630,10 +634,14 @@ fn non_empty_option(value: String) -> Option<String> {
     }
 }
 
-fn working_root(repo_root: &Path, override_value: Option<&PathBuf>) -> Result<PathBuf> {
-    let root = override_value
-        .cloned()
-        .unwrap_or_else(|| repo_root.join(".artifacts").join("dhara_tool"));
+fn artifacts_root(repo_root: &Path) -> Result<PathBuf> {
+    let root = default_artifacts_dir(repo_root);
+    fs::create_dir_all(&root).with_context(|| format!("failed to create {}", root.display()))?;
+    Ok(root)
+}
+
+fn output_root(repo_root: &Path, override_value: Option<&PathBuf>) -> Result<PathBuf> {
+    let root = resolve_output_dir(repo_root, override_value.map(PathBuf::as_path));
     fs::create_dir_all(&root).with_context(|| format!("failed to create {}", root.display()))?;
     Ok(root)
 }

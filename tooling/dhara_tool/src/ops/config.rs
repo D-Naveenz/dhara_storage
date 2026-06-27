@@ -352,6 +352,7 @@ pub fn validate_config(repo_root: &Path, config: &DharaRepoConfig) -> Result<()>
         require_exists(repo_root, icon)?;
     }
     require_exists(repo_root, ENV_EXAMPLE_PATH)?;
+    require_exists(repo_root, crate::paths::RUNTIME_DEFS_RELATIVE)?;
 
     Ok(())
 }
@@ -659,6 +660,12 @@ mod tests {
         fs::write(
             repo_root.join("src/bindings/Dhara.Storage/icon-small.png"),
             "png",
+        )
+        .unwrap();
+        fs::create_dir_all(repo_root.join("tooling/output")).unwrap();
+        fs::write(
+            repo_root.join(crate::paths::RUNTIME_DEFS_RELATIVE),
+            "placeholder",
         )
         .unwrap();
     }

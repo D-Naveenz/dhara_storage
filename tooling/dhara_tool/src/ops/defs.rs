@@ -3,14 +3,16 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use tracing::{error, info};
 
-use super::{
-    BuilderAction, CommandResult, LoggingOptions, ReportField, StructuredReport, ToolContext,
-    execute_action, init_logging,
-};
+use crate::command::{CommandResult, ReportField, StructuredReport, ToolContext};
+use crate::paths::{default_defs_package_path, resolve_logs_dir, resolve_output_dir};
+
+use super::{BuilderAction, LoggingOptions, execute_action, init_logging};
 
 /// Repo-relative working paths used by defs commands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefsPaths {
+    /// Repository root used to resolve canonical tooling paths.
+    pub repo_root: PathBuf,
     /// Source directory or archive root used to discover TrID XML inputs.
     pub package_dir: PathBuf,
     /// Output directory used for generated `filedefs.dat` artifacts.
@@ -38,10 +40,11 @@ impl DefsPaths {
         logs_dir: Option<PathBuf>,
     ) -> Self {
         Self {
+            repo_root: repo_root.to_path_buf(),
             package_dir: package_dir
                 .unwrap_or_else(|| repo_root.join("tooling").join("dhara_tool").join("package")),
-            output_dir: output_dir.unwrap_or_else(|| repo_root.join("output")),
-            logs_dir: logs_dir.unwrap_or_else(|| repo_root.join("logs")),
+            output_dir: resolve_output_dir(repo_root, output_dir.as_deref()),
+            logs_dir: resolve_logs_dir(repo_root, output_dir.as_deref(), logs_dir.as_deref()),
         }
     }
 
@@ -62,7 +65,7 @@ impl DefsPaths {
 
     /// Returns the default output path for generated `filedefs.dat` files.
     pub fn default_package_output_path(&self) -> PathBuf {
-        self.output_dir.join("filedefs.dat")
+        default_defs_package_path(&self.repo_root)
     }
 }
 
@@ -167,23 +170,6 @@ pub fn print_defs_help() -> String {
     .join("\n")
 }
 
-/// Returns the default input and output paths used by `defs sync-embedded`.
-pub fn default_embedded_sync_paths(repo_root: &Path) -> (PathBuf, PathBuf) {
-    (
-        repo_root
-            .join("tooling")
-            .join("dhara_tool")
-            .join("package")
-            .join("triddefs_xml.7z"),
-        repo_root
-            .join("src")
-            .join("static")
-            .join("dhara_storage_dal")
-            .join("resources")
-            .join("filedefs.dat"),
-    )
-}
-
 fn resolve_action(command: DefsCommand, paths: &DefsPaths) -> BuilderAction {
     match command {
         DefsCommand::Pack { output } => BuilderAction::Pack {
@@ -208,19 +194,10 @@ fn resolve_action(command: DefsCommand, paths: &DefsPaths) -> BuilderAction {
             input,
             output,
             check,
-        } => {
-            let repo_root = paths
-                .package_dir
-                .parent()
-                .and_then(|parent| parent.parent())
-                .and_then(|parent| parent.parent())
-                .unwrap_or_else(|| Path::new("."));
-            let (default_input, default_output) = default_embedded_sync_paths(repo_root);
-            BuilderAction::SyncEmbedded {
-                input: input.unwrap_or(default_input),
-                output: output.unwrap_or(default_output),
-                check,
-            }
-        }
+        } => BuilderAction::SyncEmbedded {
+            input: input.unwrap_or_else(|| paths.default_trid_input_path()),
+            output: output.unwrap_or_else(|| paths.default_package_output_path()),
+            check,
+        },
     }
 }

@@ -21,7 +21,7 @@ use generated::dhara::storage::dal as fb;
 
 const BUNDLED_FILEDEFS_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/resources/filedefs.dat"
+    "/../../../tooling/output/filedefs.dat"
 ));
 
 static PACKAGE: Lazy<Result<DefinitionPackage, String>> =

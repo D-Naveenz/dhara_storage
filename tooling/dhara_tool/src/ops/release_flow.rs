@@ -6,10 +6,9 @@ use toml_edit::DocumentMut;
 use tracing::info;
 use xmltree::{Element, XMLNode};
 
-use super::{
-    CommandResult, DharaRepoConfig, PackageOptions, load_env, package_flow, run_command,
-    verify_release,
-};
+use crate::command::CommandResult;
+
+use super::{DharaRepoConfig, PackageOptions, load_env, package_flow, run_command, verify_release};
 
 const CARGO_REGISTRY_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
 

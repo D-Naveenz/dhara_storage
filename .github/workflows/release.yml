@@ -107,6 +107,6 @@ jobs:
         with:
           name: Dhara.Storage-package
           path: |
-            .artifacts/dhara_tool/nuget/*.nupkg
-            .artifacts/dhara_tool/nuget/*.snupkg
-            .artifacts/dhara_tool/nuget/*.symbols.nupkg
+            tooling/output/nuget/*.nupkg
+            tooling/output/nuget/*.snupkg
+            tooling/output/nuget/*.symbols.nupkg

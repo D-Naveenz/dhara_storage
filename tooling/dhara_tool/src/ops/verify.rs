@@ -2,7 +2,9 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::{CommandResult, DharaRepoConfig, PackageOptions, run_command, verify_release};
+use crate::command::CommandResult;
+
+use super::{DharaRepoConfig, PackageOptions, run_command, verify_release};
 
 pub fn verify_release_config(repo_root: &Path) -> Result<CommandResult> {
     verify_release(repo_root)?;
