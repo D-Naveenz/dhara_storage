@@ -7,10 +7,6 @@ pub enum DefinitionPackageError {
     #[error("definition package does not begin with the expected DSFD magic")]
     InvalidMagic,
 
-    /// The file does not end with the expected `DSFD` magic.
-    #[error("definition package does not end with the expected DSFD magic")]
-    InvalidEndMagic,
-
     /// The container format version is not supported.
     #[error("unsupported DSFD container format version: {version}")]
     UnsupportedFormatVersion {
@@ -24,10 +20,6 @@ pub enum DefinitionPackageError {
         /// Layout validation failure message.
         message: String,
     },
-
-    /// The FlatBuffers payload does not carry the expected `DSFD` identifier.
-    #[error("definition package payload does not use the expected DSFD FlatBuffers identifier")]
-    InvalidIdentifier,
 
     /// FlatBuffers verification failed.
     #[error("definition package FlatBuffer is invalid: {0}")]

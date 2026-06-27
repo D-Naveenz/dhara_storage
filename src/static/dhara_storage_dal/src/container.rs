@@ -1,8 +1,8 @@
 use crate::error::DefinitionPackageError;
 use crate::metadata_xml::{deserialize_metadata, serialize_metadata};
 use crate::model::{
-    DEFINITION_PACKAGE_IDENTIFIER, DSFD_END_MAGIC_LEN, DSFD_FILE_HEADER_LEN, DSFD_FORMAT_VERSION,
-    DefinitionPackage, DefinitionPackageView,
+    DEFINITION_PACKAGE_IDENTIFIER, DSFD_FILE_HEADER_LEN, DSFD_FORMAT_VERSION, DefinitionPackage,
+    DefinitionPackageView,
 };
 
 use super::codec::{decode_flatbuffer_payload, encode_flatbuffer_payload, root_flatbuffer_package};
@@ -46,11 +46,7 @@ pub fn root_definition_package(
 fn assemble_file(payload: &[u8], metadata: &[u8]) -> Vec<u8> {
     let payload_length = u32::try_from(payload.len()).expect("payload length should fit in u32");
     let metadata_length = u32::try_from(metadata.len()).expect("metadata length should fit in u32");
-    let total_len = DSFD_FILE_HEADER_LEN
-        + payload.len()
-        + METADATA_LENGTH_LEN
-        + metadata.len()
-        + DSFD_END_MAGIC_LEN;
+    let total_len = DSFD_FILE_HEADER_LEN + payload.len() + METADATA_LENGTH_LEN + metadata.len();
     let mut file = Vec::with_capacity(total_len);
     file.extend_from_slice(DEFINITION_PACKAGE_IDENTIFIER.as_bytes());
     file.extend_from_slice(&DSFD_FORMAT_VERSION.to_le_bytes());
@@ -58,12 +54,11 @@ fn assemble_file(payload: &[u8], metadata: &[u8]) -> Vec<u8> {
     file.extend_from_slice(payload);
     file.extend_from_slice(&metadata_length.to_le_bytes());
     file.extend_from_slice(metadata);
-    file.extend_from_slice(DEFINITION_PACKAGE_IDENTIFIER.as_bytes());
     file
 }
 
 fn split_file(bytes: &[u8]) -> Result<(&[u8], &[u8]), DefinitionPackageError> {
-    if bytes.len() < DSFD_FILE_HEADER_LEN + METADATA_LENGTH_LEN + DSFD_END_MAGIC_LEN {
+    if bytes.len() < DSFD_FILE_HEADER_LEN + METADATA_LENGTH_LEN {
         return Err(DefinitionPackageError::InvalidContainerLayout {
             message: "file is too small to contain a DSFD package".to_owned(),
         });
@@ -98,14 +93,10 @@ fn split_file(bytes: &[u8]) -> Result<(&[u8], &[u8]), DefinitionPackageError> {
             message: "metadata offset overflows the file layout".to_owned(),
         })?;
 
-    if bytes.len() < metadata_offset + DSFD_END_MAGIC_LEN {
+    if bytes.len() < metadata_offset {
         return Err(DefinitionPackageError::InvalidContainerLayout {
             message: "metadata section is truncated".to_owned(),
         });
-    }
-
-    if bytes[bytes.len() - DSFD_END_MAGIC_LEN..] != *DEFINITION_PACKAGE_IDENTIFIER.as_bytes() {
-        return Err(DefinitionPackageError::InvalidEndMagic);
     }
 
     let metadata_length = usize::try_from(u32::from_le_bytes([
@@ -120,7 +111,6 @@ fn split_file(bytes: &[u8]) -> Result<(&[u8], &[u8]), DefinitionPackageError> {
 
     let expected_total = metadata_offset
         .checked_add(metadata_length)
-        .and_then(|end| end.checked_add(DSFD_END_MAGIC_LEN))
         .ok_or_else(|| DefinitionPackageError::InvalidContainerLayout {
             message: "file layout overflows".to_owned(),
         })?;
@@ -149,7 +139,8 @@ mod tests {
     use crate::codec::{decode_flatbuffer_payload, encode_flatbuffer_payload};
     use crate::error::DefinitionPackageError;
     use crate::model::{
-        DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern,
+        DEFINITION_PACKAGE_IDENTIFIER, DefinitionPackage, DefinitionRecord, SignatureDefinition,
+        SignaturePattern,
     };
 
     fn sample_package() -> DefinitionPackage {
@@ -209,5 +200,27 @@ mod tests {
         assert_eq!(decoded.package_revision, package.package_revision);
         assert_eq!(decoded.tags, package.tags);
         assert_eq!(decoded.definitions, package.definitions);
+    }
+
+    #[test]
+    fn encoded_file_ends_with_xml_closing_tag() {
+        let encoded = encode_definition_package(&sample_package());
+
+        assert_eq!(encoded.last(), Some(&b'>'));
+        assert_ne!(
+            &encoded[encoded.len().saturating_sub(4)..],
+            DEFINITION_PACKAGE_IDENTIFIER.as_bytes()
+        );
+    }
+
+    #[test]
+    fn file_magic_is_at_offset_zero_only_in_header() {
+        let encoded = encode_definition_package(&sample_package());
+
+        assert_eq!(&encoded[..4], DEFINITION_PACKAGE_IDENTIFIER.as_bytes());
+        assert_ne!(
+            encoded.last(),
+            Some(&DEFINITION_PACKAGE_IDENTIFIER.as_bytes()[3])
+        );
     }
 }

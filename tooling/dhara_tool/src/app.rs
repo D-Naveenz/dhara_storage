@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
-use crate::ops::{DharaStorageCapability, log_session_end};
+use crate::ops::{DharaStorageCapability, ensure_workspace_state, log_session_end};
 use crate::tui::{can_launch, run_tui};
 
 pub fn run() -> Result<()> {
@@ -46,6 +46,8 @@ pub fn run() -> Result<()> {
         output_dir: cli.output_dir,
         logs_dir: cli.logs_dir,
     };
+
+    ensure_workspace_state(&context);
 
     match determine_launch_mode(!cli.command.is_empty(), can_launch()) {
         LaunchMode::InteractiveTui => run_tui(&registry, &context)?,

@@ -12,6 +12,7 @@ use ratatui::backend::CrosstermBackend;
 
 use crate::command::CommandRegistry;
 use crate::command::ToolContext;
+use crate::ops::ensure_workspace_state;
 
 use super::render::render;
 use super::state::{AppState, Focus, MainView};
@@ -27,8 +28,11 @@ pub fn run_tui(registry: &CommandRegistry, context: &ToolContext) -> Result<()> 
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend).context("failed to create terminal")?;
 
-    let mut state =
-        AppState::with_repository_label(AppState::repository_label_from_path(&context.repo_root));
+    let workspace = ensure_workspace_state(context);
+    let mut state = AppState::with_workspace(
+        AppState::repository_label_from_path(&context.repo_root),
+        workspace,
+    );
     loop {
         state.poll_active_run();
         terminal.draw(|frame| render(frame, &state, registry))?;

@@ -161,6 +161,18 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
             .unwrap_or_else(|| "default".to_owned()),
         "session paths resolved"
     );
+
+    let workspace = super::workspace_snapshot(&options.context);
+    debug!(
+        target: AUDIT_TARGET,
+        defs_path = %workspace.defs_path.display(),
+        defs_status = workspace.status_label(),
+        package_version = workspace.package_version.as_deref().unwrap_or("—"),
+        package_revision = workspace.package_revision.map(|value| value.to_string()).unwrap_or_else(|| "—".to_owned()),
+        definitions_release = workspace.definitions_release.as_deref().unwrap_or("—"),
+        definition_count = workspace.definition_count.map(|value| value.to_string()).unwrap_or_else(|| "—".to_owned()),
+        "workspace definitions package snapshot"
+    );
 }
 
 pub fn log_session_end(exit_code: i32, module_id: Option<&str>, error: Option<&str>) {

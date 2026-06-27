@@ -7,6 +7,7 @@ use dhara_storage_dal::{
 use tracing::debug;
 
 use crate::ops::builder::BuilderError;
+use crate::ops::workspace::next_package_revision_for_build;
 
 mod mime;
 mod model;
@@ -20,7 +21,6 @@ use source_manifest::load_definitions_release;
 
 const VALIDATED_TAGS: u32 = 48;
 const TARGET_DEFINITION_COUNT: usize = 5_500;
-const PACKAGE_REVISION: u16 = 1;
 
 /// Progress stages emitted while transforming TrID XML into a reduced package.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -333,10 +333,14 @@ fn build_trid_xml_package_with_report_internal(
         "reduced TrID definitions package ready"
     );
 
+    let tool_version = crate::version();
+    let package_revision = next_package_revision_for_build(tool_version)
+        .map_err(|message| BuilderError::Package { message })?;
+
     let package = DefinitionPackage {
-        package_version: crate::version().to_owned(),
+        package_version: tool_version.to_owned(),
         definitions_release,
-        package_revision: PACKAGE_REVISION,
+        package_revision,
         tags: VALIDATED_TAGS,
         definitions: survivors
             .into_iter()

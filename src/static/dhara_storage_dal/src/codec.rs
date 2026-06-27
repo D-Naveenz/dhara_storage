@@ -41,9 +41,6 @@ pub(crate) fn decode_flatbuffer_payload(
 pub(crate) fn root_flatbuffer_package(
     bytes: &[u8],
 ) -> Result<DefinitionPackageView<'_>, DefinitionPackageError> {
-    if !fb::definition_package_buffer_has_identifier(bytes) {
-        return Err(DefinitionPackageError::InvalidIdentifier);
-    }
     Ok(fb::root_as_definition_package(bytes)?)
 }
 
@@ -266,18 +263,9 @@ mod tests {
     fn malformed_payload_is_rejected() {
         let error = decode_flatbuffer_payload(b"not-flatbuffers").unwrap_err();
 
-        assert!(matches!(error, DefinitionPackageError::InvalidIdentifier));
-    }
-
-    #[test]
-    fn wrong_identifier_is_rejected() {
-        let mut builder = flatbuffers::FlatBufferBuilder::new();
-        let root = builder.create_string("not a definition package");
-        builder.finish(root, Some("NOPE"));
-        let bytes = builder.finished_data();
-
-        let error = decode_flatbuffer_payload(bytes).unwrap_err();
-
-        assert!(matches!(error, DefinitionPackageError::InvalidIdentifier));
+        assert!(matches!(
+            error,
+            DefinitionPackageError::InvalidFlatbuffer(_)
+        ));
     }
 }

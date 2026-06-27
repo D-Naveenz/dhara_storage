@@ -706,30 +706,18 @@ pub unsafe fn root_as_definition_package_unchecked(buf: &[u8]) -> DefinitionPack
 pub unsafe fn size_prefixed_root_as_definition_package_unchecked(buf: &[u8]) -> DefinitionPackage<'_> {
   unsafe { ::flatbuffers::size_prefixed_root_unchecked::<DefinitionPackage>(buf) }
 }
-pub const DEFINITION_PACKAGE_IDENTIFIER: &str = "DSFD";
-
-#[inline]
-pub fn definition_package_buffer_has_identifier(buf: &[u8]) -> bool {
-  ::flatbuffers::buffer_has_identifier(buf, DEFINITION_PACKAGE_IDENTIFIER, false)
-}
-
-#[inline]
-pub fn definition_package_size_prefixed_buffer_has_identifier(buf: &[u8]) -> bool {
-  ::flatbuffers::buffer_has_identifier(buf, DEFINITION_PACKAGE_IDENTIFIER, true)
-}
-
 pub const DEFINITION_PACKAGE_EXTENSION: &str = "dat";
 
 #[inline]
 pub fn finish_definition_package_buffer<'a, 'b, A: ::flatbuffers::Allocator + 'a>(
     fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>,
     root: ::flatbuffers::WIPOffset<DefinitionPackage<'a>>) {
-  fbb.finish(root, Some(DEFINITION_PACKAGE_IDENTIFIER));
+  fbb.finish(root, None);
 }
 
 #[inline]
 pub fn finish_size_prefixed_definition_package_buffer<'a, 'b, A: ::flatbuffers::Allocator + 'a>(fbb: &'b mut ::flatbuffers::FlatBufferBuilder<'a, A>, root: ::flatbuffers::WIPOffset<DefinitionPackage<'a>>) {
-  fbb.finish_size_prefixed(root, Some(DEFINITION_PACKAGE_IDENTIFIER));
+  fbb.finish_size_prefixed(root, None);
 }
 }  // pub mod dal
 }  // pub mod storage

@@ -8,6 +8,8 @@ use dhara_storage_dal::{
 use thiserror::Error;
 use tracing::debug;
 
+use crate::ops::record_package_written;
+
 #[path = "trid_xml/mod.rs"]
 mod trid_xml;
 
@@ -150,6 +152,7 @@ pub fn write_package(
         path: path.clone(),
         source,
     })?;
+    record_package_written(&path, package);
     Ok(path)
 }
 

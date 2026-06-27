@@ -9,6 +9,7 @@ pub mod release_flow;
 pub mod runner;
 pub mod support;
 pub mod verify;
+pub mod workspace;
 
 pub use builder::{
     BuilderError, LoadedPackage, PackageSummary, SyncEmbeddedOutcome, SyncEmbeddedStatus,
@@ -43,4 +44,9 @@ pub use runner::{
 pub use support::{
     inspect_package_entries, run_command, run_command_expect_failure, run_command_with_env,
     run_command_with_env_redacted, write_nuget_config,
+};
+pub use workspace::{
+    DefsPackageStatus, WorkspaceSnapshot, ensure_workspace_state, next_package_revision,
+    next_package_revision_for_build, record_package_written, refresh_workspace_state,
+    workspace_snapshot,
 };

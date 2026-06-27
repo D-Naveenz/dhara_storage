@@ -26,8 +26,7 @@ pub use container::{
 };
 pub use error::DefinitionPackageError;
 pub use model::{
-    DEFINITION_PACKAGE_IDENTIFIER, DEFINITION_PACKAGE_SIGNATURE, DSFD_END_MAGIC_LEN,
-    DSFD_FILE_HEADER_LEN, DSFD_FORMAT_VERSION, DSFD_METADATA_XMLNS, DefinitionPackage,
-    DefinitionPackageView, DefinitionRecord, FILEDEFS_DAT_FILE_NAME, SignatureDefinition,
-    SignaturePattern,
+    DEFINITION_PACKAGE_IDENTIFIER, DEFINITION_PACKAGE_SIGNATURE, DSFD_FILE_HEADER_LEN,
+    DSFD_FORMAT_VERSION, DSFD_METADATA_XMLNS, DefinitionPackage, DefinitionPackageView,
+    DefinitionRecord, FILEDEFS_DAT_FILE_NAME, SignatureDefinition, SignaturePattern,
 };

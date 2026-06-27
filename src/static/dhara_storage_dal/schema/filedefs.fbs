@@ -1,6 +1,5 @@
 namespace dhara.storage.dal;
 
-file_identifier "DSFD";
 file_extension "dat";
 
 table ByteBlob {
