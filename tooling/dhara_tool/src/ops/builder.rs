@@ -2,8 +2,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use dhara_storage_dal::{
-    DEFINITION_PACKAGE_IDENTIFIER, DefinitionPackage, bundled_definition_package,
-    decode_definition_package, encode_definition_package,
+    DEFINITION_PACKAGE_IDENTIFIER, DEFINITION_PACKAGE_SIGNATURE, DefinitionPackage,
+    bundled_definition_package, decode_definition_package, encode_definition_package,
 };
 use thiserror::Error;
 use tracing::debug;
@@ -48,15 +48,19 @@ pub enum BuilderError {
         message: String,
     },
 
-    #[error("failed to determine a usable TrID source version from: {versions}")]
-    MissingSourceVersion { versions: String },
+    #[error("missing definitions release sidecar manifest at '{path}'")]
+    MissingDefinitionsRelease { path: PathBuf },
+
+    #[error("invalid definitions release in '{path}': {message}")]
+    InvalidDefinitionsRelease { path: PathBuf, message: String },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackageSummary {
+    pub(crate) signature: String,
     pub(crate) package_id: String,
     pub(crate) package_version: String,
-    pub(crate) source_version: String,
+    pub(crate) definitions_release: String,
     pub(crate) package_revision: u16,
     pub(crate) tags: u32,
     pub(crate) definition_count: usize,
@@ -65,9 +69,10 @@ pub struct PackageSummary {
 impl PackageSummary {
     pub(crate) fn from_loaded(loaded: &LoadedPackage) -> Self {
         Self {
+            signature: DEFINITION_PACKAGE_SIGNATURE.to_owned(),
             package_id: DEFINITION_PACKAGE_IDENTIFIER.to_owned(),
             package_version: loaded.package.package_version.clone(),
-            source_version: loaded.package.source_version.clone(),
+            definitions_release: loaded.package.definitions_release.clone(),
             package_revision: loaded.package.package_revision,
             tags: loaded.package.tags,
             definition_count: loaded.package.definitions.len(),
@@ -246,10 +251,10 @@ fn current_validity_reason(current: &LoadedPackage, desired: &DefinitionPackage)
             current.package.package_version, desired.package_version
         ));
     }
-    if current.package.source_version != desired.source_version {
+    if current.package.definitions_release != desired.definitions_release {
         return Some(format!(
-            "source version mismatch: current='{}', desired='{}'",
-            current.package.source_version, desired.source_version
+            "definitions release mismatch: current='{}', desired='{}'",
+            current.package.definitions_release, desired.definitions_release
         ));
     }
     if current.package.package_revision != desired.package_revision {
@@ -274,6 +279,8 @@ mod tests {
         packages_match, sync_embedded_package, trid_xml, write_package,
     };
 
+    use dhara_storage_dal::DEFINITION_PACKAGE_SIGNATURE;
+
     fn fixtures_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests")
@@ -281,10 +288,32 @@ mod tests {
             .join("trid_xml")
     }
 
+    fn write_source_sidecar(source: &Path) {
+        let parent = source.parent().unwrap_or_else(|| Path::new("."));
+        let stem = source
+            .file_stem()
+            .or_else(|| source.file_name())
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "filedefs".to_owned());
+        fs::write(
+            parent.join(format!("{stem}.source.toml")),
+            "definitions_release = \"2026-06-24\"\n",
+        )
+        .expect("source sidecar should be written");
+    }
+
+    fn write_archive_sidecar(dir: &Path) {
+        fs::write(
+            dir.join("triddefs_xml.source.toml"),
+            "definitions_release = \"2026-06-24\"\n",
+        )
+        .expect("archive sidecar should be written");
+    }
+
     #[test]
     fn bundled_package_has_expected_summary() {
         let package = load_bundled_package().expect("bundled package should load");
-        assert!(package.package_version.starts_with("trid-"));
+        assert_eq!(package.package_version, env!("CARGO_PKG_VERSION"));
         assert!(!package.definitions.is_empty());
     }
 
@@ -307,9 +336,9 @@ mod tests {
             .expect("fixture directory should build");
 
         assert_eq!(package.tags, 48);
-        assert_eq!(package.source_version, "2.00");
+        assert_eq!(package.definitions_release, "2026-06-24");
         assert_eq!(package.package_revision, 1);
-        assert_eq!(package.package_version, "trid-2.00+dhbn.1");
+        assert_eq!(package.package_version, env!("CARGO_PKG_VERSION"));
         assert_eq!(package.definitions.len(), 3);
     }
 
@@ -328,6 +357,7 @@ mod tests {
             .status()
             .expect("tar should be available for archive creation");
         assert!(status.success(), "tar should create a 7z archive");
+        write_archive_sidecar(temp.path());
 
         let from_directory = trid_xml::build_trid_xml_package(fixtures_root())
             .expect("fixture directory should build");
@@ -380,6 +410,7 @@ mod tests {
 </TrID>"#,
         )
         .expect("fixture XML should be written");
+        write_source_sidecar(temp.path());
 
         let build = trid_xml::build_trid_xml_package_with_report(temp.path())
             .expect("fixture should build");
@@ -434,9 +465,10 @@ mod tests {
         assert_eq!(
             summary,
             PackageSummary {
-                package_id: "FDEF".to_string(),
-                package_version: "trid-2.00+dhbn.1".to_string(),
-                source_version: "2.00".to_string(),
+                signature: DEFINITION_PACKAGE_SIGNATURE.to_string(),
+                package_id: "DSFD".to_string(),
+                package_version: env!("CARGO_PKG_VERSION").to_string(),
+                definitions_release: "2026-06-24".to_string(),
                 package_revision: 1,
                 tags: 48,
                 definition_count: 3,
@@ -473,6 +505,7 @@ mod tests {
             .status()
             .expect("tar should create the fixture archive");
         assert!(status.success(), "tar should create a 7z archive");
+        write_archive_sidecar(temp.path());
 
         let mut package =
             trid_xml::build_trid_xml_package(fixtures_root()).expect("fixture should build");
@@ -484,7 +517,7 @@ mod tests {
         assert_eq!(outcome.status, SyncEmbeddedStatus::Updated);
 
         let loaded = super::load_package(&output_path).expect("updated package should load");
-        assert_eq!(loaded.package.package_version, "trid-2.00+dhbn.1");
+        assert_eq!(loaded.package.package_version, env!("CARGO_PKG_VERSION"));
     }
 
     #[test]
@@ -503,6 +536,7 @@ mod tests {
             .status()
             .expect("tar should create the fixture archive");
         assert!(status.success(), "tar should create a 7z archive");
+        write_archive_sidecar(temp.path());
 
         let output =
             sync_embedded_package(&archive_path, &output_path, true).expect("check should run");

@@ -172,10 +172,11 @@ where
                 title: "Package Summary".to_string(),
                 status: ReportStatus::Success,
                 fields: vec![
+                    field("Signature", summary.signature),
                     field("Package Id", summary.package_id),
-                    field("Format", "FlatBuffers"),
+                    field("Format", "DSFD"),
                     field("Package Version", summary.package_version),
-                    field("Source Version", summary.source_version),
+                    field("Definitions Release", summary.definitions_release),
                     field("Package Revision", summary.package_revision.to_string()),
                     field("Tags", summary.tags.to_string()),
                     field("Definitions", summary.definition_count.to_string()),
@@ -255,7 +256,7 @@ where
             let outcome = sync_embedded_package(&input, &output, check)?;
             let (status, exit_code, result) = match outcome.status {
                 super::builder::SyncEmbeddedStatus::Skipped => {
-                    log_module_step_debug(&outcome.detail);
+                    log_module_step_warn(&outcome.detail);
                     (ReportStatus::Success, 0, "skipped")
                 }
                 super::builder::SyncEmbeddedStatus::UpToDate => {

@@ -5,11 +5,8 @@ use crate::model::{
     SignaturePattern,
 };
 
-/// Encode an owned definition package into FlatBuffers bytes.
-///
-/// The output includes the `FDEF` file identifier and is suitable for writing
-/// to `filedefs.dat`.
-pub fn encode_definition_package(package: &DefinitionPackage) -> Vec<u8> {
+/// Encode the FlatBuffers payload section for a definition package.
+pub(crate) fn encode_flatbuffer_payload(package: &DefinitionPackage) -> Vec<u8> {
     let mut builder = flatbuffers::FlatBufferBuilder::with_capacity(estimate_capacity(package));
 
     let definitions = package
@@ -18,13 +15,9 @@ pub fn encode_definition_package(package: &DefinitionPackage) -> Vec<u8> {
         .map(|definition| encode_definition_record(&mut builder, definition))
         .collect::<Vec<_>>();
     let definitions = builder.create_vector(&definitions);
-    let package_version = builder.create_string(&package.package_version);
-    let source_version = builder.create_string(&package.source_version);
     let root = fb::DefinitionPackage::create(
         &mut builder,
         &fb::DefinitionPackageArgs {
-            package_version: Some(package_version),
-            source_version: Some(source_version),
             package_revision: package.package_revision,
             tags: package.tags,
             definitions: Some(definitions),
@@ -34,25 +27,18 @@ pub fn encode_definition_package(package: &DefinitionPackage) -> Vec<u8> {
     builder.finished_data().to_vec()
 }
 
-/// Decode verified FlatBuffers bytes into an owned definition package.
+/// Decode a FlatBuffers payload section into an owned definition package.
 ///
-/// # Errors
-///
-/// Returns an error when the buffer does not use the expected identifier or
-/// fails FlatBuffers verification.
-pub fn decode_definition_package(
+/// Metadata fields (`package_version`, `definitions_release`) are left empty and
+/// must be filled by the container decoder from the XML footer.
+pub(crate) fn decode_flatbuffer_payload(
     bytes: &[u8],
 ) -> Result<DefinitionPackage, DefinitionPackageError> {
-    Ok(owned_package(root_definition_package(bytes)?))
+    Ok(owned_package(root_flatbuffer_package(bytes)?))
 }
 
-/// Return a verified borrowed FlatBuffers root view over a package buffer.
-///
-/// # Errors
-///
-/// Returns an error when the buffer does not use the expected identifier or
-/// fails FlatBuffers verification.
-pub fn root_definition_package(
+/// Return a verified borrowed FlatBuffers root view over a payload buffer.
+pub(crate) fn root_flatbuffer_package(
     bytes: &[u8],
 ) -> Result<DefinitionPackageView<'_>, DefinitionPackageError> {
     if !fb::definition_package_buffer_has_identifier(bytes) {
@@ -130,8 +116,8 @@ fn encode_signature_definition<'a>(
 
 fn owned_package(package: fb::DefinitionPackage<'_>) -> DefinitionPackage {
     DefinitionPackage {
-        package_version: package.package_version().unwrap_or_default().to_owned(),
-        source_version: package.source_version().unwrap_or_default().to_owned(),
+        package_version: String::new(),
+        definitions_release: String::new(),
         package_revision: package.package_revision(),
         tags: package.tags(),
         definitions: package
@@ -192,18 +178,16 @@ fn owned_pattern(pattern: fb::SignaturePattern<'_>) -> SignaturePattern {
 }
 
 fn estimate_capacity(package: &DefinitionPackage) -> usize {
-    let string_bytes = package.package_version.len()
-        + package.source_version.len()
-        + package
-            .definitions
-            .iter()
-            .map(|definition| {
-                definition.file_type.len()
-                    + definition.mime_type.len()
-                    + definition.remarks.len()
-                    + definition.extensions.iter().map(String::len).sum::<usize>()
-            })
-            .sum::<usize>();
+    let string_bytes = package
+        .definitions
+        .iter()
+        .map(|definition| {
+            definition.file_type.len()
+                + definition.mime_type.len()
+                + definition.remarks.len()
+                + definition.extensions.iter().map(String::len).sum::<usize>()
+        })
+        .sum::<usize>();
     let byte_bytes = package
         .definitions
         .iter()
@@ -227,7 +211,7 @@ fn estimate_capacity(package: &DefinitionPackage) -> usize {
 
 #[cfg(test)]
 mod tests {
-    use super::{decode_definition_package, encode_definition_package, root_definition_package};
+    use super::{decode_flatbuffer_payload, encode_flatbuffer_payload, root_flatbuffer_package};
     use crate::error::DefinitionPackageError;
     use crate::model::{
         DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern,
@@ -235,8 +219,8 @@ mod tests {
 
     fn sample_package() -> DefinitionPackage {
         DefinitionPackage {
-            package_version: "trid-2.00+dhbn.1".to_owned(),
-            source_version: "2.00".to_owned(),
+            package_version: "0.6.0".to_owned(),
+            definitions_release: "2026-06-24".to_owned(),
             package_revision: 1,
             tags: 48,
             definitions: vec![DefinitionRecord {
@@ -257,26 +241,30 @@ mod tests {
     }
 
     #[test]
-    fn flatbuffer_roundtrip_preserves_package_semantics() {
+    fn flatbuffer_roundtrip_preserves_payload_semantics() {
         let package = sample_package();
-        let encoded = encode_definition_package(&package);
-        let decoded = decode_definition_package(&encoded).expect("package should decode");
+        let encoded = encode_flatbuffer_payload(&package);
+        let decoded = decode_flatbuffer_payload(&encoded).expect("payload should decode");
 
-        assert_eq!(decoded, package);
+        assert_eq!(decoded.package_revision, package.package_revision);
+        assert_eq!(decoded.tags, package.tags);
+        assert_eq!(decoded.definitions, package.definitions);
+        assert!(decoded.package_version.is_empty());
+        assert!(decoded.definitions_release.is_empty());
     }
 
     #[test]
     fn root_view_reads_without_owned_decode() {
-        let encoded = encode_definition_package(&sample_package());
-        let root = root_definition_package(&encoded).expect("root should verify");
+        let encoded = encode_flatbuffer_payload(&sample_package());
+        let root = root_flatbuffer_package(&encoded).expect("root should verify");
 
         assert_eq!(root.definitions().unwrap().len(), 1);
         assert_eq!(root.package_revision(), 1);
     }
 
     #[test]
-    fn malformed_buffer_is_rejected() {
-        let error = decode_definition_package(b"not-flatbuffers").unwrap_err();
+    fn malformed_payload_is_rejected() {
+        let error = decode_flatbuffer_payload(b"not-flatbuffers").unwrap_err();
 
         assert!(matches!(error, DefinitionPackageError::InvalidIdentifier));
     }
@@ -288,7 +276,7 @@ mod tests {
         builder.finish(root, Some("NOPE"));
         let bytes = builder.finished_data();
 
-        let error = decode_definition_package(bytes).unwrap_err();
+        let error = decode_flatbuffer_payload(bytes).unwrap_err();
 
         assert!(matches!(error, DefinitionPackageError::InvalidIdentifier));
     }

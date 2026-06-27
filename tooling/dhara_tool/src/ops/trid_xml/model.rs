@@ -10,6 +10,7 @@ use super::{ParsedTridDefinition, TridPattern, TridSignature};
 #[derive(Debug, Deserialize)]
 struct TridXmlDocument {
     #[serde(rename = "@ver", default)]
+    #[allow(dead_code)]
     version: String,
     #[serde(rename = "Info")]
     info: TridXmlInfo,
@@ -124,7 +125,6 @@ pub(crate) fn parse_trid_xml_definition(
         .collect::<Vec<_>>();
 
     Ok(ParsedTridDefinition {
-        source_version: document.version.trim().to_string(),
         file_type: document.info.file_type.trim().to_string(),
         extensions: split_extensions(&document.info.extensions),
         mime_type: normalize_mime_type(&document.info.mime_type),
@@ -237,7 +237,6 @@ mod tests {
         let parsed =
             parse_trid_xml_definition(xml, "fixture.trid.xml".as_ref()).expect("xml should parse");
 
-        assert_eq!(parsed.source_version, "2.00");
         assert_eq!(parsed.file_type, "Portable Network Graphics");
         assert_eq!(parsed.extensions, vec!["png"]);
         assert_eq!(parsed.mime_type, "image/png");

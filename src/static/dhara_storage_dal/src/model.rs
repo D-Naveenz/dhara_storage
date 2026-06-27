@@ -1,21 +1,36 @@
 use crate::generated::dhara::storage::dal as fb;
 
-/// Four-byte FlatBuffers file identifier used by definition packages.
+/// Human-readable signature stored in the XML metadata footer.
+pub const DEFINITION_PACKAGE_SIGNATURE: &str = "Dhara Storage File Definition package - DSFD";
+
+/// Four-byte file magic and FlatBuffers file identifier used by definition packages.
 pub const DEFINITION_PACKAGE_IDENTIFIER: &str = fb::DEFINITION_PACKAGE_IDENTIFIER;
+
+/// XML namespace for DSFD metadata documents.
+pub const DSFD_METADATA_XMLNS: &str = "https://dhara.dev/ns/dsfd/1";
+
+/// Current on-disk container format version.
+pub const DSFD_FORMAT_VERSION: u16 = 1;
+
+/// Byte length of the fixed file header at the start of `filedefs.dat`.
+pub const DSFD_FILE_HEADER_LEN: usize = 10;
+
+/// Byte length of the trailing end magic.
+pub const DSFD_END_MAGIC_LEN: usize = 4;
 
 /// Default file name for embedded file-definition packages.
 pub const FILEDEFS_DAT_FILE_NAME: &str = "filedefs.dat";
 
-/// Borrowed FlatBuffers root view over a definition package.
+/// Borrowed FlatBuffers root view over a definition package payload.
 pub type DefinitionPackageView<'a> = fb::DefinitionPackage<'a>;
 
 /// Serialized file-definition package loaded from `filedefs.dat`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefinitionPackage {
-    /// The version of the normalized package schema produced by the builder.
+    /// Version of `dhara_tool` used to build the package.
     pub package_version: String,
-    /// The upstream source-data version carried through from the TrID source set.
-    pub source_version: String,
+    /// ISO `YYYY-MM-DD` release date of the upstream TrID definitions dataset.
+    pub definitions_release: String,
     /// Monotonic package revision assigned by the builder.
     pub package_revision: u16,
     /// Builder-defined package flags.

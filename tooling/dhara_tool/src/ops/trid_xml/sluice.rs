@@ -137,7 +137,6 @@ mod tests {
     #[test]
     fn higher_quality_definitions_score_above_weaker_ones() {
         let strong = ParsedTridDefinition {
-            source_version: "2.00".to_string(),
             file_type: "Strong".to_string(),
             extensions: vec!["png".to_string()],
             mime_type: "image/png".to_string(),
@@ -158,7 +157,6 @@ mod tests {
             file_count: 500,
         };
         let weak = ParsedTridDefinition {
-            source_version: "2.00".to_string(),
             file_type: "Weak".to_string(),
             extensions: vec!["png".to_string()],
             mime_type: "image/png".to_string(),

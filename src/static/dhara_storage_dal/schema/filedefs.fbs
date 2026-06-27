@@ -1,6 +1,6 @@
 namespace dhara.storage.dal;
 
-file_identifier "FDEF";
+file_identifier "DSFD";
 file_extension "dat";
 
 table ByteBlob {
@@ -27,8 +27,6 @@ table DefinitionRecord {
 }
 
 table DefinitionPackage {
-  package_version:string;
-  source_version:string;
   package_revision:ushort;
   tags:uint;
   definitions:[DefinitionRecord];

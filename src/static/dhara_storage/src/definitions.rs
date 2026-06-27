@@ -107,7 +107,7 @@ pub fn decode_definition_package(bytes: &[u8]) -> Result<DefinitionPackage, Stor
     info!(
         target: "dhara_storage::definitions",
         byte_len = bytes.len(),
-        "decoding FlatBuffers definition package"
+        "decoding DSFD definition package"
     );
     dal::decode_definition_package(bytes).map_err(|err| StorageError::DefinitionsLoad {
         message: err.to_string(),
@@ -126,9 +126,7 @@ pub(crate) fn database() -> Result<&'static DefinitionDatabase, StorageError> {
 mod tests {
     use dhara_storage_dal::encode_definition_package;
 
-    use super::{
-        DefinitionPackage, bundled_definition_package, database, decode_definition_package,
-    };
+    use super::{bundled_definition_package, database, decode_definition_package};
 
     #[test]
     fn bundled_dat_loads_successfully() {
@@ -169,18 +167,9 @@ mod tests {
 
     #[test]
     fn legacy_plain_bytes_are_rejected() {
-        let error = DefinitionPackage {
-            package_version: "test".to_owned(),
-            source_version: "test".to_owned(),
-            package_revision: 1,
-            tags: 0,
-            definitions: Vec::new(),
-        };
-        let plain = format!("{error:?}");
-
         let error =
-            decode_definition_package(plain.as_bytes()).expect_err("plain bytes should fail");
+            decode_definition_package(b"not-a-dsfd-package").expect_err("plain bytes should fail");
 
-        assert!(error.to_string().contains("FDEF"));
+        assert!(error.to_string().contains("DSFD"));
     }
 }

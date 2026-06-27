@@ -1,7 +1,7 @@
 use once_cell::sync::Lazy;
 use tracing::debug;
 
-use crate::codec::decode_definition_package;
+use crate::container::decode_definition_package;
 use crate::error::DefinitionPackageError;
 use crate::model::DefinitionPackage;
 
@@ -36,7 +36,8 @@ mod tests {
         let package =
             bundled_definition_package().expect("bundled definitions package should decode");
 
-        assert!(package.package_version.starts_with("trid-"));
+        assert!(!package.package_version.is_empty());
+        assert!(!package.definitions_release.is_empty());
         assert!(!package.definitions.is_empty());
     }
 }

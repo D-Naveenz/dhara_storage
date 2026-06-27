@@ -532,11 +532,9 @@ impl<'a> ::flatbuffers::Follow<'a> for DefinitionPackage<'a> {
 }
 
 impl<'a> DefinitionPackage<'a> {
-  pub const VT_PACKAGE_VERSION: ::flatbuffers::VOffsetT = 4;
-  pub const VT_SOURCE_VERSION: ::flatbuffers::VOffsetT = 6;
-  pub const VT_PACKAGE_REVISION: ::flatbuffers::VOffsetT = 8;
-  pub const VT_TAGS: ::flatbuffers::VOffsetT = 10;
-  pub const VT_DEFINITIONS: ::flatbuffers::VOffsetT = 12;
+  pub const VT_PACKAGE_REVISION: ::flatbuffers::VOffsetT = 4;
+  pub const VT_TAGS: ::flatbuffers::VOffsetT = 6;
+  pub const VT_DEFINITIONS: ::flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: ::flatbuffers::Table<'a>) -> Self {
@@ -550,27 +548,11 @@ impl<'a> DefinitionPackage<'a> {
     let mut builder = DefinitionPackageBuilder::new(_fbb);
     if let Some(x) = args.definitions { builder.add_definitions(x); }
     builder.add_tags(args.tags);
-    if let Some(x) = args.source_version { builder.add_source_version(x); }
-    if let Some(x) = args.package_version { builder.add_package_version(x); }
     builder.add_package_revision(args.package_revision);
     builder.finish()
   }
 
 
-  #[inline]
-  pub fn package_version(&self) -> Option<&'a str> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<&str>>(DefinitionPackage::VT_PACKAGE_VERSION, None)}
-  }
-  #[inline]
-  pub fn source_version(&self) -> Option<&'a str> {
-    // Safety:
-    // Created from valid Table for this object
-    // which contains a valid value in this slot
-    unsafe { self._tab.get::<::flatbuffers::ForwardsUOffset<&str>>(DefinitionPackage::VT_SOURCE_VERSION, None)}
-  }
   #[inline]
   pub fn package_revision(&self) -> u16 {
     // Safety:
@@ -600,8 +582,6 @@ impl ::flatbuffers::Verifiable for DefinitionPackage<'_> {
     v: &mut ::flatbuffers::Verifier, pos: usize
   ) -> Result<(), ::flatbuffers::InvalidFlatbuffer> {
     v.visit_table(pos)?
-     .visit_field::<::flatbuffers::ForwardsUOffset<&str>>("package_version", Self::VT_PACKAGE_VERSION, false)?
-     .visit_field::<::flatbuffers::ForwardsUOffset<&str>>("source_version", Self::VT_SOURCE_VERSION, false)?
      .visit_field::<u16>("package_revision", Self::VT_PACKAGE_REVISION, false)?
      .visit_field::<u32>("tags", Self::VT_TAGS, false)?
      .visit_field::<::flatbuffers::ForwardsUOffset<::flatbuffers::Vector<'_, ::flatbuffers::ForwardsUOffset<DefinitionRecord>>>>("definitions", Self::VT_DEFINITIONS, false)?
@@ -610,8 +590,6 @@ impl ::flatbuffers::Verifiable for DefinitionPackage<'_> {
   }
 }
 pub struct DefinitionPackageArgs<'a> {
-    pub package_version: Option<::flatbuffers::WIPOffset<&'a str>>,
-    pub source_version: Option<::flatbuffers::WIPOffset<&'a str>>,
     pub package_revision: u16,
     pub tags: u32,
     pub definitions: Option<::flatbuffers::WIPOffset<::flatbuffers::Vector<'a, ::flatbuffers::ForwardsUOffset<DefinitionRecord<'a>>>>>,
@@ -620,8 +598,6 @@ impl<'a> Default for DefinitionPackageArgs<'a> {
   #[inline]
   fn default() -> Self {
     DefinitionPackageArgs {
-      package_version: None,
-      source_version: None,
       package_revision: 0,
       tags: 0,
       definitions: None,
@@ -634,14 +610,6 @@ pub struct DefinitionPackageBuilder<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a
   start_: ::flatbuffers::WIPOffset<::flatbuffers::TableUnfinishedWIPOffset>,
 }
 impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> DefinitionPackageBuilder<'a, 'b, A> {
-  #[inline]
-  pub fn add_package_version(&mut self, package_version: ::flatbuffers::WIPOffset<&'b  str>) {
-    self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<_>>(DefinitionPackage::VT_PACKAGE_VERSION, package_version);
-  }
-  #[inline]
-  pub fn add_source_version(&mut self, source_version: ::flatbuffers::WIPOffset<&'b  str>) {
-    self.fbb_.push_slot_always::<::flatbuffers::WIPOffset<_>>(DefinitionPackage::VT_SOURCE_VERSION, source_version);
-  }
   #[inline]
   pub fn add_package_revision(&mut self, package_revision: u16) {
     self.fbb_.push_slot::<u16>(DefinitionPackage::VT_PACKAGE_REVISION, package_revision, 0);
@@ -672,8 +640,6 @@ impl<'a: 'b, 'b, A: ::flatbuffers::Allocator + 'a> DefinitionPackageBuilder<'a, 
 impl ::core::fmt::Debug for DefinitionPackage<'_> {
   fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
     let mut ds = f.debug_struct("DefinitionPackage");
-      ds.field("package_version", &self.package_version());
-      ds.field("source_version", &self.source_version());
       ds.field("package_revision", &self.package_revision());
       ds.field("tags", &self.tags());
       ds.field("definitions", &self.definitions());
@@ -740,7 +706,7 @@ pub unsafe fn root_as_definition_package_unchecked(buf: &[u8]) -> DefinitionPack
 pub unsafe fn size_prefixed_root_as_definition_package_unchecked(buf: &[u8]) -> DefinitionPackage<'_> {
   unsafe { ::flatbuffers::size_prefixed_root_unchecked::<DefinitionPackage>(buf) }
 }
-pub const DEFINITION_PACKAGE_IDENTIFIER: &str = "FDEF";
+pub const DEFINITION_PACKAGE_IDENTIFIER: &str = "DSFD";
 
 #[inline]
 pub fn definition_package_buffer_has_identifier(buf: &[u8]) -> bool {
