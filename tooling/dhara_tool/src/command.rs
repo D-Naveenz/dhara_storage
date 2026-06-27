@@ -135,10 +135,14 @@ impl CommandRegistry {
 
         match &result {
             Ok(command_result) => {
-                let summary =
-                    crate::ops::summarize_command_result(command.id, command_result);
+                let summary = crate::ops::summarize_command_result(command.id, command_result);
                 if long_running {
-                    crate::ops::log_module_end(command.id, command_result.exit_code, &summary, started);
+                    crate::ops::log_module_end(
+                        command.id,
+                        command_result.exit_code,
+                        &summary,
+                        started,
+                    );
                 } else {
                     crate::ops::log_module_compact_finish(
                         command.id,

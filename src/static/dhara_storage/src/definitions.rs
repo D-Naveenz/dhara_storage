@@ -7,7 +7,11 @@ use tracing::{debug, info};
 use crate::error::StorageError;
 
 /// Four-byte FlatBuffers file identifier used by normalized file-definition packages.
-pub const DEFINITION_PACKAGE_ID: [u8; 4] = *b"FDEF";
+pub const DEFINITION_PACKAGE_ID: [u8; 4] = {
+    const IDENT: &str = dal::DEFINITION_PACKAGE_IDENTIFIER;
+    const BYTES: &[u8] = IDENT.as_bytes();
+    [BYTES[0], BYTES[1], BYTES[2], BYTES[3]]
+};
 const CATCH_ALL_INDEX: usize = 256;
 
 pub use dal::{

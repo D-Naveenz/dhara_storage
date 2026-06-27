@@ -4,7 +4,9 @@ use super::builder::{
     TridBuildProgress, build_trid_xml_package_with_progress, inspect_package, load_bundled_package,
     normalize_package, packages_match, sync_embedded_package, write_package,
 };
-use super::logging::{log_build_progress, log_module_step_debug, log_module_step_warn, log_transform_statistics};
+use super::logging::{
+    log_build_progress, log_module_step_debug, log_module_step_warn, log_transform_statistics,
+};
 use super::output::emit_stdout_line;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

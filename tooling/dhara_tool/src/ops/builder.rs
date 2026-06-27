@@ -1,9 +1,9 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use dhara_storage::{DefinitionPackage, bundled_definition_package};
 use dhara_storage_dal::{
-    DEFINITION_PACKAGE_IDENTIFIER, decode_definition_package, encode_definition_package,
+    DEFINITION_PACKAGE_IDENTIFIER, DefinitionPackage, bundled_definition_package,
+    decode_definition_package, encode_definition_package,
 };
 use thiserror::Error;
 use tracing::debug;

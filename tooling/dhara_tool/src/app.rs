@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::command::{CommandRegistry, RunMode, ToolContext, ToolCapability};
-use crate::ops::{log_session_end, DharaStorageCapability};
+use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
+use crate::ops::{DharaStorageCapability, log_session_end};
 use crate::tui::{can_launch, run_tui};
 
 pub fn run() -> Result<()> {

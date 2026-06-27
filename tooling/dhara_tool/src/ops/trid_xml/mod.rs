@@ -1,7 +1,9 @@
 use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
-use dhara_storage::{DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern};
+use dhara_storage_dal::{
+    DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern,
+};
 use tracing::debug;
 
 use crate::ops::builder::BuilderError;
@@ -104,7 +106,7 @@ pub struct TridBuildOutput {
 ///
 /// # Returns
 ///
-/// - `Result<DefinitionPackage, BuilderError>` - A reduced package compatible with `dhara_storage`.
+/// - `Result<DefinitionPackage, BuilderError>` - A reduced package compatible with the Dhara definition package format.
 ///
 /// # Errors
 ///

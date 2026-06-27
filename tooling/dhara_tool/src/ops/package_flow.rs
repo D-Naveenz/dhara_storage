@@ -67,7 +67,10 @@ pub fn pack(
 
     let package_path = nuget_output.join(format!("{}.{}.nupkg", config.nuget.package_id, version));
     inspect_package_contents(&package_path, config)?;
-    log_module_step_debug(&format!("packed NuGet package at {}", package_path.display()));
+    log_module_step_debug(&format!(
+        "packed NuGet package at {}",
+        package_path.display()
+    ));
 
     Ok(CommandResult::with_message(format!(
         "Packed {}",

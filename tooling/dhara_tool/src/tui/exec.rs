@@ -72,7 +72,9 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::command::{CommandRegistry, CommandResult, CommandSpec, CommandUi, RunMode, SectionSpec, ToolContext};
+    use crate::command::{
+        CommandRegistry, CommandResult, CommandSpec, CommandUi, RunMode, SectionSpec, ToolContext,
+    };
 
     use super::{RunCompletion, start_run};
 

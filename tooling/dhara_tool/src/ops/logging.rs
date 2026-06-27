@@ -144,8 +144,10 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
         log_path.display()
     );
 
-    let output_dir =
-        resolve_output_dir(&options.context.repo_root, options.context.output_dir.as_deref());
+    let output_dir = resolve_output_dir(
+        &options.context.repo_root,
+        options.context.output_dir.as_deref(),
+    );
     debug!(
         target: AUDIT_TARGET,
         repo_root = %options.context.repo_root.display(),
@@ -241,12 +243,7 @@ fn summarize_defs_report(report: &crate::command::StructuredReport) -> String {
     for field in &report.fields {
         if matches!(
             field.label.as_str(),
-            "Definitions"
-                | "Total Parsed"
-                | "Final Kept"
-                | "Package Version"
-                | "Result"
-                | "Output"
+            "Definitions" | "Total Parsed" | "Final Kept" | "Package Version" | "Result" | "Output"
         ) {
             parts.push(format!("{}={}", field.label, field.value));
         }
@@ -290,12 +287,7 @@ pub fn log_module_end(module_id: &str, exit_code: i32, summary: &str, started: I
     }
 }
 
-pub fn log_module_compact_finish(
-    module_id: &str,
-    exit_code: i32,
-    summary: &str,
-    started: Instant,
-) {
+pub fn log_module_compact_finish(module_id: &str, exit_code: i32, summary: &str, started: Instant) {
     let duration = format_duration(started.elapsed());
     let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
     if exit_code == 0 {
@@ -443,7 +435,9 @@ pub fn log_build_progress(update: &TridBuildProgress) {
 fn format_build_progress_line(update: &TridBuildProgress) -> Option<String> {
     match update.stage {
         TridBuildStage::LoadSource => Some(format!("stage: load source — {}", update.message)),
-        TridBuildStage::ExtractArchive => Some(format!("stage: extract archive — {}", update.message)),
+        TridBuildStage::ExtractArchive => {
+            Some(format!("stage: extract archive — {}", update.message))
+        }
         TridBuildStage::FinalizePackage => {
             Some(format!("stage: finalize package — {}", update.message))
         }
@@ -533,11 +527,11 @@ mod tests {
     use chrono::NaiveDate;
     use tempfile::tempdir;
 
-    use crate::ops::builder::{TridBuildProgress, TridBuildStage, TridBuildStats};
     use super::{
         format_build_progress_line, format_duration, humanize_reduce_message, log_file_name_for,
         next_log_session, parse_log_session,
     };
+    use crate::ops::builder::{TridBuildProgress, TridBuildStage, TridBuildStats};
     use std::time::Duration;
 
     #[test]
@@ -556,8 +550,14 @@ mod tests {
     #[test]
     fn parse_log_session_recognizes_session_zero_and_numbered_sessions() {
         let date = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
-        assert_eq!(parse_log_session("2026-04-10_dhara_tool.log", date), Some(0));
-        assert_eq!(parse_log_session("2026-04-10_dhara_tool_1.log", date), Some(1));
+        assert_eq!(
+            parse_log_session("2026-04-10_dhara_tool.log", date),
+            Some(0)
+        );
+        assert_eq!(
+            parse_log_session("2026-04-10_dhara_tool_1.log", date),
+            Some(1)
+        );
         assert_eq!(parse_log_session("2026-04-09_dhara_tool.log", date), None);
     }
 
