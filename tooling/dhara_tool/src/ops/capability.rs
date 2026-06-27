@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use anyhow::{Result, bail};
 use clap::{ArgAction, Parser, ValueEnum};
 
-use crate::{
+use super::{
     CommandResult, CommandSpec, DefsCommand, PackageOptions, SectionSpec, ToolContext, VersionPart,
     bump_version, execute_defs, init_env, load_config, pack_package, print_defs_help,
     publish_package, run_release, set_version, show, sync,
@@ -353,7 +353,7 @@ fn parse_args<T: Parser>(name: &str, args: &[String]) -> Result<Option<T>> {
     }
 }
 
-fn current_config(context: &ToolContext) -> Result<crate::DharaRepoConfig> {
+fn current_config(context: &ToolContext) -> Result<super::DharaRepoConfig> {
     load_config(&context.repo_root)
 }
 
@@ -383,8 +383,8 @@ fn publish_options(args: PublishArgs, context: &ToolContext) -> Result<PackageOp
     })
 }
 
-fn release_options(args: ReleaseRunArgs, context: &ToolContext) -> crate::ReleaseOptions {
-    crate::ReleaseOptions {
+fn release_options(args: ReleaseRunArgs, context: &ToolContext) -> super::ReleaseOptions {
+    super::ReleaseOptions {
         configuration: args.configuration,
         source_override: args.source,
         api_key_env_override: args.api_key_env,
@@ -529,7 +529,7 @@ fn verify_release_config_command(context: &ToolContext, args: &[String]) -> Resu
     if parse_args::<NoArgs>("verify release-config", args)?.is_none() {
         return Ok(CommandResult::success());
     }
-    crate::verify::verify_release_config(&context.repo_root)
+    super::verify::verify_release_config(&context.repo_root)
 }
 
 fn verify_ci_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
@@ -537,14 +537,14 @@ fn verify_ci_command(context: &ToolContext, args: &[String]) -> Result<CommandRe
         return Ok(CommandResult::success());
     }
     let config = current_config(context)?;
-    crate::verify::verify_ci(&context.repo_root, &config)
+    super::verify::verify_ci(&context.repo_root, &config)
 }
 
 fn verify_docs_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
     if parse_args::<NoArgs>("verify docs", args)?.is_none() {
         return Ok(CommandResult::success());
     }
-    crate::verify::verify_docs(&context.repo_root)
+    super::verify::verify_docs(&context.repo_root)
 }
 
 fn verify_package_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
@@ -552,7 +552,7 @@ fn verify_package_command(context: &ToolContext, args: &[String]) -> Result<Comm
         return Ok(CommandResult::success());
     };
     let config = current_config(context)?;
-    crate::verify::verify_package(&context.repo_root, &config, &package_options(args, context))
+    super::verify::verify_package(&context.repo_root, &config, &package_options(args, context))
 }
 
 fn package_pack_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
@@ -599,8 +599,8 @@ fn release_run_command(context: &ToolContext, args: &[String]) -> Result<Command
 mod tests {
     use std::path::PathBuf;
 
+    use super::ToolContext;
     use super::{DharaStorageCapability, ReleaseRunArgs, parse_args, release_options};
-    use crate::ToolContext;
 
     #[test]
     fn registration_adds_expected_sections_and_commands() {

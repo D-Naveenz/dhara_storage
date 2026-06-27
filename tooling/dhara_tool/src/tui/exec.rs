@@ -1,7 +1,7 @@
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 
-use dhara_storage_ops::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
+use crate::ops::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
 
 use crate::command::{CommandRegistry, CommandResult, ToolContext};
 

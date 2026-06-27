@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use tracing::{error, info};
 
-use crate::{
+use super::{
     BuilderAction, CommandResult, LoggingOptions, ReportField, StructuredReport, ToolContext,
     execute_action, init_logging,
 };
@@ -38,12 +38,8 @@ impl DefsPaths {
         logs_dir: Option<PathBuf>,
     ) -> Self {
         Self {
-            package_dir: package_dir.unwrap_or_else(|| {
-                repo_root
-                    .join("tooling")
-                    .join("dhara_storage_ops")
-                    .join("package")
-            }),
+            package_dir: package_dir
+                .unwrap_or_else(|| repo_root.join("tooling").join("dhara_tool").join("package")),
             output_dir: output_dir.unwrap_or_else(|| repo_root.join("output")),
             logs_dir: logs_dir.unwrap_or_else(|| repo_root.join("logs")),
         }
@@ -105,7 +101,7 @@ pub enum DefsCommand {
 pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandResult> {
     let paths = DefsPaths::from_context(context);
     info!(
-        target: "dhara_storage_ops::defs",
+        target: "dhara_tool::ops::defs",
         command = ?command,
         repo_root = %context.repo_root.display(),
         package_dir = %paths.package_dir.display(),
@@ -124,7 +120,7 @@ pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandRes
     let action = resolve_action(command, &paths);
     let report = execute_action(action, &logging.log_path, |_| {}).map_err(|error| {
         error!(
-            target: "dhara_storage_ops::defs",
+            target: "dhara_tool::ops::defs",
             log_path = %logging.log_path.display(),
             error = %error,
             "defs command failed"
@@ -132,7 +128,7 @@ pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandRes
         anyhow::anyhow!(error.to_string())
     })?;
     info!(
-        target: "dhara_storage_ops::defs",
+        target: "dhara_tool::ops::defs",
         title = report.title(),
         exit_code = report.exit_code(),
         log_path = %logging.log_path.display(),
@@ -176,7 +172,7 @@ pub fn default_embedded_sync_paths(repo_root: &Path) -> (PathBuf, PathBuf) {
     (
         repo_root
             .join("tooling")
-            .join("dhara_storage_ops")
+            .join("dhara_tool")
             .join("package")
             .join("triddefs_xml.7z"),
         repo_root

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use tracing::{debug, info};
 
-use crate::{
+use super::{
     CommandResult, DharaRepoConfig, inspect_package_entries, load_env, run_command,
     run_command_expect_failure, run_command_with_env_redacted, sync, verify_release,
     write_nuget_config,
@@ -26,7 +26,7 @@ pub fn pack(
     options: &PackageOptions,
 ) -> Result<CommandResult> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         configuration = %options.configuration,
         output_dir = options.output_dir.as_ref().map(|path| path.display().to_string()).unwrap_or_default(),
         version_override = options.version_override.as_deref().unwrap_or(""),
@@ -66,7 +66,7 @@ pub fn pack(
     let package_path = nuget_output.join(format!("{}.{}.nupkg", config.nuget.package_id, version));
     inspect_package_contents(&package_path, config)?;
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         package_path = %package_path.display(),
         "completed NuGet pack flow"
     );
@@ -83,7 +83,7 @@ pub fn verify(
     options: &PackageOptions,
 ) -> Result<CommandResult> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         configuration = %options.configuration,
         "verifying NuGet package"
     );
@@ -133,7 +133,7 @@ pub fn verify(
         &config.ci.aot_runtime_smoke,
     )?;
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         package_path = %package_path.display(),
         "completed NuGet verification flow"
     );
@@ -148,7 +148,7 @@ pub fn publish(
     options: &PackageOptions,
 ) -> Result<CommandResult> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         execute_publish = options.execute_publish,
         "publishing NuGet package"
     );
@@ -191,7 +191,7 @@ pub fn publish(
     )?;
 
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         package_path = %package_path.display(),
         source = %source,
         "published NuGet package after local smoke verification"
@@ -208,7 +208,7 @@ pub fn publish_packed(
     options: &PackageOptions,
 ) -> Result<CommandResult> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         "publishing pre-packed NuGet package"
     );
 
@@ -246,7 +246,7 @@ pub fn publish_packed(
     )?;
 
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         package_path = %package_path.display(),
         source = %source,
         "published pre-packed NuGet package"
@@ -276,7 +276,7 @@ fn stage_native_assets(
             .get(rid)
             .with_context(|| format!("missing rust target mapping for runtime '{rid}'"))?;
         debug!(
-            target: "dhara_storage_ops::package_flow",
+            target: "dhara_tool::ops::package_flow",
             runtime = %rid,
             rust_target = %target,
             stage_root = %stage_root.display(),
@@ -324,7 +324,7 @@ fn stage_native_assets(
 fn inspect_package_contents(package_path: &Path, config: &DharaRepoConfig) -> Result<()> {
     let entries = inspect_package_entries(package_path)?;
     debug!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         package_path = %package_path.display(),
         entry_count = entries.len(),
         "inspecting package contents"
@@ -372,7 +372,7 @@ fn restore_smoke_consumer(
     publish_aot: bool,
 ) -> Result<()> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         project = %config.ci.smoke_project,
         version,
         runtime = runtime.unwrap_or("default"),
@@ -402,7 +402,7 @@ fn restore_smoke_consumer(
 
 fn run_smoke_consumer(repo_root: &Path, config: &DharaRepoConfig, version: &str) -> Result<()> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         project = %config.ci.smoke_project,
         version,
         "running smoke consumer"
@@ -436,7 +436,7 @@ fn verify_unsupported_runtime_rejected(
     nuget_config: &Path,
 ) -> Result<()> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         project = %config.ci.smoke_project,
         version,
         unsupported_runtime = "win-x86",
@@ -470,7 +470,7 @@ fn publish_aot_smoke_consumer(
     runtime: &str,
 ) -> Result<()> {
     info!(
-        target: "dhara_storage_ops::package_flow",
+        target: "dhara_tool::ops::package_flow",
         project = %config.ci.smoke_project,
         version,
         runtime,

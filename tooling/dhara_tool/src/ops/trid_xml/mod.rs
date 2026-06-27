@@ -4,7 +4,7 @@ use std::path::Path;
 use dhara_storage::{DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern};
 use tracing::{debug, info};
 
-use crate::builder::BuilderError;
+use crate::ops::builder::BuilderError;
 
 mod mime;
 mod model;

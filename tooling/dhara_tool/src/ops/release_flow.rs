@@ -6,7 +6,7 @@ use toml_edit::DocumentMut;
 use tracing::info;
 use xmltree::{Element, XMLNode};
 
-use crate::{
+use super::{
     CommandResult, DharaRepoConfig, PackageOptions, load_env, package_flow, run_command,
     verify_release,
 };
@@ -30,7 +30,7 @@ pub fn run(
     options: &ReleaseOptions,
 ) -> Result<CommandResult> {
     info!(
-        target: "dhara_storage_ops::release_flow",
+        target: "dhara_tool::ops::release_flow",
         dry_run = options.dry_run,
         publish_cargo = options.publish_cargo,
         publish_nuget = options.publish_nuget,
@@ -167,7 +167,7 @@ fn validate_versions_synced(repo_root: &Path, config: &DharaRepoConfig) -> Resul
         expected,
         "workspace.package.version",
     )?;
-    for dependency in ["dhara_storage_dal", "dhara_storage", "dhara_storage_ops"] {
+    for dependency in ["dhara_storage_dal", "dhara_storage"] {
         require_toml_version(
             &cargo,
             &["workspace", "dependencies", dependency, "version"],
@@ -244,8 +244,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::{
-        CiConfig, NuGetConfig, PublishConfig, TargetsConfig, VersionConfig, config::DharaRepoConfig,
+    use crate::ops::{
+        CiConfig, DharaRepoConfig, NuGetConfig, PublishConfig, TargetsConfig, VersionConfig,
     };
 
     fn sample_config() -> DharaRepoConfig {
@@ -297,7 +297,6 @@ version = "{cargo_version}"
 [workspace.dependencies]
 dhara_storage_dal = {{ version = "{cargo_version}", path = "src/static/dhara_storage_dal" }}
 dhara_storage = {{ version = "{cargo_version}", path = "src/static/dhara_storage" }}
-dhara_storage_ops = {{ version = "{cargo_version}", path = "tooling/dhara_storage_ops" }}
 "#
             ),
         )

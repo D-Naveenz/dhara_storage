@@ -21,7 +21,6 @@ shared release metadata. The current publish target is `0.6.0`.
 | `src/dynamic/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
 | `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |
 | `tooling/dhara_tool`           | Operator CLI for verification, packaging, release, and defs workflows                                 |
-| `tooling/dhara_storage_ops`    | Repository-specific capability pack used by `dhara_tool`                                             |
 
 ## Highlights
 
@@ -92,7 +91,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - Rust crates emit structured `tracing` events for analysis, metadata loading, operations, watching, package verification, and release flows.
 - `dharastorage` exposes a native logger registration API that forwards JSON log records across the ABI.
 - `Dhara.Storage` forwards both managed wrapper logs and native runtime logs into a host `ILoggerFactory`.
-- `dhara_tool` and `dhara_storage_ops` now emit richer command, configuration, transfer, and verification logs for release diagnostics.
+- `dhara_tool` now emits richer command, configuration, transfer, and verification logs for release diagnostics.
 
 ## Release Flow
 

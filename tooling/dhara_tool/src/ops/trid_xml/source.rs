@@ -6,7 +6,7 @@ use std::process::Command;
 use tempfile::{TempDir, tempdir};
 use tracing::{debug, info};
 
-use crate::builder::BuilderError;
+use crate::ops::builder::BuilderError;
 
 use super::{
     ParsedTridDefinition, TridBuildProgress, TridBuildStage, TridBuildStats,

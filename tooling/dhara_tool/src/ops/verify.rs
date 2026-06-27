@@ -2,7 +2,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use crate::{CommandResult, DharaRepoConfig, PackageOptions, run_command, verify_release};
+use super::{CommandResult, DharaRepoConfig, PackageOptions, run_command, verify_release};
 
 pub fn verify_release_config(repo_root: &Path) -> Result<CommandResult> {
     verify_release(repo_root)?;
@@ -16,7 +16,6 @@ pub fn verify_ci(repo_root: &Path, config: &DharaRepoConfig) -> Result<CommandRe
         "dhara_storage_dal",
         "dhara_storage",
         "dharastorage",
-        "dhara_storage_ops",
         "dhara_tool",
     ] {
         run_command(
@@ -45,12 +44,7 @@ pub fn verify_ci(repo_root: &Path, config: &DharaRepoConfig) -> Result<CommandRe
         ],
         repo_root,
     )?;
-    for package in [
-        "dhara_storage_dal",
-        "dharastorage",
-        "dhara_storage_ops",
-        "dhara_tool",
-    ] {
+    for package in ["dhara_storage_dal", "dharastorage", "dhara_tool"] {
         run_command(
             "cargo",
             &[
@@ -76,12 +70,7 @@ pub fn verify_ci(repo_root: &Path, config: &DharaRepoConfig) -> Result<CommandRe
         ],
         repo_root,
     )?;
-    for package in [
-        "dhara_storage_dal",
-        "dharastorage",
-        "dhara_storage_ops",
-        "dhara_tool",
-    ] {
+    for package in ["dhara_storage_dal", "dharastorage", "dhara_tool"] {
         run_command(
             "cargo",
             &["test".to_owned(), "-p".to_owned(), package.to_owned()],
@@ -110,12 +99,7 @@ pub fn verify_docs(repo_root: &Path) -> Result<CommandResult> {
         ],
         repo_root,
     )?;
-    for package in [
-        "dhara_storage_dal",
-        "dharastorage",
-        "dhara_storage_ops",
-        "dhara_tool",
-    ] {
+    for package in ["dhara_storage_dal", "dharastorage", "dhara_tool"] {
         run_command(
             "cargo",
             &[
@@ -136,5 +120,5 @@ pub fn verify_package(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    crate::package_flow::verify(repo_root, config, options)
+    super::package_flow::verify(repo_root, config, options)
 }

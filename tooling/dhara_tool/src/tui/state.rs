@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use dhara_storage_ops::OutputStream;
+use crate::ops::OutputStream;
 
 use crate::command::{CommandRegistry, CommandResult, CommandSpec, ToolContext};
 

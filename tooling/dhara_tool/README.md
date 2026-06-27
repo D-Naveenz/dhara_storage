@@ -32,4 +32,4 @@ Dhara TUI. Explicit subcommands still use the minimal non-TUI execution path.
 - package verification and publish milestones
 - failures and validation details
 
-Repository-specific command implementations live in `tooling/dhara_storage_ops`.
+Repository-specific command implementations live in `tooling/dhara_tool/src/ops`.

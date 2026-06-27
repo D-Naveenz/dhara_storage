@@ -9,7 +9,7 @@ use anyhow::{Context, Result, bail};
 use tracing::{debug, info};
 use zip::ZipArchive;
 
-use crate::output::{emit_stderr_line, emit_stdout_line, set_active_child};
+use super::output::{emit_stderr_line, emit_stdout_line, set_active_child};
 
 fn command_display(program: &str, args: &[String]) -> String {
     if args.is_empty() {
@@ -22,7 +22,7 @@ fn command_display(program: &str, args: &[String]) -> String {
 pub fn run_command(program: &str, args: &[String], cwd: &Path) -> Result<()> {
     emit_stdout_line(format!("> {}", command_display(program, args)));
     info!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         program,
         args = args.join(" "),
         cwd = %cwd.display(),
@@ -37,7 +37,7 @@ pub fn run_command(program: &str, args: &[String], cwd: &Path) -> Result<()> {
         );
     }
     debug!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         program,
         status = %status,
         "command completed successfully"
@@ -64,7 +64,7 @@ pub fn run_command_with_env_redacted(
     let display_args = redact_args(args, redacted_values);
     emit_stdout_line(format!("> {}", command_display(program, &display_args)));
     info!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         program,
         args = display_args.join(" "),
         cwd = %cwd.display(),
@@ -80,7 +80,7 @@ pub fn run_command_with_env_redacted(
         );
     }
     debug!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         program,
         status = %status,
         "command completed successfully"
@@ -111,7 +111,7 @@ pub fn run_command_expect_failure(
 ) -> Result<()> {
     emit_stdout_line(format!("> {}", command_display(program, args)));
     info!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         program,
         args = args.join(" "),
         cwd = %cwd.display(),
@@ -138,7 +138,7 @@ pub fn run_command_expect_failure(
     }
 
     debug!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         program,
         status = %output.status,
         expected_output,
@@ -173,7 +173,7 @@ pub fn write_nuget_config(path: &Path, sources: &[PathBuf]) -> Result<()> {
 
 pub fn inspect_package_entries(package_path: &Path) -> Result<Vec<String>> {
     debug!(
-        target: "dhara_storage_ops::support",
+        target: "dhara_tool::ops::support",
         package_path = %package_path.display(),
         "reading package entries"
     );

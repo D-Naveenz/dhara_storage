@@ -3,7 +3,7 @@ use std::path::Path;
 use quick_xml::de::from_str;
 use serde::Deserialize;
 
-use crate::builder::BuilderError;
+use crate::ops::builder::BuilderError;
 
 use super::{ParsedTridDefinition, TridPattern, TridSignature};
 
