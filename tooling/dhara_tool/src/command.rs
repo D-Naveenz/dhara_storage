@@ -118,7 +118,27 @@ impl CommandRegistry {
         let Some((command, rest)) = self.resolve(args) else {
             bail!("unknown command path: {}", args.join(" "));
         };
-        (command.handler)(context, rest)
+
+        crate::ops::ensure_logging(crate::ops::LoggingOptions::from_context(context, false))?;
+
+        let command_line = args.join(" ");
+        crate::ops::log_command_begin(command.id, &command_line, context);
+
+        let result = (command.handler)(context, rest);
+
+        match &result {
+            Ok(command_result) => crate::ops::log_command_end(command.id, command_result),
+            Err(error) => {
+                tracing::error!(
+                    target: "dhara_tool::audit",
+                    command_id = command.id,
+                    error = %error,
+                    "command failed"
+                );
+            }
+        }
+
+        result
     }
 
     pub fn help_text(&self) -> String {

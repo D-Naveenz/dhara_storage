@@ -216,10 +216,9 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.logs_dir = Some(PathBuf::from(token.trim_start_matches("--logs-dir=")));
                 index += 1;
             }
-            _ if token.starts_with('-') => bail!("unknown global option: {token}"),
             _ => {
-                parsed.command.extend(args[index..].iter().cloned());
-                break;
+                parsed.command.push(token.clone());
+                index += 1;
             }
         }
     }
@@ -235,7 +234,7 @@ fn next_value<'a>(args: &'a [String], index: usize, option: &str) -> Result<&'a 
 
 fn help_text(registry: &CommandRegistry) -> String {
     format!(
-        "Usage: dhara_tool [global-options] <command>\n\nGlobal options:\n  --repo-root <path>\n  --package-dir <path>\n  --output-dir <path>\n  --logs-dir <path>\n  -s, --silent\n  -v, --verbose\n  -h, --help\n  --version\n\n{}",
+        "Usage: dhara_tool [global-options] <command> [command-options]\n\nGlobal options (may appear before or after the command):\n  --repo-root <path>\n  --package-dir <path>\n  --output-dir <path>\n  --logs-dir <path>\n  -s, --silent\n  -v, --verbose\n  -h, --help\n  --version\n\n{}",
         registry.help_text()
     )
 }
@@ -248,7 +247,7 @@ mod tests {
 
     use super::{
         LaunchMode, determine_launch_mode, discover_repo_root_from, normalize_repo_root,
-        resolve_repo_root,
+        parse_root_args, resolve_repo_root,
     };
 
     #[test]
@@ -304,6 +303,32 @@ mod tests {
         let resolved = discover_repo_root_from(&nested).unwrap();
 
         assert_eq!(resolved, normalize_repo_root(root).unwrap());
+    }
+
+    #[test]
+    fn global_verbose_flag_may_follow_subcommand() {
+        let parsed = parse_root_args(vec![
+            "defs".to_owned(),
+            "inspect-trid-xml".to_owned(),
+            "-v".to_owned(),
+        ])
+        .unwrap();
+
+        assert_eq!(parsed.verbose, 1);
+        assert_eq!(parsed.command, vec!["defs", "inspect-trid-xml"]);
+    }
+
+    #[test]
+    fn global_verbose_flag_may_precede_subcommand() {
+        let parsed = parse_root_args(vec![
+            "-v".to_owned(),
+            "defs".to_owned(),
+            "inspect".to_owned(),
+        ])
+        .unwrap();
+
+        assert_eq!(parsed.verbose, 1);
+        assert_eq!(parsed.command, vec!["defs", "inspect"]);
     }
 
     #[test]

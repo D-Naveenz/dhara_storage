@@ -6,7 +6,7 @@ use tracing::{error, info};
 use crate::command::{CommandResult, ReportField, StructuredReport, ToolContext};
 use crate::paths::{default_defs_package_path, resolve_logs_dir, resolve_output_dir};
 
-use super::{BuilderAction, LoggingOptions, execute_action, init_logging};
+use super::{BuilderAction, current_log_path, execute_action, log_file_path};
 
 /// Repo-relative working paths used by defs commands.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,17 +114,12 @@ pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandRes
         silent = context.silent,
         "starting defs command"
     );
-    let logging = init_logging(LoggingOptions {
-        silent: context.silent,
-        verbose: context.verbose,
-        logs_dir: paths.logs_dir.clone(),
-        interactive: false,
-    })?;
+    let log_path = current_log_path().unwrap_or_else(|| log_file_path(&paths.logs_dir));
     let action = resolve_action(command, &paths);
-    let report = execute_action(action, &logging.log_path, |_| {}).map_err(|error| {
+    let report = execute_action(action, &log_path, |_| {}).map_err(|error| {
         error!(
             target: "dhara_tool::ops::defs",
-            log_path = %logging.log_path.display(),
+            log_path = %log_path.display(),
             error = %error,
             "defs command failed"
         );
@@ -134,7 +129,7 @@ pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandRes
         target: "dhara_tool::ops::defs",
         title = report.title(),
         exit_code = report.exit_code(),
-        log_path = %logging.log_path.display(),
+        log_path = %log_path.display(),
         "defs command completed"
     );
 

@@ -23,7 +23,11 @@ pub use config::{
     sync_cargo_toml, sync_csproj, validate_config, verify_release,
 };
 pub use defs::{DefsCommand, DefsPaths, execute as execute_defs, print_defs_help};
-pub use logging::{LoggingOptions, LoggingRuntime, init_logging, log_file_path};
+pub use logging::{
+    LoggingOptions, LoggingRuntime, current_log_path, ensure_logging, init_logging,
+    log_build_progress, log_command_begin, log_command_end, log_file_path, log_task_step,
+    log_transform_statistics,
+};
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,
     emit_stdout_line,
