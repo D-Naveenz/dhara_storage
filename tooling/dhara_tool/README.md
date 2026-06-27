@@ -20,17 +20,21 @@ cargo run -p dhara_tool -- release run --skip-cargo
 ```
 
 Launching `dhara_tool` without a subcommand in an interactive terminal opens the
-Dhara TUI. Explicit subcommands still use the minimal non-TUI execution path.
+Dhara TUI (**interactive** mode). Explicit subcommands use **direct** mode (no TUI).
 
 ## Logging
 
-`dhara_tool` now emits richer structured logs for:
+Audit logs follow [docs/logging.md](../docs/logging.md). Each run writes to
+`tooling/output/logs/{date}_dhara_tool[_N].log` with session-scoped files.
 
-- command start and completion
-- effective configuration
-- spawned external processes
-- package verification and publish milestones
-- failures and validation details
+`dhara_tool` emits human-readable audit lines for:
+
+- session and module lifecycle (start, steps, finish)
+- TrID transformation statistics
+- subprocess milestones (verify, package, release)
+- failures with exit codes and timestamps
+
+Use `-v` for more console detail; `-q` suppresses command stdout in direct mode.
 
 Repository-specific command logic lives in `tooling/dhara_tool/src/ops`. The TUI and CLI registry in `command` and `tui` call into that module through `DharaStorageCapability`.
 

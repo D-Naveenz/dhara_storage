@@ -1039,8 +1039,9 @@ mod tests {
     fn test_context() -> ToolContext {
         ToolContext {
             repo_root: PathBuf::from("."),
-            silent: false,
+            run_mode: crate::command::RunMode::Direct,
             verbose: 0,
+            quiet: false,
             package_dir: None,
             output_dir: None,
             logs_dir: None,

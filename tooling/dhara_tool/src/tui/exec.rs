@@ -3,7 +3,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::ops::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
 
-use crate::command::{CommandRegistry, CommandResult, ToolContext};
+use crate::command::{CommandRegistry, CommandResult, RunMode, ToolContext};
 
 pub struct RunHandle {
     pub label: String,
@@ -28,6 +28,8 @@ pub fn start_run(
 ) -> RunHandle {
     let (output_tx, output_rx) = mpsc::channel();
     let (completion_tx, completion_rx) = mpsc::channel();
+    let mut context = context;
+    context.run_mode = RunMode::Interactive;
     let join = thread::spawn(move || {
         let _capture = OutputCaptureGuard::install(output_tx);
         let completion = match registry.execute(&context, &command) {
@@ -70,9 +72,7 @@ mod tests {
 
     use anyhow::Result;
 
-    use crate::command::{
-        CommandRegistry, CommandResult, CommandSpec, CommandUi, SectionSpec, ToolContext,
-    };
+    use crate::command::{CommandRegistry, CommandResult, CommandSpec, CommandUi, RunMode, SectionSpec, ToolContext};
 
     use super::{RunCompletion, start_run};
 
@@ -100,8 +100,9 @@ mod tests {
 
         let context = ToolContext {
             repo_root: ".".into(),
-            silent: false,
+            run_mode: RunMode::Interactive,
             verbose: 0,
+            quiet: false,
             package_dir: None,
             output_dir: None,
             logs_dir: None,

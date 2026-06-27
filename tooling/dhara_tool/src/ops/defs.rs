@@ -1,7 +1,6 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
-use tracing::{error, info};
 
 use crate::command::{CommandResult, ReportField, StructuredReport, ToolContext};
 use crate::paths::{default_defs_package_path, resolve_logs_dir, resolve_output_dir};
@@ -103,35 +102,11 @@ pub enum DefsCommand {
 /// Executes a defs command using repository-relative defaults and structured logging.
 pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandResult> {
     let paths = DefsPaths::from_context(context);
-    info!(
-        target: "dhara_tool::ops::defs",
-        command = ?command,
-        repo_root = %context.repo_root.display(),
-        package_dir = %paths.package_dir.display(),
-        output_dir = %paths.output_dir.display(),
-        logs_dir = %paths.logs_dir.display(),
-        verbose = context.verbose,
-        silent = context.silent,
-        "starting defs command"
-    );
     let log_path = current_log_path().unwrap_or_else(|| log_file_path(&paths.logs_dir));
     let action = resolve_action(command, &paths);
-    let report = execute_action(action, &log_path, |_| {}).map_err(|error| {
-        error!(
-            target: "dhara_tool::ops::defs",
-            log_path = %log_path.display(),
-            error = %error,
-            "defs command failed"
-        );
-        anyhow::anyhow!(error.to_string())
-    })?;
-    info!(
-        target: "dhara_tool::ops::defs",
-        title = report.title(),
-        exit_code = report.exit_code(),
-        log_path = %log_path.display(),
-        "defs command completed"
-    );
+
+    let report = execute_action(action, &log_path, |_| {})
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
     Ok(CommandResult {
         exit_code: report.exit_code(),

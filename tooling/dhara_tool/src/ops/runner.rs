@@ -1,12 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use tracing::{info, warn};
-
 use super::builder::{
     TridBuildProgress, build_trid_xml_package_with_progress, inspect_package, load_bundled_package,
     normalize_package, packages_match, sync_embedded_package, write_package,
 };
-use super::logging::{log_build_progress, log_task_step, log_transform_statistics};
+use super::logging::{log_build_progress, log_module_step_debug, log_module_step_warn, log_transform_statistics};
 use super::output::emit_stdout_line;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -71,6 +69,13 @@ impl BuilderAction {
             Self::SyncEmbedded { .. } => "Embedded Package Sync",
         }
     }
+
+    pub fn is_long_running(&self) -> bool {
+        matches!(
+            self,
+            Self::BuildTridXml { .. } | Self::InspectTridXml { .. }
+        )
+    }
 }
 
 impl ReportField {
@@ -111,31 +116,14 @@ pub fn execute_action<F>(
 where
     F: FnMut(TridBuildProgress),
 {
-    info!(
-        target: "dhara_tool::ops::runner",
-        action = ?action,
-        log_path = %log_path.display(),
-        "executing builder action"
-    );
+    let long_running = action.is_long_running();
 
     let report = match action {
         BuilderAction::Pack { output } => {
-            log_task_step("load bundled runtime package", "started", None);
+            log_module_step_debug("loading bundled runtime package");
             let package = load_bundled_package()?;
-            log_task_step("load bundled runtime package", "success", None);
-
-            log_task_step(
-                "write bundled package",
-                "started",
-                Some(&output.display().to_string()),
-            );
             let written = write_package(&package, &output)?;
-            log_task_step(
-                "write bundled package",
-                "success",
-                Some(&written.display().to_string()),
-            );
-
+            log_module_step_debug(&format!("wrote bundled package to {}", written.display()));
             CommandReport {
                 title: "Bundled Package".to_string(),
                 status: ReportStatus::Success,
@@ -147,34 +135,22 @@ where
             }
         }
         BuilderAction::BuildTridXml { input, output } => {
-            log_task_step(
-                "build TrID XML package",
-                "started",
-                Some(&input.display().to_string()),
-            );
+            if long_running {
+                log_module_step_debug(&format!(
+                    "building TrID XML package from {}",
+                    input.display()
+                ));
+            }
             let build = build_trid_xml_package_with_progress(&input, |update| {
                 log_build_progress(&update);
                 progress(update);
             })?;
             log_transform_statistics(&build.report);
-            log_task_step(
-                "build TrID XML package",
-                "success",
-                Some(&output.display().to_string()),
-            );
-
-            log_task_step(
-                "write definitions package",
-                "started",
-                Some(&output.display().to_string()),
-            );
             let written = write_package(&build.package, &output)?;
-            log_task_step(
-                "write definitions package",
-                "success",
-                Some(&written.display().to_string()),
-            );
-
+            log_module_step_debug(&format!(
+                "wrote definitions package to {}",
+                written.display()
+            ));
             let mut fields = vec![
                 field("Input", input.display().to_string()),
                 field("Output", written.display().to_string()),
@@ -189,17 +165,7 @@ where
             }
         }
         BuilderAction::Inspect { input } => {
-            log_task_step(
-                "inspect definitions package",
-                "started",
-                Some(&input.display().to_string()),
-            );
             let summary = inspect_package(&input)?;
-            log_task_step(
-                "inspect definitions package",
-                "success",
-                Some(&input.display().to_string()),
-            );
             CommandReport {
                 title: "Package Summary".to_string(),
                 status: ReportStatus::Success,
@@ -217,22 +183,17 @@ where
             }
         }
         BuilderAction::InspectTridXml { input } => {
-            log_task_step(
-                "inspect TrID XML transformation",
-                "started",
-                Some(&input.display().to_string()),
-            );
+            if long_running {
+                log_module_step_debug(&format!(
+                    "previewing TrID XML transformation from {}",
+                    input.display()
+                ));
+            }
             let build = build_trid_xml_package_with_progress(&input, |update| {
                 log_build_progress(&update);
                 progress(update);
             })?;
             log_transform_statistics(&build.report);
-            log_task_step(
-                "inspect TrID XML transformation",
-                "success",
-                Some(&input.display().to_string()),
-            );
-
             let mut fields = vec![field("Log", log_path.display().to_string())];
             extend_transform_report_fields(&mut fields, &build.report);
             CommandReport {
@@ -243,17 +204,11 @@ where
             }
         }
         BuilderAction::Normalize { input, output } => {
-            log_task_step(
-                "normalize definitions package",
-                "started",
-                Some(&input.display().to_string()),
-            );
             let written = normalize_package(&input, &output)?;
-            log_task_step(
-                "normalize definitions package",
-                "success",
-                Some(&written.display().to_string()),
-            );
+            log_module_step_debug(&format!(
+                "normalized package written to {}",
+                written.display()
+            ));
             CommandReport {
                 title: "Normalized Package".to_string(),
                 status: ReportStatus::Success,
@@ -266,18 +221,13 @@ where
             }
         }
         BuilderAction::Verify { left, right } => {
-            log_task_step("verify package equivalence", "started", None);
             let matches = packages_match(&left, &right)?;
             if !matches {
-                warn!(
-                    target: "dhara_tool::ops::runner",
-                    left = %left.display(),
-                    right = %right.display(),
-                    "package verification reported differences"
-                );
-                log_task_step("verify package equivalence", "warning", Some("packages differ"));
-            } else {
-                log_task_step("verify package equivalence", "success", Some("packages match"));
+                log_module_step_warn(&format!(
+                    "package verification differed: {} vs {}",
+                    left.display(),
+                    right.display()
+                ));
             }
             CommandReport {
                 title: "Verification".to_string(),
@@ -300,47 +250,22 @@ where
             output,
             check,
         } => {
-            log_task_step(
-                "sync runtime definitions package",
-                "started",
-                Some(&format!(
-                    "input={}; output={}; check={check}",
-                    input.display(),
-                    output.display()
-                )),
-            );
             let outcome = sync_embedded_package(&input, &output, check)?;
             let (status, exit_code, result) = match outcome.status {
                 super::builder::SyncEmbeddedStatus::Skipped => {
-                    log_task_step(
-                        "sync runtime definitions package",
-                        "skipped",
-                        Some(outcome.detail.as_str()),
-                    );
+                    log_module_step_debug(&outcome.detail);
                     (ReportStatus::Success, 0, "skipped")
                 }
                 super::builder::SyncEmbeddedStatus::UpToDate => {
-                    log_task_step(
-                        "sync runtime definitions package",
-                        "success",
-                        Some(outcome.detail.as_str()),
-                    );
+                    log_module_step_debug(&outcome.detail);
                     (ReportStatus::Success, 0, "up-to-date")
                 }
                 super::builder::SyncEmbeddedStatus::Updated => {
-                    log_task_step(
-                        "sync runtime definitions package",
-                        "success",
-                        Some(outcome.detail.as_str()),
-                    );
+                    log_module_step_debug(&outcome.detail);
                     (ReportStatus::Success, 0, "updated")
                 }
                 super::builder::SyncEmbeddedStatus::NeedsUpdate => {
-                    log_task_step(
-                        "sync runtime definitions package",
-                        "warning",
-                        Some(outcome.detail.as_str()),
-                    );
+                    log_module_step_warn(&outcome.detail);
                     (ReportStatus::Warning, 1, "update required")
                 }
             };
@@ -364,7 +289,6 @@ where
         }
     };
 
-    log_runner_report(&report);
     Ok(report)
 }
 
@@ -373,22 +297,6 @@ pub fn print_report(report: &CommandReport) {
     for entry in report.fields() {
         emit_stdout_line(format!("{:<20} {}", entry.label(), entry.value()));
     }
-}
-
-fn log_runner_report(report: &CommandReport) {
-    let outcome = match report.status {
-        ReportStatus::Success => "success",
-        ReportStatus::Warning => "warning",
-    };
-
-    info!(
-        target: "dhara_tool::audit",
-        title = report.title.as_str(),
-        outcome,
-        exit_code = report.exit_code,
-        field_count = report.fields.len(),
-        "operation completed"
-    );
 }
 
 fn extend_transform_report_fields(

@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use dhara_storage::{DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern};
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::ops::builder::BuilderError;
 
@@ -160,7 +160,7 @@ fn build_trid_xml_package_with_report_internal(
     source: &Path,
     progress: &mut dyn FnMut(TridBuildProgress),
 ) -> Result<TridBuildOutput, BuilderError> {
-    info!(source = %source.display(), "building reduced TrID XML package");
+    debug!(source = %source.display(), "building reduced TrID XML package");
     progress(TridBuildProgress {
         stage: TridBuildStage::LoadSource,
         message: format!("Loading source {}", source.display()),
@@ -323,7 +323,7 @@ fn build_trid_xml_package_with_report_internal(
             final_trimmed: report.final_trimmed,
         },
     });
-    info!(
+    debug!(
         final_kept = report.final_kept,
         final_trimmed = report.final_trimmed,
         "reduced TrID definitions package ready"

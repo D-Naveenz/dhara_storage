@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use tempfile::{TempDir, tempdir};
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::ops::builder::BuilderError;
 
@@ -17,7 +17,7 @@ pub(crate) fn load_trid_definitions(
     source: &Path,
     progress: &mut dyn FnMut(TridBuildProgress),
 ) -> Result<Vec<ParsedTridDefinition>, BuilderError> {
-    info!(source = %source.display(), "loading TrID XML source");
+    debug!(source = %source.display(), "loading TrID XML source");
     if source.is_dir() {
         return load_from_directory(source, progress);
     }
@@ -86,7 +86,7 @@ fn load_from_directory(
             },
         });
     }
-    info!(
+    debug!(
         count = definitions.len(),
         "loaded TrID XML definitions from directory"
     );
@@ -97,7 +97,7 @@ fn load_from_archive(
     source: &Path,
     progress: &mut dyn FnMut(TridBuildProgress),
 ) -> Result<Vec<ParsedTridDefinition>, BuilderError> {
-    info!(source = %source.display(), "extracting TrID XML archive");
+    debug!(source = %source.display(), "extracting TrID XML archive");
     progress(TridBuildProgress {
         stage: TridBuildStage::ExtractArchive,
         message: format!("Extracting {}", source.display()),

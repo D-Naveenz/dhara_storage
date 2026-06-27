@@ -3,8 +3,8 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::command::{CommandRegistry, ToolCapability, ToolContext};
-use crate::ops::DharaStorageCapability;
+use crate::command::{CommandRegistry, RunMode, ToolContext, ToolCapability};
+use crate::ops::{log_session_end, DharaStorageCapability};
 use crate::tui::{can_launch, run_tui};
 
 pub fn run() -> Result<()> {
@@ -29,10 +29,19 @@ pub fn run() -> Result<()> {
         env::current_exe().ok(),
     )?;
 
+    let run_mode = if !cli.command.is_empty() {
+        RunMode::Direct
+    } else if can_launch() {
+        RunMode::Interactive
+    } else {
+        RunMode::Direct
+    };
+
     let context = ToolContext {
         repo_root,
-        silent: cli.silent,
+        run_mode,
         verbose: cli.verbose,
+        quiet: cli.quiet,
         package_dir: cli.package_dir,
         output_dir: cli.output_dir,
         logs_dir: cli.logs_dir,
@@ -42,8 +51,21 @@ pub fn run() -> Result<()> {
         LaunchMode::InteractiveTui => run_tui(&registry, &context)?,
         LaunchMode::PlainHelp => print!("{}", help_text(&registry)),
         LaunchMode::DirectCommand => {
-            let result = registry.execute(&context, &cli.command)?;
-            result.print(context.silent);
+            let command_id = registry
+                .resolve(&cli.command)
+                .map(|(command, _)| command.id)
+                .unwrap_or("unknown");
+            let result = match registry.execute(&context, &cli.command) {
+                Ok(result) => {
+                    log_session_end(result.exit_code, Some(command_id), None);
+                    result
+                }
+                Err(error) => {
+                    log_session_end(1, Some(command_id), Some(&error.to_string()));
+                    return Err(error);
+                }
+            };
+            result.print(&context);
             if result.exit_code != 0 {
                 std::process::exit(result.exit_code);
             }
@@ -139,7 +161,7 @@ fn normalize_repo_root(path: PathBuf) -> Result<PathBuf> {
 #[derive(Debug, Clone)]
 struct RootArgs {
     repo_root: Option<PathBuf>,
-    silent: bool,
+    quiet: bool,
     verbose: u8,
     package_dir: Option<PathBuf>,
     output_dir: Option<PathBuf>,
@@ -152,7 +174,7 @@ struct RootArgs {
 fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
     let mut parsed = RootArgs {
         repo_root: None,
-        silent: false,
+        quiet: false,
         verbose: 0,
         package_dir: None,
         output_dir: None,
@@ -174,8 +196,8 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.show_version = true;
                 index += 1;
             }
-            "-s" | "--silent" => {
-                parsed.silent = true;
+            "-q" | "--quiet" => {
+                parsed.quiet = true;
                 index += 1;
             }
             "-v" | "--verbose" => {
@@ -234,7 +256,20 @@ fn next_value<'a>(args: &'a [String], index: usize, option: &str) -> Result<&'a 
 
 fn help_text(registry: &CommandRegistry) -> String {
     format!(
-        "Usage: dhara_tool [global-options] <command> [command-options]\n\nGlobal options (may appear before or after the command):\n  --repo-root <path>\n  --package-dir <path>\n  --output-dir <path>\n  --logs-dir <path>\n  -s, --silent\n  -v, --verbose\n  -h, --help\n  --version\n\n{}",
+        "Usage: dhara_tool [global-options] <command> [command-options]\n\n\
+         Launch modes:\n\
+           interactive  no subcommand in a TTY — opens the guided TUI\n\
+           direct       subcommand present — runs immediately (CI, agents, scripts)\n\n\
+         Global options (may appear before or after the command):\n\
+           --repo-root <path>\n\
+           --package-dir <path>\n\
+           --output-dir <path>\n\
+           --logs-dir <path>\n\
+           -q, --quiet     suppress command stdout in direct mode\n\
+           -v, --verbose\n\
+           -h, --help\n\
+           --version\n\n\
+         {}",
         registry.help_text()
     )
 }
@@ -329,6 +364,17 @@ mod tests {
 
         assert_eq!(parsed.verbose, 1);
         assert_eq!(parsed.command, vec!["defs", "inspect"]);
+    }
+
+    #[test]
+    fn quiet_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "defs".to_owned(),
+            "inspect".to_owned(),
+            "--quiet".to_owned(),
+        ])
+        .unwrap();
+        assert!(parsed.quiet);
     }
 
     #[test]

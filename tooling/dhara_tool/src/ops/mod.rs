@@ -24,9 +24,11 @@ pub use config::{
 };
 pub use defs::{DefsCommand, DefsPaths, execute as execute_defs, print_defs_help};
 pub use logging::{
-    LoggingOptions, LoggingRuntime, current_log_path, ensure_logging, init_logging,
-    log_build_progress, log_command_begin, log_command_end, log_file_path, log_task_step,
-    log_transform_statistics,
+    LoggingOptions, LoggingRuntime, current_log_path, ensure_logging, format_command_args,
+    init_logging, is_long_running_module, log_build_progress, log_file_path, log_module_begin,
+    log_module_begin_debug, log_module_compact_finish, log_module_end, log_module_failed,
+    log_module_step_debug, log_module_step_error, log_module_step_warn, log_session_begin,
+    log_session_end, log_transform_statistics, summarize_command_result,
 };
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,

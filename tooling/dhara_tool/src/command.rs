@@ -119,22 +119,37 @@ impl CommandRegistry {
             bail!("unknown command path: {}", args.join(" "));
         };
 
-        crate::ops::ensure_logging(crate::ops::LoggingOptions::from_context(context, false))?;
+        crate::ops::ensure_logging(crate::ops::LoggingOptions::from_context(context))?;
 
-        let command_line = args.join(" ");
-        crate::ops::log_command_begin(command.id, &command_line, context);
+        let long_running = crate::ops::is_long_running_module(command.id);
+        let started = std::time::Instant::now();
+        let args_summary = crate::ops::format_command_args(rest);
+
+        if long_running {
+            crate::ops::log_module_begin(command.id, &args_summary);
+        } else {
+            crate::ops::log_module_begin_debug(command.id, &args_summary);
+        }
 
         let result = (command.handler)(context, rest);
 
         match &result {
-            Ok(command_result) => crate::ops::log_command_end(command.id, command_result),
+            Ok(command_result) => {
+                let summary =
+                    crate::ops::summarize_command_result(command.id, command_result);
+                if long_running {
+                    crate::ops::log_module_end(command.id, command_result.exit_code, &summary, started);
+                } else {
+                    crate::ops::log_module_compact_finish(
+                        command.id,
+                        command_result.exit_code,
+                        &summary,
+                        started,
+                    );
+                }
+            }
             Err(error) => {
-                tracing::error!(
-                    target: "dhara_tool::audit",
-                    command_id = command.id,
-                    error = %error,
-                    "command failed"
-                );
+                crate::ops::log_module_failed(command.id, &error.to_string(), started);
             }
         }
 
@@ -179,11 +194,27 @@ impl CommandUi {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunMode {
+    Interactive,
+    Direct,
+}
+
+impl RunMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Interactive => "interactive",
+            Self::Direct => "direct",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolContext {
     pub repo_root: PathBuf,
-    pub silent: bool,
+    pub run_mode: RunMode,
     pub verbose: u8,
+    pub quiet: bool,
     pub package_dir: Option<PathBuf>,
     pub output_dir: Option<PathBuf>,
     pub logs_dir: Option<PathBuf>,
@@ -241,8 +272,8 @@ impl CommandResult {
         }
     }
 
-    pub fn print(&self, silent: bool) {
-        if silent {
+    pub fn print(&self, context: &ToolContext) {
+        if context.run_mode != RunMode::Direct || context.quiet {
             return;
         }
 
@@ -283,8 +314,9 @@ mod tests {
     fn context() -> ToolContext {
         ToolContext {
             repo_root: PathBuf::from("."),
-            silent: false,
+            run_mode: RunMode::Direct,
             verbose: 0,
+            quiet: false,
             package_dir: None,
             output_dir: None,
             logs_dir: None,

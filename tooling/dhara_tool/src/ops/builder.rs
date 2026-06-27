@@ -6,13 +6,14 @@ use dhara_storage_dal::{
     DEFINITION_PACKAGE_IDENTIFIER, decode_definition_package, encode_definition_package,
 };
 use thiserror::Error;
-use tracing::{debug, info};
+use tracing::debug;
 
 #[path = "trid_xml/mod.rs"]
 mod trid_xml;
 
 pub use trid_xml::{
-    TridBuildProgress, TridBuildStage, TridTransformReport, build_trid_xml_package_with_progress,
+    TridBuildProgress, TridBuildStage, TridBuildStats, TridTransformReport,
+    build_trid_xml_package_with_progress,
 };
 
 #[derive(Debug, Error)]
@@ -98,7 +99,7 @@ pub struct SyncEmbeddedOutcome {
 
 pub fn load_package(path: impl AsRef<Path>) -> Result<LoadedPackage, BuilderError> {
     let path = path.as_ref();
-    info!(path = %path.display(), "loading definitions package");
+    debug!(path = %path.display(), "loading definitions package");
     let bytes = fs::read(path).map_err(|source| BuilderError::Io {
         operation: "read package",
         path: path.to_path_buf(),
@@ -111,7 +112,7 @@ pub fn load_package(path: impl AsRef<Path>) -> Result<LoadedPackage, BuilderErro
 }
 
 pub fn load_bundled_package() -> Result<DefinitionPackage, BuilderError> {
-    info!("loading bundled runtime definitions package");
+    debug!("loading bundled runtime definitions package");
     bundled_definition_package()
         .cloned()
         .map_err(|err| BuilderError::Package {
@@ -124,7 +125,7 @@ pub fn write_package(
     path: impl AsRef<Path>,
 ) -> Result<PathBuf, BuilderError> {
     let path = path.as_ref().to_path_buf();
-    info!(path = %path.display(), "writing definitions package");
+    debug!(path = %path.display(), "writing definitions package");
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|source| BuilderError::Io {
             operation: "create output directory for",
@@ -151,7 +152,7 @@ pub fn normalize_package(
     input: impl AsRef<Path>,
     output: impl AsRef<Path>,
 ) -> Result<PathBuf, BuilderError> {
-    info!("normalizing definitions package");
+    debug!("normalizing definitions package");
     let package = load_package(input)?;
     write_package(&package.package, output)
 }
@@ -160,14 +161,14 @@ pub fn packages_match(
     left: impl AsRef<Path>,
     right: impl AsRef<Path>,
 ) -> Result<bool, BuilderError> {
-    info!("comparing definitions packages");
+    debug!("comparing definitions packages");
     let left = load_package(left)?;
     let right = load_package(right)?;
     Ok(left.package == right.package)
 }
 
 pub fn inspect_package(path: impl AsRef<Path>) -> Result<PackageSummary, BuilderError> {
-    info!("inspecting definitions package");
+    debug!("inspecting definitions package");
     let package = load_package(path)?;
     Ok(PackageSummary::from_loaded(&package))
 }
@@ -179,7 +180,7 @@ pub fn sync_embedded_package(
 ) -> Result<SyncEmbeddedOutcome, BuilderError> {
     let input = input.as_ref().to_path_buf();
     let output = output.as_ref().to_path_buf();
-    info!(
+    debug!(
         input = %input.display(),
         output = %output.display(),
         check_only,

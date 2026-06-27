@@ -2,14 +2,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
-use tracing::{debug, info};
+use tracing::debug;
 
 use crate::command::CommandResult;
 use crate::paths::{default_artifacts_dir, resolve_output_dir};
 
 use super::{
-    DharaRepoConfig, inspect_package_entries, load_env, run_command, run_command_expect_failure,
-    run_command_with_env_redacted, sync, verify_release, write_nuget_config,
+    DharaRepoConfig, inspect_package_entries, load_env, log_module_step_debug, run_command,
+    run_command_expect_failure, run_command_with_env_redacted, sync, verify_release,
+    write_nuget_config,
 };
 
 #[derive(Debug, Clone)]
@@ -27,13 +28,11 @@ pub fn pack(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        configuration = %options.configuration,
-        output_dir = options.output_dir.as_ref().map(|path| path.display().to_string()).unwrap_or_default(),
-        version_override = options.version_override.as_deref().unwrap_or(""),
-        "packing NuGet package"
-    );
+    log_module_step_debug(&format!(
+        "packing NuGet package (configuration={}, version={})",
+        options.configuration,
+        options.version_override.as_deref().unwrap_or("from config")
+    ));
     verify_release(repo_root)?;
     sync(repo_root)?;
 
@@ -68,11 +67,7 @@ pub fn pack(
 
     let package_path = nuget_output.join(format!("{}.{}.nupkg", config.nuget.package_id, version));
     inspect_package_contents(&package_path, config)?;
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        package_path = %package_path.display(),
-        "completed NuGet pack flow"
-    );
+    log_module_step_debug(&format!("packed NuGet package at {}", package_path.display()));
 
     Ok(CommandResult::with_message(format!(
         "Packed {}",
@@ -85,11 +80,10 @@ pub fn verify(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        configuration = %options.configuration,
-        "verifying NuGet package"
-    );
+    log_module_step_debug(&format!(
+        "verifying NuGet package (configuration={})",
+        options.configuration
+    ));
     pack(repo_root, config, options)?;
 
     let version = effective_version(config, &options.version_override);
@@ -136,11 +130,10 @@ pub fn verify(
         &artifacts_root.join("smoke-aot"),
         &config.ci.aot_runtime_smoke,
     )?;
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        package_path = %package_path.display(),
-        "completed NuGet verification flow"
-    );
+    log_module_step_debug(&format!(
+        "completed NuGet verification at {}",
+        package_path.display()
+    ));
     Ok(CommandResult::with_message(
         "Package verified successfully.",
     ))
@@ -151,11 +144,10 @@ pub fn publish(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        execute_publish = options.execute_publish,
-        "publishing NuGet package"
-    );
+    log_module_step_debug(&format!(
+        "publishing NuGet package (execute={})",
+        options.execute_publish
+    ));
     verify(repo_root, config, options)?;
 
     if !options.execute_publish {
@@ -194,12 +186,11 @@ pub fn publish(
         &[api_key.as_str()],
     )?;
 
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        package_path = %package_path.display(),
-        source = %source,
-        "published NuGet package after local smoke verification"
-    );
+    log_module_step_debug(&format!(
+        "published NuGet package to {} via {}",
+        package_path.display(),
+        source
+    ));
 
     Ok(CommandResult::with_message(
         "Published package successfully.",
@@ -211,10 +202,7 @@ pub fn publish_packed(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        "publishing pre-packed NuGet package"
-    );
+    log_module_step_debug("publishing pre-packed NuGet package");
 
     let version = effective_version(config, &options.version_override);
     let source = effective_source(repo_root, config, options)?;
@@ -249,12 +237,11 @@ pub fn publish_packed(
         &[api_key.as_str()],
     )?;
 
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        package_path = %package_path.display(),
-        source = %source,
-        "published pre-packed NuGet package"
-    );
+    log_module_step_debug(&format!(
+        "published pre-packed NuGet package to {} via {}",
+        package_path.display(),
+        source
+    ));
 
     Ok(CommandResult::with_message(
         "Published package successfully.",
@@ -375,14 +362,11 @@ fn restore_smoke_consumer(
     runtime: Option<&str>,
     publish_aot: bool,
 ) -> Result<()> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        project = %config.ci.smoke_project,
-        version,
-        runtime = runtime.unwrap_or("default"),
-        publish_aot,
-        "restoring smoke consumer"
-    );
+    log_module_step_debug(&format!(
+        "restoring smoke consumer {} (runtime={}, aot={publish_aot})",
+        config.ci.smoke_project,
+        runtime.unwrap_or("default")
+    ));
     remove_package_cache(repo_root, &config.nuget.package_id, version)?;
     reset_smoke_consumer_outputs(repo_root, config)?;
     let mut args = vec![
@@ -405,12 +389,10 @@ fn restore_smoke_consumer(
 }
 
 fn run_smoke_consumer(repo_root: &Path, config: &DharaRepoConfig, version: &str) -> Result<()> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        project = %config.ci.smoke_project,
-        version,
-        "running smoke consumer"
-    );
+    log_module_step_debug(&format!(
+        "running smoke consumer {} (version={version})",
+        config.ci.smoke_project
+    ));
     run_command(
         "dotnet",
         &[
@@ -439,13 +421,10 @@ fn verify_unsupported_runtime_rejected(
     version: &str,
     nuget_config: &Path,
 ) -> Result<()> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        project = %config.ci.smoke_project,
-        version,
-        unsupported_runtime = "win-x86",
-        "verifying unsupported runtime rejection"
-    );
+    log_module_step_debug(&format!(
+        "verifying unsupported runtime rejection for {} (win-x86)",
+        config.ci.smoke_project
+    ));
     remove_package_cache(repo_root, &config.nuget.package_id, version)?;
     run_command_expect_failure(
         "dotnet",
@@ -473,14 +452,11 @@ fn publish_aot_smoke_consumer(
     output_dir: &Path,
     runtime: &str,
 ) -> Result<()> {
-    info!(
-        target: "dhara_tool::ops::package_flow",
-        project = %config.ci.smoke_project,
-        version,
-        runtime,
-        output_dir = %output_dir.display(),
-        "publishing AOT smoke consumer"
-    );
+    log_module_step_debug(&format!(
+        "publishing AOT smoke consumer {} (runtime={runtime}, output={})",
+        config.ci.smoke_project,
+        output_dir.display()
+    ));
     reset_directory(output_dir)?;
     run_command(
         "dotnet",

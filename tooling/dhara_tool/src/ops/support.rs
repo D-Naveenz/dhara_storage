@@ -6,9 +6,10 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use anyhow::{Context, Result, bail};
-use tracing::{debug, info};
+use tracing::debug;
 use zip::ZipArchive;
 
+use super::logging::log_module_step_debug;
 use super::output::{emit_stderr_line, emit_stdout_line, set_active_child};
 
 fn command_display(program: &str, args: &[String]) -> String {
@@ -21,13 +22,11 @@ fn command_display(program: &str, args: &[String]) -> String {
 
 pub fn run_command(program: &str, args: &[String], cwd: &Path) -> Result<()> {
     emit_stdout_line(format!("> {}", command_display(program, args)));
-    info!(
-        target: "dhara_tool::ops::support",
-        program,
-        args = args.join(" "),
-        cwd = %cwd.display(),
-        "running command"
-    );
+    log_module_step_debug(&format!(
+        "running {} in {}",
+        command_display(program, args),
+        cwd.display()
+    ));
     let status = run_command_streaming(program, args, cwd, &[])?;
     if !status.success() {
         bail!(
@@ -63,14 +62,12 @@ pub fn run_command_with_env_redacted(
 ) -> Result<()> {
     let display_args = redact_args(args, redacted_values);
     emit_stdout_line(format!("> {}", command_display(program, &display_args)));
-    info!(
-        target: "dhara_tool::ops::support",
-        program,
-        args = display_args.join(" "),
-        cwd = %cwd.display(),
-        env_count = envs.len(),
-        "running command with environment overrides"
-    );
+    log_module_step_debug(&format!(
+        "running {} in {} ({} env overrides)",
+        command_display(program, &display_args),
+        cwd.display(),
+        envs.len()
+    ));
     let status = run_command_streaming(program, args, cwd, envs)?;
     if !status.success() {
         bail!(
@@ -110,14 +107,11 @@ pub fn run_command_expect_failure(
     expected_output: &str,
 ) -> Result<()> {
     emit_stdout_line(format!("> {}", command_display(program, args)));
-    info!(
-        target: "dhara_tool::ops::support",
-        program,
-        args = args.join(" "),
-        cwd = %cwd.display(),
-        expected_output,
-        "running command that is expected to fail"
-    );
+    log_module_step_debug(&format!(
+        "running {} in {} (expected failure)",
+        command_display(program, args),
+        cwd.display()
+    ));
     let output = run_command_capture(program, args, cwd, &[])?;
     if output.status.success() {
         bail!(

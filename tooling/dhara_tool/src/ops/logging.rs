@@ -2,6 +2,7 @@ use std::cell::Cell;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use chrono::{Local, NaiveDate};
 use tracing::{debug, error, info, warn};
@@ -13,7 +14,7 @@ use tracing_subscriber::fmt::format::FmtSpan;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::command::{CommandResult, ToolContext};
+use crate::command::{CommandResult, RunMode, ToolContext};
 use crate::paths::{resolve_logs_dir, resolve_output_dir};
 
 use super::builder::{TridBuildProgress, TridBuildStage, TridTransformReport};
@@ -21,13 +22,15 @@ use super::builder::{TridBuildProgress, TridBuildStage, TridTransformReport};
 static LOGGING: OnceLock<LoggingRuntime> = OnceLock::new();
 
 const LOG_FILE_STEM: &str = "dhara_tool";
+const AUDIT_TARGET: &str = "dhara_tool::audit";
 
 #[derive(Debug, Clone)]
 pub struct LoggingOptions {
-    pub silent: bool,
+    pub run_mode: RunMode,
     pub verbose: u8,
+    pub quiet: bool,
     pub logs_dir: PathBuf,
-    pub interactive: bool,
+    pub context: ToolContext,
 }
 
 pub struct LoggingRuntime {
@@ -36,16 +39,17 @@ pub struct LoggingRuntime {
 }
 
 impl LoggingOptions {
-    pub fn from_context(context: &ToolContext, interactive: bool) -> Self {
+    pub fn from_context(context: &ToolContext) -> Self {
         Self {
-            silent: context.silent,
+            run_mode: context.run_mode,
             verbose: context.verbose,
+            quiet: context.quiet,
             logs_dir: resolve_logs_dir(
                 &context.repo_root,
                 context.output_dir.as_deref(),
                 context.logs_dir.as_deref(),
             ),
-            interactive,
+            context: context.clone(),
         }
     }
 }
@@ -72,7 +76,7 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
 
     let (writer, guard) = tracing_appender::non_blocking(file);
 
-    let console_max_level = if options.interactive || options.silent {
+    let console_max_level = if options.run_mode == RunMode::Interactive {
         LevelFilter::ERROR
     } else {
         match options.verbose {
@@ -114,15 +118,7 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
         .try_init()
         .map_err(io_error_from_set_global_default)?;
 
-    info!(
-        target: "dhara_tool::audit",
-        log_path = %log_path.display(),
-        session = log_session_from_path(&log_path),
-        verbose = options.verbose,
-        silent = options.silent,
-        interactive = options.interactive,
-        "dhara_tool logging initialized"
-    );
+    log_session_begin(&log_path, &options);
 
     Ok(LoggingRuntime {
         log_path,
@@ -136,12 +132,224 @@ fn io_error_from_set_global_default(
     std::io::Error::other(error)
 }
 
+pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
+    let version = crate::version();
+    let mode = options.run_mode.as_str();
+    let quiet = if options.quiet { "yes" } else { "no" };
+
+    info!(
+        target: AUDIT_TARGET,
+        "dhara_tool {version} started — mode={mode}, verbose={}, quiet={quiet}, log={}",
+        options.verbose,
+        log_path.display()
+    );
+
+    let output_dir =
+        resolve_output_dir(&options.context.repo_root, options.context.output_dir.as_deref());
+    debug!(
+        target: AUDIT_TARGET,
+        repo_root = %options.context.repo_root.display(),
+        output_dir = %output_dir.display(),
+        logs_dir = %options.logs_dir.display(),
+        package_dir = options
+            .context
+            .package_dir
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "default".to_owned()),
+        "session paths resolved"
+    );
+}
+
+pub fn log_session_end(exit_code: i32, module_id: Option<&str>, error: Option<&str>) {
+    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+    match (exit_code, module_id, error) {
+        (0, Some(module), None) => info!(
+            target: AUDIT_TARGET,
+            "dhara_tool exiting 0 at {timestamp} — completed {module}"
+        ),
+        (code, Some(module), Some(err)) => info!(
+            target: AUDIT_TARGET,
+            "dhara_tool exiting {code} at {timestamp} — {module} failed: {err}"
+        ),
+        (code, _, Some(err)) => info!(
+            target: AUDIT_TARGET,
+            "dhara_tool exiting {code} at {timestamp} — {err}"
+        ),
+        (code, Some(module), None) => info!(
+            target: AUDIT_TARGET,
+            "dhara_tool exiting {code} at {timestamp} — {module}"
+        ),
+        (code, None, None) => info!(
+            target: AUDIT_TARGET,
+            "dhara_tool exiting {code} at {timestamp}"
+        ),
+    }
+}
+
+pub fn is_long_running_module(command_id: &str) -> bool {
+    matches!(
+        command_id,
+        "defs.build-trid-xml"
+            | "defs.inspect-trid-xml"
+            | "verify.ci"
+            | "verify.package"
+            | "package.pack"
+            | "package.publish"
+            | "release.run"
+    )
+}
+
+pub fn format_command_args(args: &[String]) -> String {
+    if args.is_empty() {
+        "defaults".to_owned()
+    } else {
+        args.join(" ")
+    }
+}
+
+pub fn summarize_command_result(command_id: &str, result: &CommandResult) -> String {
+    if let Some(message) = &result.message {
+        return message.clone();
+    }
+
+    if let Some(report) = &result.report {
+        if command_id.starts_with("defs.") {
+            return summarize_defs_report(report);
+        }
+        let highlights: Vec<String> = report
+            .fields
+            .iter()
+            .take(4)
+            .map(|field| format!("{}={}", field.label, field.value))
+            .collect();
+        if highlights.is_empty() {
+            return report.title.clone();
+        }
+        return format!("{} — {}", report.title, highlights.join(", "));
+    }
+
+    if result.exit_code == 0 {
+        "completed".to_owned()
+    } else {
+        format!("exit code {}", result.exit_code)
+    }
+}
+
+fn summarize_defs_report(report: &crate::command::StructuredReport) -> String {
+    let mut parts = Vec::new();
+    for field in &report.fields {
+        if matches!(
+            field.label.as_str(),
+            "Definitions"
+                | "Total Parsed"
+                | "Final Kept"
+                | "Package Version"
+                | "Result"
+                | "Output"
+        ) {
+            parts.push(format!("{}={}", field.label, field.value));
+        }
+    }
+    if parts.is_empty() {
+        report.title.clone()
+    } else {
+        parts.join(", ")
+    }
+}
+
+pub fn log_module_begin(module_id: &str, config_summary: &str) {
+    reset_build_progress_logging();
+    info!(
+        target: AUDIT_TARGET,
+        "{module_id} started — {config_summary}"
+    );
+}
+
+pub fn log_module_begin_debug(module_id: &str, config_summary: &str) {
+    reset_build_progress_logging();
+    debug!(
+        target: AUDIT_TARGET,
+        "{module_id} — {config_summary}"
+    );
+}
+
+pub fn log_module_end(module_id: &str, exit_code: i32, summary: &str, started: Instant) {
+    let duration = format_duration(started.elapsed());
+    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+    if exit_code == 0 {
+        info!(
+            target: AUDIT_TARGET,
+            "{module_id} finished in {duration} at {timestamp} — {summary}"
+        );
+    } else {
+        warn!(
+            target: AUDIT_TARGET,
+            "{module_id} finished in {duration} at {timestamp} with exit {exit_code} — {summary}"
+        );
+    }
+}
+
+pub fn log_module_compact_finish(
+    module_id: &str,
+    exit_code: i32,
+    summary: &str,
+    started: Instant,
+) {
+    let duration = format_duration(started.elapsed());
+    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+    if exit_code == 0 {
+        info!(
+            target: AUDIT_TARGET,
+            "{module_id} finished in {duration} at {timestamp} — {summary}"
+        );
+    } else {
+        warn!(
+            target: AUDIT_TARGET,
+            "{module_id} finished in {duration} at {timestamp} with exit {exit_code} — {summary}"
+        );
+    }
+}
+
+pub fn log_module_failed(module_id: &str, error: &str, started: Instant) {
+    let duration = format_duration(started.elapsed());
+    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
+    error!(
+        target: AUDIT_TARGET,
+        "{module_id} failed in {duration} at {timestamp} — {error}"
+    );
+}
+
+pub fn log_module_step_debug(message: &str) {
+    debug!(target: AUDIT_TARGET, "{message}");
+}
+
+pub fn log_module_step_warn(message: &str) {
+    warn!(target: AUDIT_TARGET, "{message}");
+}
+
+pub fn log_module_step_error(message: &str) {
+    error!(target: AUDIT_TARGET, "{message}");
+}
+
+pub fn log_transform_statistics(report: &TridTransformReport) {
+    info!(
+        target: AUDIT_TARGET,
+        "TrID transform — parsed={}, kept={}, mime_corrected={}, mime_rejected={}, ext_rejected={}, sig_rejected={}, trimmed={}",
+        report.total_parsed,
+        report.final_kept,
+        report.mime_corrected,
+        report.mime_rejected,
+        report.extension_rejected,
+        report.signature_rejected,
+        report.final_trimmed,
+    );
+}
+
 pub fn current_log_path() -> Option<PathBuf> {
     LOGGING.get().map(|runtime| runtime.log_path.clone())
 }
 
-/// Returns the path for the active log file, or allocates the next session path when logging
-/// has not been initialized yet.
 pub fn log_file_path(logs_dir: &Path) -> PathBuf {
     current_log_path().unwrap_or_else(|| {
         allocate_log_path(logs_dir).unwrap_or_else(|_| {
@@ -207,105 +415,65 @@ fn log_file_name_for(date: NaiveDate, session: u32) -> String {
     }
 }
 
-fn log_session_from_path(log_path: &Path) -> u32 {
-    log_path
-        .file_name()
-        .and_then(|name| name.to_str())
-        .and_then(|name| {
-            let date = Local::now().date_naive();
-            parse_log_session(name, date)
-        })
-        .unwrap_or(0)
-}
-
-pub fn log_command_begin(command_id: &str, command_line: &str, context: &ToolContext) {
-    reset_build_progress_logging();
-    let output_dir = resolve_output_dir(&context.repo_root, context.output_dir.as_deref());
-    let logs_dir = resolve_logs_dir(
-        &context.repo_root,
-        context.output_dir.as_deref(),
-        context.logs_dir.as_deref(),
-    );
-
-    info!(
-        target: "dhara_tool::audit",
-        command_id,
-        command = command_line,
-        repo_root = %context.repo_root.display(),
-        output_dir = %output_dir.display(),
-        logs_dir = %logs_dir.display(),
-        package_dir = context
-            .package_dir
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "default".to_owned()),
-        silent = context.silent,
-        verbose = context.verbose,
-        "command started"
-    );
-}
-
-pub fn log_command_end(command_id: &str, result: &CommandResult) {
-    if let Some(message) = &result.message {
-        info!(
-            target: "dhara_tool::audit",
-            command_id,
-            message = message.as_str(),
-            "command message"
-        );
-    }
-
-    if let Some(report) = &result.report {
-        log_structured_report(command_id, report.title.as_str(), &report.fields);
-    }
-
-    let outcome = if result.exit_code == 0 {
-        "success"
+fn format_duration(duration: Duration) -> String {
+    let secs = duration.as_secs();
+    if secs >= 3600 {
+        format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
+    } else if secs >= 60 {
+        format!("{}m{}s", secs / 60, secs % 60)
+    } else if duration.as_millis() >= 1000 {
+        format!("{:.1}s", duration.as_secs_f64())
     } else {
-        "failed"
-    };
-
-    info!(
-        target: "dhara_tool::audit",
-        command_id,
-        exit_code = result.exit_code,
-        outcome,
-        "command finished"
-    );
-}
-
-pub fn log_task_step(task: &str, outcome: &str, detail: Option<&str>) {
-    match outcome {
-        "failed" | "error" => error!(
-            target: "dhara_tool::audit",
-            task,
-            outcome,
-            detail = detail.unwrap_or(""),
-            "task step"
-        ),
-        "skipped" | "warning" | "bypassed" => warn!(
-            target: "dhara_tool::audit",
-            task,
-            outcome,
-            detail = detail.unwrap_or(""),
-            "task step"
-        ),
-        _ => info!(
-            target: "dhara_tool::audit",
-            task,
-            outcome,
-            detail = detail.unwrap_or(""),
-            "task step"
-        ),
+        format!("{}ms", duration.as_millis())
     }
 }
 
 pub fn log_build_progress(update: &TridBuildProgress) {
-    let log_at_info = build_progress_should_log_at_info(update);
-    if log_at_info {
-        info!(target: "dhara_tool::ops::trid", stage = ?update.stage, message = update.message.as_str(), current = update.current, total = ?update.total, current_item = update.current_item.as_deref().unwrap_or(""), parsed = update.stats.parsed_count, accepted = update.stats.accepted_count, mime_corrected = update.stats.mime_corrected, mime_rejected = update.stats.mime_rejected, extension_rejected = update.stats.extension_rejected, signature_rejected = update.stats.signature_rejected, final_trimmed = update.stats.final_trimmed, "build progress");
+    let Some(line) = format_build_progress_line(update) else {
+        return;
+    };
+
+    if build_progress_should_log_at_info(update) {
+        info!(target: AUDIT_TARGET, "{line}");
     } else {
-        debug!(target: "dhara_tool::ops::trid", stage = ?update.stage, message = update.message.as_str(), current = update.current, total = ?update.total, current_item = update.current_item.as_deref().unwrap_or(""), parsed = update.stats.parsed_count, accepted = update.stats.accepted_count, mime_corrected = update.stats.mime_corrected, mime_rejected = update.stats.mime_rejected, extension_rejected = update.stats.extension_rejected, signature_rejected = update.stats.signature_rejected, final_trimmed = update.stats.final_trimmed, "build progress");
+        debug!(target: AUDIT_TARGET, "{line}");
+    }
+}
+
+fn format_build_progress_line(update: &TridBuildProgress) -> Option<String> {
+    match update.stage {
+        TridBuildStage::LoadSource => Some(format!("stage: load source — {}", update.message)),
+        TridBuildStage::ExtractArchive => Some(format!("stage: extract archive — {}", update.message)),
+        TridBuildStage::FinalizePackage => {
+            Some(format!("stage: finalize package — {}", update.message))
+        }
+        TridBuildStage::ParseDefinitions => {
+            if update.current == 0 {
+                return Some(format!("stage: parse definitions — {}", update.message));
+            }
+            let total = update.total?;
+            let item = update.current_item.as_deref().unwrap_or("?");
+            Some(format!("({}/{}) {item} — parsing", update.current, total))
+        }
+        TridBuildStage::ReduceDefinitions => {
+            if update.current == 0 {
+                return Some(format!("stage: reduce definitions — {}", update.message));
+            }
+            let total = update.total?;
+            let item = update.current_item.as_deref()?;
+            let outcome = humanize_reduce_message(&update.message);
+            Some(format!("({}/{}) {item} — {outcome}", update.current, total))
+        }
+    }
+}
+
+fn humanize_reduce_message(message: &str) -> &str {
+    match message {
+        "Accepting validated definition" => "accepted",
+        "Rejecting definition without patterns" => "rejected: no patterns",
+        "Rejecting definition by extension floodgate" => "rejected: extension floodgate",
+        "Rejecting definition by MIME validation" => "rejected: invalid MIME",
+        other => other,
     }
 }
 
@@ -360,50 +528,17 @@ fn build_progress_should_log_at_info(update: &TridBuildProgress) -> bool {
     true
 }
 
-pub fn log_transform_statistics(report: &TridTransformReport) {
-    info!(
-        target: "dhara_tool::audit",
-        total_parsed = report.total_parsed,
-        mime_corrected = report.mime_corrected,
-        mime_rejected = report.mime_rejected,
-        extension_rejected = report.extension_rejected,
-        signature_rejected = report.signature_rejected,
-        final_trimmed = report.final_trimmed,
-        final_kept = report.final_kept,
-        "TrID transformation statistics"
-    );
-}
-
-fn log_structured_report(
-    scope: &str,
-    title: &str,
-    fields: &[crate::command::ReportField],
-) {
-    info!(
-        target: "dhara_tool::audit",
-        scope,
-        title,
-        field_count = fields.len(),
-        "structured report"
-    );
-
-    for field in fields {
-        info!(
-            target: "dhara_tool::audit",
-            scope,
-            label = field.label.as_str(),
-            value = field.value.as_str(),
-            "report field"
-        );
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use chrono::NaiveDate;
     use tempfile::tempdir;
 
-    use super::{log_file_name_for, next_log_session, parse_log_session};
+    use crate::ops::builder::{TridBuildProgress, TridBuildStage, TridBuildStats};
+    use super::{
+        format_build_progress_line, format_duration, humanize_reduce_message, log_file_name_for,
+        next_log_session, parse_log_session,
+    };
+    use std::time::Duration;
 
     #[test]
     fn log_file_name_uses_dhara_tool_stem_for_session_zero() {
@@ -439,5 +574,38 @@ mod tests {
 
         std::fs::write(logs_dir.join(log_file_name_for(date, 1)), "session 1").unwrap();
         assert_eq!(next_log_session(logs_dir, date).unwrap(), 2);
+    }
+
+    #[test]
+    fn build_progress_formats_reduce_rejection_readably() {
+        let line = format_build_progress_line(&TridBuildProgress {
+            stage: TridBuildStage::ReduceDefinitions,
+            message: "Rejecting definition by extension floodgate".to_owned(),
+            current: 5511,
+            total: Some(21692),
+            current_item: Some("BrainSuite Surface File Format".to_owned()),
+            stats: TridBuildStats::default(),
+        })
+        .unwrap();
+        assert!(line.contains("(5511/21692) BrainSuite Surface File Format"));
+        assert!(line.contains("extension floodgate"));
+    }
+
+    #[test]
+    fn humanize_reduce_message_maps_known_outcomes() {
+        assert_eq!(
+            humanize_reduce_message("Rejecting definition by extension floodgate"),
+            "rejected: extension floodgate"
+        );
+        assert_eq!(
+            humanize_reduce_message("Accepting validated definition"),
+            "accepted"
+        );
+    }
+
+    #[test]
+    fn format_duration_scales_units() {
+        assert_eq!(format_duration(Duration::from_millis(450)), "450ms");
+        assert_eq!(format_duration(Duration::from_secs(65)), "1m5s");
     }
 }

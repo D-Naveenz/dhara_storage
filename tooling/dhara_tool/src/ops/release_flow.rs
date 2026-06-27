@@ -3,12 +3,14 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use toml_edit::DocumentMut;
-use tracing::info;
 use xmltree::{Element, XMLNode};
 
 use crate::command::CommandResult;
 
-use super::{DharaRepoConfig, PackageOptions, load_env, package_flow, run_command, verify_release};
+use super::{
+    DharaRepoConfig, PackageOptions, load_env, log_module_step_debug, package_flow, run_command,
+    verify_release,
+};
 
 const CARGO_REGISTRY_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
 
@@ -28,13 +30,10 @@ pub fn run(
     config: &DharaRepoConfig,
     options: &ReleaseOptions,
 ) -> Result<CommandResult> {
-    info!(
-        target: "dhara_tool::ops::release_flow",
-        dry_run = options.dry_run,
-        publish_cargo = options.publish_cargo,
-        publish_nuget = options.publish_nuget,
-        "running release flow"
-    );
+    log_module_step_debug(&format!(
+        "running release flow (dry_run={}, cargo={}, nuget={})",
+        options.dry_run, options.publish_cargo, options.publish_nuget
+    ));
 
     verify_release(repo_root)?;
     validate_versions_synced(repo_root, config)?;
