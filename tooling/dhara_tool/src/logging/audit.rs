@@ -448,8 +448,7 @@ mod tests {
     use tracing_subscriber::filter::LevelFilter;
 
     use super::{
-        format_duration, log_file_name_for, next_log_session, parse_log_session,
-        resolve_log_levels,
+        format_duration, log_file_name_for, next_log_session, parse_log_session, resolve_log_levels,
     };
     use std::time::Duration;
 
