@@ -459,6 +459,6 @@ $RECYCLE.BIN/
 !**/[Pp]ackage/*.md
 .env.local
 .dotnet/
-.tooling/output/logs/
+.tooling/logs/
 .tooling/output/nuget/
 .tooling/artifacts/

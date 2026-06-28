@@ -29,7 +29,7 @@ Session INFO includes `workers={effective}`.
 
 ## Log files
 
-- Directory: `tooling/output/logs/`
+- Directory: `tooling/logs/`
 - Naming: `{date}_dhara_tool.log` (session 0), `{date}_dhara_tool_{n}.log` (session n > 0)
 - Each process invocation allocates the next session file for that day.
 
@@ -223,7 +223,7 @@ Language-agnostic equivalent: `{timestamp} {LEVEL} {scope}: {single human-readab
 
 When diagnosing a run from logs alone:
 
-1. Open the latest `tooling/output/logs/{date}_dhara_tool*.log` for today.
+1. Open the latest `tooling/logs/{date}_dhara_tool*.log` for today.
 2. Find `dhara_tool ... started` — note mode and workers.
 3. Find `{module} started` or `{module} finished` / `failed`.
 4. For TrID work, grep `phase ` for timings and `TrID transform —` for final stats.

@@ -2,7 +2,7 @@
 
 This document describes the on-disk **Dhara Storage File Definition (DSFD)** package
 used for content-based file-type identification. The canonical runtime artifact is
-`tooling/output/filedefs.dat`. It is built by `dhara_tool`, embedded into
+`src/core/dhara_storage_dal/resources/filedefs.dat`. It is built by `dhara_tool`, embedded into
 `dhara_storage_dal` at compile time, and consumed by `dhara_storage` at runtime.
 
 ## Overview
@@ -156,13 +156,13 @@ future builder features.
 |------|------|
 | `tooling/dhara_tool/package/triddefs_xml.7z` | Local TrID XML source archive (gitignored when large) |
 | `tooling/dhara_tool/package/triddefs_xml.source.toml` | Sidecar: upstream `definitions_release` date |
-| `tooling/output/filedefs.dat` | Canonical built package |
-| `src/core/dhara_storage_dal` (compile time) | Embeds `tooling/output/filedefs.dat` via `include_bytes!` |
+| `src/core/dhara_storage_dal/resources/filedefs.dat` | Embedded runtime package (published with crate) |
+| `src/core/dhara_storage_dal` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
 
 Typical operator commands:
 
 ```powershell
-# Build from the default TrID archive into tooling/output/filedefs.dat
+# Build from the default TrID archive into src/core/dhara_storage_dal/resources/filedefs.dat
 cargo run -p dhara_tool -- defs build-trid-xml -v
 
 # Inspect the current package

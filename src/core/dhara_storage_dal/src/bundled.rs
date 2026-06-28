@@ -7,7 +7,7 @@ use crate::model::DefinitionPackage;
 
 const BUNDLED_FILEDEFS_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../../tooling/output/filedefs.dat"
+    "/resources/filedefs.dat"
 ));
 
 static PACKAGE: Lazy<Result<DefinitionPackage, String>> =

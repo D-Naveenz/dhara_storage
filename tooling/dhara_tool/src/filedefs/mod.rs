@@ -10,7 +10,7 @@ use crate::command::{
     CommandResult, ReportField as CommandReportField, StructuredReport, ToolContext,
 };
 use crate::logging::{current_log_path, log_build_progress, log_file_path};
-use crate::paths::{default_defs_package_path, resolve_logs_dir, resolve_output_dir};
+use crate::paths::{resolve_defs_output_dir, resolve_logs_dir};
 
 pub use package::*;
 pub use runner::*;
@@ -50,8 +50,8 @@ impl DefsPaths {
             repo_root: repo_root.to_path_buf(),
             package_dir: package_dir
                 .unwrap_or_else(|| repo_root.join("tooling").join("dhara_tool").join("package")),
-            output_dir: resolve_output_dir(repo_root, output_dir.as_deref()),
-            logs_dir: resolve_logs_dir(repo_root, output_dir.as_deref(), logs_dir.as_deref()),
+            output_dir: resolve_defs_output_dir(repo_root, output_dir.as_deref()),
+            logs_dir: resolve_logs_dir(repo_root, logs_dir.as_deref()),
         }
     }
 
@@ -72,7 +72,7 @@ impl DefsPaths {
 
     /// Returns the default output path for generated `filedefs.dat` files.
     pub fn default_package_output_path(&self) -> PathBuf {
-        default_defs_package_path(&self.repo_root)
+        self.output_dir.join("filedefs.dat")
     }
 }
 

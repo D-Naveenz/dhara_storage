@@ -662,7 +662,7 @@ mod tests {
             "png",
         )
         .unwrap();
-        fs::create_dir_all(repo_root.join("tooling/output")).unwrap();
+        fs::create_dir_all(repo_root.join("src/core/dhara_storage_dal/resources")).unwrap();
         fs::write(
             repo_root.join(crate::paths::RUNTIME_DEFS_RELATIVE),
             "placeholder",
