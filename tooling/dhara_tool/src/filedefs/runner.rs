@@ -1,13 +1,14 @@
 use std::path::{Path, PathBuf};
 
-use super::builder::{
-    TridBuildProgress, build_trid_xml_package_with_progress, inspect_package, load_bundled_package,
-    normalize_package, packages_match, sync_embedded_package, write_package,
+use crate::filedefs::{
+    SyncEmbeddedStatus, TridBuildProgress, TridTransformReport,
+    build_trid_xml_package_with_progress, inspect_package, load_bundled_package, normalize_package,
+    packages_match, sync_embedded_package, write_package,
 };
-use super::logging::{
+use crate::logging::{
     log_build_progress, log_module_step_debug, log_module_step_warn, log_transform_statistics,
 };
-use super::output::emit_stdout_line;
+use crate::output::emit_stdout_line;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BuilderAction {
@@ -75,7 +76,7 @@ impl BuilderAction {
     pub fn is_long_running(&self) -> bool {
         matches!(
             self,
-            Self::BuildTridXml { .. } | Self::InspectTridXml { .. }
+            Self::BuildTridXml { .. } | Self::InspectTridXml { .. } | Self::SyncEmbedded { .. }
         )
     }
 }
@@ -253,21 +254,30 @@ where
             output,
             check,
         } => {
-            let outcome = sync_embedded_package(&input, &output, check)?;
+            if long_running {
+                log_module_step_debug(&format!(
+                    "syncing embedded definitions package from {}",
+                    input.display()
+                ));
+            }
+            let outcome = sync_embedded_package(&input, &output, check, |update| {
+                log_build_progress(&update);
+                progress(update);
+            })?;
             let (status, exit_code, result) = match outcome.status {
-                super::builder::SyncEmbeddedStatus::Skipped => {
+                SyncEmbeddedStatus::Skipped => {
                     log_module_step_warn(&outcome.detail);
                     (ReportStatus::Success, 0, "skipped")
                 }
-                super::builder::SyncEmbeddedStatus::UpToDate => {
+                SyncEmbeddedStatus::UpToDate => {
                     log_module_step_debug(&outcome.detail);
                     (ReportStatus::Success, 0, "up-to-date")
                 }
-                super::builder::SyncEmbeddedStatus::Updated => {
+                SyncEmbeddedStatus::Updated => {
                     log_module_step_debug(&outcome.detail);
                     (ReportStatus::Success, 0, "updated")
                 }
-                super::builder::SyncEmbeddedStatus::NeedsUpdate => {
+                SyncEmbeddedStatus::NeedsUpdate => {
                     log_module_step_warn(&outcome.detail);
                     (ReportStatus::Warning, 1, "update required")
                 }
@@ -302,10 +312,7 @@ pub fn print_report(report: &CommandReport) {
     }
 }
 
-fn extend_transform_report_fields(
-    fields: &mut Vec<ReportField>,
-    report: &super::builder::TridTransformReport,
-) {
+fn extend_transform_report_fields(fields: &mut Vec<ReportField>, report: &TridTransformReport) {
     fields.push(field("Total Parsed", report.total_parsed.to_string()));
     fields.push(field("MIME Corrected", report.mime_corrected.to_string()));
     fields.push(field("MIME Rejected", report.mime_rejected.to_string()));

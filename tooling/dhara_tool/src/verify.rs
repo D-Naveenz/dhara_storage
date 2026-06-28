@@ -122,5 +122,5 @@ pub fn verify_package(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    super::package_flow::verify(repo_root, config, options)
+    crate::nuget::verify(repo_root, config, options)
 }

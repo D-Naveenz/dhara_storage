@@ -8,12 +8,9 @@ use dhara_storage_dal::{
 use thiserror::Error;
 use tracing::debug;
 
-use crate::ops::record_package_written;
+use crate::workspace::record_package_written;
 
-#[path = "trid_xml/mod.rs"]
-mod trid_xml;
-
-pub use trid_xml::{
+pub use crate::filedefs::trid::{
     TridBuildProgress, TridBuildStage, TridBuildStats, TridTransformReport,
     build_trid_xml_package_with_progress,
 };
@@ -181,11 +178,15 @@ pub fn inspect_package(path: impl AsRef<Path>) -> Result<PackageSummary, Builder
     Ok(PackageSummary::from_loaded(&package))
 }
 
-pub fn sync_embedded_package(
+pub fn sync_embedded_package<F>(
     input: impl AsRef<Path>,
     output: impl AsRef<Path>,
     check_only: bool,
-) -> Result<SyncEmbeddedOutcome, BuilderError> {
+    mut progress: F,
+) -> Result<SyncEmbeddedOutcome, BuilderError>
+where
+    F: FnMut(TridBuildProgress),
+{
     let input = input.as_ref().to_path_buf();
     let output = output.as_ref().to_path_buf();
     debug!(
@@ -205,7 +206,9 @@ pub fn sync_embedded_package(
         });
     }
 
-    let build = trid_xml::build_trid_xml_package_with_report(&input)?;
+    let build = crate::filedefs::trid::build_trid_xml_package_with_progress(&input, |update| {
+        progress(update);
+    })?;
     let desired_package = build.package;
     let desired_version = desired_package.package_version.clone();
 
@@ -279,7 +282,7 @@ mod tests {
 
     use super::{
         PackageSummary, SyncEmbeddedStatus, load_bundled_package, normalize_package,
-        packages_match, sync_embedded_package, trid_xml, write_package,
+        packages_match, sync_embedded_package, write_package,
     };
 
     use dhara_storage_dal::DEFINITION_PACKAGE_SIGNATURE;
@@ -335,7 +338,7 @@ mod tests {
 
     #[test]
     fn builds_package_from_fixture_directory() {
-        let package = trid_xml::build_trid_xml_package(fixtures_root())
+        let package = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
             .expect("fixture directory should build");
 
         assert_eq!(package.tags, 48);
@@ -362,17 +365,17 @@ mod tests {
         assert!(status.success(), "tar should create a 7z archive");
         write_archive_sidecar(temp.path());
 
-        let from_directory = trid_xml::build_trid_xml_package(fixtures_root())
+        let from_directory = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
             .expect("fixture directory should build");
-        let from_archive =
-            trid_xml::build_trid_xml_package(&archive_path).expect("fixture archive should build");
+        let from_archive = crate::filedefs::trid::build_trid_xml_package(&archive_path)
+            .expect("fixture archive should build");
 
         assert_eq!(from_archive, from_directory);
     }
 
     #[test]
     fn inspects_trid_xml_source_without_writing_package() {
-        let report = trid_xml::inspect_trid_xml_source(fixtures_root())
+        let report = crate::filedefs::trid::inspect_trid_xml_source(fixtures_root())
             .expect("fixture directory should be inspectable");
 
         assert_eq!(report.total_parsed, 3);
@@ -415,7 +418,7 @@ mod tests {
         .expect("fixture XML should be written");
         write_source_sidecar(temp.path());
 
-        let build = trid_xml::build_trid_xml_package_with_report(temp.path())
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(temp.path())
             .expect("fixture should build");
         let definition = build
             .package
@@ -432,11 +435,11 @@ mod tests {
     fn builder_writes_full_package_readable_by_runtime() {
         let temp = tempdir().expect("temporary directory should exist");
         let output_path = temp.path().join("filedefs.dat");
-        let build = trid_xml::build_trid_xml_package_with_report(fixtures_root())
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(fixtures_root())
             .expect("fixture should build");
 
         write_package(&build.package, &output_path).expect("package should be written");
-        let loaded = super::load_package(&output_path).expect("package should load");
+        let loaded = crate::filedefs::load_package(&output_path).expect("package should load");
 
         assert_eq!(loaded.package, build.package);
     }
@@ -445,12 +448,12 @@ mod tests {
     fn builder_writes_flatbuffers_packages_with_identifier() {
         let temp = tempdir().expect("temporary directory should exist");
         let output_path = temp.path().join("filedefs.dat");
-        let build = trid_xml::build_trid_xml_package_with_report(fixtures_root())
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(fixtures_root())
             .expect("fixture should build");
 
         write_package(&build.package, &output_path).expect("package should be written");
         let bytes = fs::read(&output_path).expect("package bytes should be readable");
-        let loaded = super::load_package(&output_path).expect("package should load");
+        let loaded = crate::filedefs::load_package(&output_path).expect("package should load");
 
         assert!(dhara_storage_dal::root_definition_package(&bytes).is_ok());
         assert_eq!(loaded.package, build.package);
@@ -460,7 +463,7 @@ mod tests {
     fn inspect_package_reports_flatbuffers_metadata() {
         let temp = tempdir().expect("temporary directory should exist");
         let output_path = temp.path().join("filedefs.dat");
-        let build = trid_xml::build_trid_xml_package_with_report(fixtures_root())
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(fixtures_root())
             .expect("fixture should build");
         write_package(&build.package, &output_path).expect("package should be written");
 
@@ -486,6 +489,7 @@ mod tests {
             temp.path().join("missing.7z"),
             temp.path().join("filedefs.dat"),
             false,
+            |_| {},
         )
         .expect("sync should succeed");
 
@@ -510,16 +514,17 @@ mod tests {
         assert!(status.success(), "tar should create a 7z archive");
         write_archive_sidecar(temp.path());
 
-        let mut package =
-            trid_xml::build_trid_xml_package(fixtures_root()).expect("fixture should build");
+        let mut package = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
+            .expect("fixture should build");
         package.package_version = "stale".to_owned();
         write_package(&package, &output_path).expect("stale package should be written");
 
-        let outcome =
-            sync_embedded_package(&archive_path, &output_path, false).expect("sync should work");
+        let outcome = sync_embedded_package(&archive_path, &output_path, false, |_| {})
+            .expect("sync should work");
         assert_eq!(outcome.status, SyncEmbeddedStatus::Updated);
 
-        let loaded = super::load_package(&output_path).expect("updated package should load");
+        let loaded =
+            crate::filedefs::load_package(&output_path).expect("updated package should load");
         assert_eq!(loaded.package.package_version, env!("CARGO_PKG_VERSION"));
     }
 
@@ -541,8 +546,8 @@ mod tests {
         assert!(status.success(), "tar should create a 7z archive");
         write_archive_sidecar(temp.path());
 
-        let output =
-            sync_embedded_package(&archive_path, &output_path, true).expect("check should run");
+        let output = sync_embedded_package(&archive_path, &output_path, true, |_| {})
+            .expect("check should run");
         assert_eq!(output.status, SyncEmbeddedStatus::NeedsUpdate);
     }
 
@@ -557,7 +562,7 @@ mod tests {
             .join("triddefs_xml.7z");
         assert!(source.exists(), "real TrID archive should be available");
 
-        let build = trid_xml::build_trid_xml_package_with_report(&source)
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(&source)
             .expect("real archive should be inspectable");
         let report = &build.report;
 

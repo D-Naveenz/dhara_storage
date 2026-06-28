@@ -270,7 +270,7 @@ fn stage_native_assets(
             .get(rid)
             .with_context(|| format!("missing rust target mapping for runtime '{rid}'"))?;
         debug!(
-            target: "dhara_tool::ops::package_flow",
+            target: "dhara_tool::package_flow",
             runtime = %rid,
             rust_target = %target,
             stage_root = %stage_root.display(),
@@ -318,7 +318,7 @@ fn stage_native_assets(
 fn inspect_package_contents(package_path: &Path, config: &DharaRepoConfig) -> Result<()> {
     let entries = inspect_package_entries(package_path)?;
     debug!(
-        target: "dhara_tool::ops::package_flow",
+        target: "dhara_tool::package_flow",
         package_path = %package_path.display(),
         entry_count = entries.len(),
         "inspecting package contents"

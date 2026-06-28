@@ -2,16 +2,20 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Instant;
 
+use rayon::prelude::*;
 use tempfile::{TempDir, tempdir};
 use tracing::debug;
 
-use crate::ops::builder::BuilderError;
+use crate::filedefs::BuilderError;
 
 use super::{
     ParsedTridDefinition, TridBuildProgress, TridBuildStage, TridBuildStats,
     model::parse_trid_xml_definition,
 };
+
+const PARALLEL_PARSE_THRESHOLD: usize = 8;
 
 pub(crate) fn load_trid_definitions(
     source: &Path,
@@ -54,43 +58,101 @@ fn load_from_directory(
     let mut xml_files = Vec::new();
     collect_xml_files(source, &mut xml_files)?;
     xml_files.sort();
+    let total_files = xml_files.len();
+    let started = Instant::now();
+
     progress(TridBuildProgress {
         stage: TridBuildStage::ParseDefinitions,
         message: "Parsing XML definitions".to_string(),
         current: 0,
-        total: Some(xml_files.len()),
+        total: Some(total_files),
         current_item: None,
         stats: TridBuildStats::default(),
     });
 
-    let total_files = xml_files.len();
-    let mut definitions = Vec::with_capacity(total_files);
-    for (index, xml_file) in xml_files.into_iter().enumerate() {
-        let xml = fs::read_to_string(&xml_file).map_err(|error| BuilderError::Io {
-            operation: "read TrID XML source",
-            path: xml_file.clone(),
-            source: error,
-        })?;
-        definitions.push(parse_trid_xml_definition(&xml, &xml_file)?);
-        progress(TridBuildProgress {
-            stage: TridBuildStage::ParseDefinitions,
-            message: "Parsing XML definition".to_string(),
-            current: index + 1,
-            total: Some(total_files),
-            current_item: xml_file
-                .file_name()
-                .map(|name| name.to_string_lossy().to_string()),
-            stats: TridBuildStats {
-                parsed_count: index + 1,
-                ..TridBuildStats::default()
-            },
-        });
-    }
+    let definitions = if total_files <= PARALLEL_PARSE_THRESHOLD {
+        parse_definitions_sequential(&xml_files, total_files, progress)?
+    } else {
+        parse_definitions_parallel(&xml_files, total_files, progress)?
+    };
+
+    let duration = format_elapsed(started.elapsed());
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ParseDefinitions,
+        message: format!("Parsed {total_files} definitions in {duration}"),
+        current: total_files,
+        total: Some(total_files),
+        current_item: None,
+        stats: TridBuildStats {
+            parsed_count: total_files,
+            ..TridBuildStats::default()
+        },
+    });
+
     debug!(
         count = definitions.len(),
         "loaded TrID XML definitions from directory"
     );
     Ok(definitions)
+}
+
+fn parse_definitions_sequential(
+    xml_files: &[PathBuf],
+    total_files: usize,
+    progress: &mut dyn FnMut(TridBuildProgress),
+) -> Result<Vec<ParsedTridDefinition>, BuilderError> {
+    let mut definitions = Vec::with_capacity(total_files);
+    for (index, xml_file) in xml_files.iter().enumerate() {
+        definitions.push(parse_xml_file(xml_file)?);
+        report_parse_progress(progress, index + 1, total_files);
+    }
+    Ok(definitions)
+}
+
+fn parse_definitions_parallel(
+    xml_files: &[PathBuf],
+    _total_files: usize,
+    _progress: &mut dyn FnMut(TridBuildProgress),
+) -> Result<Vec<ParsedTridDefinition>, BuilderError> {
+    xml_files
+        .par_iter()
+        .map(|xml_file| parse_xml_file(xml_file))
+        .collect()
+}
+
+fn parse_xml_file(xml_file: &Path) -> Result<ParsedTridDefinition, BuilderError> {
+    let xml = fs::read_to_string(xml_file).map_err(|error| BuilderError::Io {
+        operation: "read TrID XML source",
+        path: xml_file.to_path_buf(),
+        source: error,
+    })?;
+    parse_trid_xml_definition(&xml, xml_file)
+}
+
+fn report_parse_progress(progress: &mut dyn FnMut(TridBuildProgress), done: usize, total: usize) {
+    if done != total && done != 1 && !done.is_multiple_of(250) {
+        return;
+    }
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ParseDefinitions,
+        message: "Parsing XML definitions".to_string(),
+        current: done,
+        total: Some(total),
+        current_item: None,
+        stats: TridBuildStats {
+            parsed_count: done,
+            ..TridBuildStats::default()
+        },
+    });
+}
+
+fn format_elapsed(duration: std::time::Duration) -> String {
+    let secs = duration.as_secs_f64();
+    if secs >= 1.0 {
+        format!("{:.1}s", secs)
+    } else {
+        format!("{}ms", duration.as_millis())
+    }
 }
 
 fn load_from_archive(

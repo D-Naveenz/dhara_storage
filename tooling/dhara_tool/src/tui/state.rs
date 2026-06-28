@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use crate::ops::{OutputStream, WorkspaceSnapshot};
+use crate::{OutputStream, WorkspaceSnapshot};
 
 use crate::command::{CommandRegistry, CommandResult, CommandSpec, ToolContext};
 
@@ -94,7 +94,7 @@ impl AppState {
             label,
             WorkspaceSnapshot {
                 defs_path: Path::new("tooling/output/filedefs.dat").to_path_buf(),
-                defs_status: crate::ops::DefsPackageStatus::Missing,
+                defs_status: crate::workspace::DefsPackageStatus::Missing,
                 package_revision: None,
                 definitions_release: None,
                 package_version: None,

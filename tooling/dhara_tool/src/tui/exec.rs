@@ -1,7 +1,9 @@
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 
-use crate::ops::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
+use crate::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
+
+// TODO(tui): wire progress panel for long-running TrID builds
 
 use crate::command::{CommandRegistry, CommandResult, RunMode, ToolContext};
 
@@ -103,7 +105,8 @@ mod tests {
         let context = ToolContext {
             repo_root: ".".into(),
             run_mode: RunMode::Interactive,
-            verbose: 0,
+            minimal: false,
+            trace: false,
             quiet: false,
             package_dir: None,
             output_dir: None,

@@ -1,4 +1,3 @@
-use std::cell::Cell;
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
@@ -17,7 +16,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use crate::command::{CommandResult, RunMode, ToolContext};
 use crate::paths::{resolve_logs_dir, resolve_output_dir};
 
-use super::builder::{TridBuildProgress, TridBuildStage, TridTransformReport};
+use crate::filedefs::{TridBuildProgress, TridTransformReport};
 
 static LOGGING: OnceLock<LoggingRuntime> = OnceLock::new();
 
@@ -27,7 +26,8 @@ const AUDIT_TARGET: &str = "dhara_tool::audit";
 #[derive(Debug, Clone)]
 pub struct LoggingOptions {
     pub run_mode: RunMode,
-    pub verbose: u8,
+    pub minimal: bool,
+    pub trace: bool,
     pub quiet: bool,
     pub logs_dir: PathBuf,
     pub context: ToolContext,
@@ -42,7 +42,8 @@ impl LoggingOptions {
     pub fn from_context(context: &ToolContext) -> Self {
         Self {
             run_mode: context.run_mode,
-            verbose: context.verbose,
+            minimal: context.minimal,
+            trace: context.trace,
             quiet: context.quiet,
             logs_dir: resolve_logs_dir(
                 &context.repo_root,
@@ -78,19 +79,18 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
 
     let console_max_level = if options.run_mode == RunMode::Interactive {
         LevelFilter::ERROR
+    } else if options.minimal {
+        LevelFilter::WARN
+    } else if options.trace {
+        LevelFilter::DEBUG
     } else {
-        match options.verbose {
-            0 => LevelFilter::WARN,
-            1 => LevelFilter::INFO,
-            2 => LevelFilter::DEBUG,
-            _ => LevelFilter::TRACE,
-        }
+        LevelFilter::INFO
     };
 
-    let file_max_level = match options.verbose {
-        0 => LevelFilter::INFO,
-        1 => LevelFilter::DEBUG,
-        _ => LevelFilter::TRACE,
+    let file_max_level = if options.trace {
+        LevelFilter::DEBUG
+    } else {
+        LevelFilter::INFO
     };
 
     let console_layer = fmt::layer()
@@ -119,6 +119,7 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
         .map_err(io_error_from_set_global_default)?;
 
     log_session_begin(&log_path, &options);
+    crate::logging::progress::init_progress_settings(&options.context);
 
     Ok(LoggingRuntime {
         log_path,
@@ -136,11 +137,12 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
     let version = crate::version();
     let mode = options.run_mode.as_str();
     let quiet = if options.quiet { "yes" } else { "no" };
+    let minimal = if options.minimal { "yes" } else { "no" };
+    let trace = if options.trace { "yes" } else { "no" };
 
     info!(
         target: AUDIT_TARGET,
-        "dhara_tool {version} started — mode={mode}, verbose={}, quiet={quiet}, log={}",
-        options.verbose,
+        "dhara_tool {version} started — mode={mode}, minimal={minimal}, trace={trace}, quiet={quiet}, log={}",
         log_path.display()
     );
 
@@ -162,7 +164,7 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
         "session paths resolved"
     );
 
-    let workspace = super::workspace_snapshot(&options.context);
+    let workspace = crate::workspace::workspace_snapshot(&options.context);
     debug!(
         target: AUDIT_TARGET,
         defs_path = %workspace.defs_path.display(),
@@ -206,6 +208,7 @@ pub fn is_long_running_module(command_id: &str) -> bool {
         command_id,
         "defs.build-trid-xml"
             | "defs.inspect-trid-xml"
+            | "defs.sync-embedded"
             | "verify.ci"
             | "verify.package"
             | "package.pack"
@@ -268,7 +271,7 @@ fn summarize_defs_report(report: &crate::command::StructuredReport) -> String {
 }
 
 pub fn log_module_begin(module_id: &str, config_summary: &str) {
-    reset_build_progress_logging();
+    crate::logging::progress::reset_build_progress_logging();
     info!(
         target: AUDIT_TARGET,
         "{module_id} started — {config_summary}"
@@ -276,7 +279,7 @@ pub fn log_module_begin(module_id: &str, config_summary: &str) {
 }
 
 pub fn log_module_begin_debug(module_id: &str, config_summary: &str) {
-    reset_build_progress_logging();
+    crate::logging::progress::reset_build_progress_logging();
     debug!(
         target: AUDIT_TARGET,
         "{module_id} — {config_summary}"
@@ -433,105 +436,7 @@ fn format_duration(duration: Duration) -> String {
 }
 
 pub fn log_build_progress(update: &TridBuildProgress) {
-    let Some(line) = format_build_progress_line(update) else {
-        return;
-    };
-
-    if build_progress_should_log_at_info(update) {
-        info!(target: AUDIT_TARGET, "{line}");
-    } else {
-        debug!(target: AUDIT_TARGET, "{line}");
-    }
-}
-
-fn format_build_progress_line(update: &TridBuildProgress) -> Option<String> {
-    match update.stage {
-        TridBuildStage::LoadSource => Some(format!("stage: load source — {}", update.message)),
-        TridBuildStage::ExtractArchive => {
-            Some(format!("stage: extract archive — {}", update.message))
-        }
-        TridBuildStage::FinalizePackage => {
-            Some(format!("stage: finalize package — {}", update.message))
-        }
-        TridBuildStage::ParseDefinitions => {
-            if update.current == 0 {
-                return Some(format!("stage: parse definitions — {}", update.message));
-            }
-            let total = update.total?;
-            let item = update.current_item.as_deref().unwrap_or("?");
-            Some(format!("({}/{}) {item} — parsing", update.current, total))
-        }
-        TridBuildStage::ReduceDefinitions => {
-            if update.current == 0 {
-                return Some(format!("stage: reduce definitions — {}", update.message));
-            }
-            let total = update.total?;
-            let item = update.current_item.as_deref()?;
-            let outcome = humanize_reduce_message(&update.message);
-            Some(format!("({}/{}) {item} — {outcome}", update.current, total))
-        }
-    }
-}
-
-fn humanize_reduce_message(message: &str) -> &str {
-    match message {
-        "Accepting validated definition" => "accepted",
-        "Rejecting definition without patterns" => "rejected: no patterns",
-        "Rejecting definition by extension floodgate" => "rejected: extension floodgate",
-        "Rejecting definition by MIME validation" => "rejected: invalid MIME",
-        other => other,
-    }
-}
-
-thread_local! {
-    static LAST_BUILD_STAGE: Cell<Option<TridBuildStage>> = const { Cell::new(None) };
-    static LAST_BUILD_MILESTONE: Cell<usize> = const { Cell::new(0) };
-}
-
-pub fn reset_build_progress_logging() {
-    LAST_BUILD_STAGE.with(|stage| stage.set(None));
-    LAST_BUILD_MILESTONE.with(|milestone| milestone.set(0));
-}
-
-fn build_progress_should_log_at_info(update: &TridBuildProgress) -> bool {
-    let stage_changed = LAST_BUILD_STAGE.with(|last| {
-        let previous = last.get();
-        if previous != Some(update.stage) {
-            last.set(Some(update.stage));
-            true
-        } else {
-            false
-        }
-    });
-
-    if stage_changed || update.current == 0 {
-        return true;
-    }
-
-    if matches!(
-        update.stage,
-        TridBuildStage::ParseDefinitions | TridBuildStage::ReduceDefinitions
-    ) {
-        let at_total = update
-            .total
-            .is_some_and(|total| total > 0 && update.current == total);
-        let at_milestone = update.current > 0
-            && LAST_BUILD_MILESTONE.with(|last| {
-                let previous = last.get();
-                let milestone = update.current / 1_000;
-                let previous_milestone = previous / 1_000;
-                if milestone > previous_milestone {
-                    last.set(update.current);
-                    true
-                } else {
-                    false
-                }
-            });
-
-        return at_total || at_milestone;
-    }
-
-    true
+    crate::logging::progress::dispatch_trid_progress(update);
 }
 
 #[cfg(test)]
@@ -539,11 +444,7 @@ mod tests {
     use chrono::NaiveDate;
     use tempfile::tempdir;
 
-    use super::{
-        format_build_progress_line, format_duration, humanize_reduce_message, log_file_name_for,
-        next_log_session, parse_log_session,
-    };
-    use crate::ops::builder::{TridBuildProgress, TridBuildStage, TridBuildStats};
+    use super::{format_duration, log_file_name_for, next_log_session, parse_log_session};
     use std::time::Duration;
 
     #[test]
@@ -586,33 +487,6 @@ mod tests {
 
         std::fs::write(logs_dir.join(log_file_name_for(date, 1)), "session 1").unwrap();
         assert_eq!(next_log_session(logs_dir, date).unwrap(), 2);
-    }
-
-    #[test]
-    fn build_progress_formats_reduce_rejection_readably() {
-        let line = format_build_progress_line(&TridBuildProgress {
-            stage: TridBuildStage::ReduceDefinitions,
-            message: "Rejecting definition by extension floodgate".to_owned(),
-            current: 5511,
-            total: Some(21692),
-            current_item: Some("BrainSuite Surface File Format".to_owned()),
-            stats: TridBuildStats::default(),
-        })
-        .unwrap();
-        assert!(line.contains("(5511/21692) BrainSuite Surface File Format"));
-        assert!(line.contains("extension floodgate"));
-    }
-
-    #[test]
-    fn humanize_reduce_message_maps_known_outcomes() {
-        assert_eq!(
-            humanize_reduce_message("Rejecting definition by extension floodgate"),
-            "rejected: extension floodgate"
-        );
-        assert_eq!(
-            humanize_reduce_message("Accepting validated definition"),
-            "accepted"
-        );
     }
 
     #[test]

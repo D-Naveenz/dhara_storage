@@ -1,11 +1,19 @@
+mod package;
+mod runner;
+pub mod trid;
+
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-use crate::command::{CommandResult, ReportField, StructuredReport, ToolContext};
+use crate::command::{
+    CommandResult, ReportField as CommandReportField, StructuredReport, ToolContext,
+};
+use crate::logging::{current_log_path, log_build_progress, log_file_path};
 use crate::paths::{default_defs_package_path, resolve_logs_dir, resolve_output_dir};
 
-use super::{BuilderAction, current_log_path, execute_action, log_file_path};
+pub use package::*;
+pub use runner::*;
 
 /// Repo-relative working paths used by defs commands.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -105,8 +113,10 @@ pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandRes
     let log_path = current_log_path().unwrap_or_else(|| log_file_path(&paths.logs_dir));
     let action = resolve_action(command, &paths);
 
-    let report = execute_action(action, &log_path, |_| {})
-        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let report = execute_action(action, &log_path, |update| {
+        log_build_progress(&update);
+    })
+    .map_err(|error| anyhow::anyhow!(error.to_string()))?;
 
     Ok(CommandResult {
         exit_code: report.exit_code(),
@@ -115,7 +125,7 @@ pub fn execute(command: DefsCommand, context: &ToolContext) -> Result<CommandRes
             fields: report
                 .fields()
                 .iter()
-                .map(|field| ReportField {
+                .map(|field| CommandReportField {
                     label: field.label().to_owned(),
                     value: field.value().to_owned(),
                 })

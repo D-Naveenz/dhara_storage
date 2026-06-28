@@ -12,7 +12,7 @@ use ratatui::backend::CrosstermBackend;
 
 use crate::command::CommandRegistry;
 use crate::command::ToolContext;
-use crate::ops::ensure_workspace_state;
+use crate::ensure_workspace_state;
 
 use super::render::render;
 use super::state::{AppState, Focus, MainView};

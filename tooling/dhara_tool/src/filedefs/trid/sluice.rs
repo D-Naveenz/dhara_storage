@@ -130,7 +130,7 @@ fn score_definition(
 #[cfg(test)]
 mod tests {
     use super::score_definition;
-    use crate::ops::builder::trid_xml::{
+    use crate::filedefs::trid::{
         ParsedTridDefinition, TridPattern, TridSignature, mime::MimeConfidence,
     };
 

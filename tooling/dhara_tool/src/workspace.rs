@@ -6,7 +6,7 @@ use crate::paths::resolve_output_dir;
 
 use dhara_storage_dal::DefinitionPackage;
 
-use super::builder::load_package;
+use crate::filedefs::load_package;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DefsPackageStatus {
@@ -204,7 +204,8 @@ mod tests {
         ToolContext {
             repo_root: root.to_path_buf(),
             run_mode: RunMode::Direct,
-            verbose: 0,
+            minimal: false,
+            trace: false,
             quiet: false,
             package_dir: None,
             output_dir: None,

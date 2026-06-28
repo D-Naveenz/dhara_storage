@@ -8,7 +8,7 @@ use xmltree::{Element, XMLNode};
 use crate::command::CommandResult;
 
 use super::{
-    DharaRepoConfig, PackageOptions, load_env, log_module_step_debug, package_flow, run_command,
+    DharaRepoConfig, PackageOptions, load_env, log_module_step_debug, nuget, run_command,
     verify_release,
 };
 
@@ -67,7 +67,7 @@ pub fn run(
     };
 
     if options.dry_run {
-        package_flow::publish(repo_root, config, &package_options)?;
+        nuget::publish(repo_root, config, &package_options)?;
         return Ok(CommandResult::with_message(if options.publish_cargo {
             "Cargo and NuGet release dry run completed."
         } else {
@@ -75,8 +75,8 @@ pub fn run(
         }));
     }
 
-    package_flow::pack(repo_root, config, &package_options)?;
-    package_flow::publish_packed(repo_root, config, &package_options)?;
+    nuget::pack(repo_root, config, &package_options)?;
+    nuget::publish_packed(repo_root, config, &package_options)?;
 
     Ok(CommandResult::with_message(if options.publish_cargo {
         "Cargo and NuGet release completed successfully."
@@ -242,7 +242,7 @@ mod tests {
     use tempfile::tempdir;
 
     use super::*;
-    use crate::ops::{
+    use crate::{
         CiConfig, DharaRepoConfig, NuGetConfig, PublishConfig, TargetsConfig, VersionConfig,
     };
 

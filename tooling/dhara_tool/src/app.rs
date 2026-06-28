@@ -4,8 +4,8 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
-use crate::ops::{DharaStorageCapability, ensure_workspace_state, log_session_end};
 use crate::tui::{can_launch, run_tui};
+use crate::{DharaStorageCapability, ensure_workspace_state, log_session_end};
 
 pub fn run() -> Result<()> {
     let cli = parse_root_args(env::args().skip(1).collect())?;
@@ -40,7 +40,8 @@ pub fn run() -> Result<()> {
     let context = ToolContext {
         repo_root,
         run_mode,
-        verbose: cli.verbose,
+        minimal: cli.minimal,
+        trace: cli.trace,
         quiet: cli.quiet,
         package_dir: cli.package_dir,
         output_dir: cli.output_dir,
@@ -164,7 +165,8 @@ fn normalize_repo_root(path: PathBuf) -> Result<PathBuf> {
 struct RootArgs {
     repo_root: Option<PathBuf>,
     quiet: bool,
-    verbose: u8,
+    minimal: bool,
+    trace: bool,
     package_dir: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     logs_dir: Option<PathBuf>,
@@ -177,7 +179,8 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
     let mut parsed = RootArgs {
         repo_root: None,
         quiet: false,
-        verbose: 0,
+        minimal: false,
+        trace: false,
         package_dir: None,
         output_dir: None,
         logs_dir: None,
@@ -202,8 +205,16 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.quiet = true;
                 index += 1;
             }
+            "--minimal" => {
+                parsed.minimal = true;
+                index += 1;
+            }
+            "--trace" => {
+                parsed.trace = true;
+                index += 1;
+            }
             "-v" | "--verbose" => {
-                parsed.verbose += 1;
+                parsed.trace = true;
                 index += 1;
             }
             "--repo-root" => {
@@ -268,7 +279,9 @@ fn help_text(registry: &CommandRegistry) -> String {
            --output-dir <path>\n\
            --logs-dir <path>\n\
            -q, --quiet     suppress command stdout in direct mode\n\
-           -v, --verbose\n\
+           --minimal       quieter console output and no live progress\n\
+           --trace         verbose audit trail (full reduce detail in log file)\n\
+           -v, --verbose   deprecated alias for --trace\n\
            -h, --help\n\
            --version\n\n\
          {}",
@@ -343,20 +356,31 @@ mod tests {
     }
 
     #[test]
-    fn global_verbose_flag_may_follow_subcommand() {
+    fn trace_flag_may_follow_subcommand() {
         let parsed = parse_root_args(vec![
             "defs".to_owned(),
             "inspect-trid-xml".to_owned(),
-            "-v".to_owned(),
+            "--trace".to_owned(),
         ])
         .unwrap();
 
-        assert_eq!(parsed.verbose, 1);
+        assert!(parsed.trace);
         assert_eq!(parsed.command, vec!["defs", "inspect-trid-xml"]);
     }
 
     #[test]
-    fn global_verbose_flag_may_precede_subcommand() {
+    fn minimal_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "defs".to_owned(),
+            "inspect".to_owned(),
+            "--minimal".to_owned(),
+        ])
+        .unwrap();
+        assert!(parsed.minimal);
+    }
+
+    #[test]
+    fn verbose_flag_aliases_trace() {
         let parsed = parse_root_args(vec![
             "-v".to_owned(),
             "defs".to_owned(),
@@ -364,7 +388,7 @@ mod tests {
         ])
         .unwrap();
 
-        assert_eq!(parsed.verbose, 1);
+        assert!(parsed.trace);
         assert_eq!(parsed.command, vec!["defs", "inspect"]);
     }
 

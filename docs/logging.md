@@ -11,7 +11,7 @@ Logs are written for **humans and AI agents**, not log aggregators. Prefer plain
 | Mode | When | Console | Command stdout | File log |
 |------|------|---------|----------------|----------|
 | **interactive** | No subcommand in a TTY | Errors only (TUI owns the screen) | Captured in TUI panel | Full audit trail |
-| **direct** | Subcommand present (CI, agents, scripts) | WARN/INFO/DEBUG per `-v` | Structured report printed | Full audit trail |
+| **direct** | Subcommand present (CI, agents, scripts) | INFO (WARN with `--minimal`, DEBUG with `--trace`) | Structured report printed | Full audit trail |
 
 Use `-q` / `--quiet` in **direct** mode to suppress command stdout while keeping the file log.
 
@@ -30,7 +30,7 @@ Use `-q` / `--quiet` in **direct** mode to suppress command stdout while keeping
 | **WARN** | Non-fatal issues: skipped steps, verification mismatches, update required |
 | **ERROR** | Failures that stop the current module |
 
-Default file log level: **INFO**. Use `-v` once for DEBUG on console and file; `-vv` for TRACE.
+Default file log level: **INFO**. Use `--minimal` to quiet the console to WARN while keeping INFO in the file log. Use `--trace` for DEBUG on console and file (including per-item reduce audit lines). `-v` / `--verbose` is a deprecated alias for `--trace`.
 
 ## Session lifecycle
 
@@ -48,7 +48,7 @@ flowchart TD
 One line with what matters to orient a reader:
 
 ```
-dhara_tool 0.6.0 started — mode=direct, verbose=0, quiet=no, log=.../2026-06-27_dhara_tool_1.log
+dhara_tool 0.7.0 started — mode=direct, minimal=no, trace=no, quiet=no, log=.../2026-06-27_dhara_tool_1.log
 ```
 
 Do **not** emit a separate “logging initialized” event.
@@ -84,7 +84,7 @@ flowchart TD
 
 Full begin / DEBUG steps / end with stats and duration:
 
-- TrID build and inspect (`defs.build-trid-xml`, `defs.inspect-trid-xml`)
+- TrID build, inspect, and sync-embedded (`defs.build-trid-xml`, `defs.inspect-trid-xml`, `defs.sync-embedded`)
 - CI verification (`verify.ci`)
 - NuGet pack/verify/publish (`package.*`)
 - Release (`release.run`)
@@ -94,7 +94,7 @@ Example:
 ```
 INFO  defs.inspect-trid-xml started — defaults
 DEBUG stage: load source — Loading source .../triddefs_xml.7z
-DEBUG (5511/21692) BrainSuite Surface File Format — rejected: extension floodgate
+DEBUG (1000/21692) reduce in progress
 INFO  TrID transform — parsed=21692, kept=5500, mime_corrected=258, ...
 INFO  defs.inspect-trid-xml finished in 4m12s at ... — Final Kept=5500, Total Parsed=21692, ...
 ```
@@ -110,9 +110,30 @@ INFO  defs.inspect finished in 151ms at ... — Definitions=5500, Package Versio
 
 Rule of thumb: fewer than ~3 trivial steps and no heavy subprocess loop → compact finish.
 
+## Console progress (direct mode)
+
+When stderr is a TTY and `--minimal` is not set, long TrID builds emit throttled progress on stderr:
+
+```
+parse: 1234/21692
+reduce: 5500/21692
+```
+
+Interactive TUI mode does not show this progress yet (see `tui/exec.rs` TODO).
+
+## TrID file audit policy
+
+| Stage | Default file log | `--trace` file log |
+|-------|------------------|-------------------|
+| LoadSource, ExtractArchive, FinalizePackage | INFO stage line | same |
+| ParseDefinitions | INFO start + INFO end with count/duration only | same (never per-file) |
+| ReduceDefinitions | INFO start + milestone every 1,000 + INFO end + transform stats | per-item accept/reject lines |
+
+Console progress uses the same counters; file logs omit per-file parse lines entirely.
+
 ## Progress events (object + outcome)
 
-During TrID reduction, log **one fact per line** at DEBUG:
+During TrID reduction with `--trace`, log **one fact per line** at DEBUG:
 
 ```
 (5511/21692) BrainSuite Surface File Format — rejected: extension floodgate
@@ -131,7 +152,7 @@ Target: `dhara_tool::audit` for all audit events.
 
 ```rust
 // Session
-info!(target: "dhara_tool::audit", "dhara_tool {version} started — mode={mode}, verbose={verbose}, log={path}");
+info!(target: "dhara_tool::audit", "dhara_tool {version} started — mode={mode}, minimal={minimal}, trace={trace}, log={path}");
 
 // Module begin (long)
 info!(target: "dhara_tool::audit", "{module_id} started — {config_summary}");
@@ -156,14 +177,14 @@ Language-agnostic equivalent: `{timestamp} {LEVEL} {scope}: {single human-readab
 | Separate `logging initialized` + `command started` + `starting defs command` | One session open + one module begin |
 | Duplicate report fields logged in runner and command layer | Stats once at module end; stdout report separate |
 | `--silent` to mean “no TUI” | Automatic `interactive` / `direct` run modes |
-| INFO on every parsed XML file (21k lines) | DEBUG per object; INFO at stage boundaries and milestones |
+| INFO on every parsed XML file (21k lines) | INFO at parse stage start/end only; console `(n/total)` throttled |
 
 ## Agent checklist
 
 When diagnosing a run from logs alone:
 
 1. Open the latest `tooling/output/logs/{date}_dhara_tool*.log` for today.
-2. Find `dhara_tool ... started` — note mode, verbose, log path.
+2. Find `dhara_tool ... started` — note mode, minimal, trace, log path.
 3. Find `{module} started` or `{module} finished` / `failed`.
 4. For TrID work, grep `TrID transform —` for final stats.
 5. Read `dhara_tool exiting` for exit code and timestamp.
@@ -192,10 +213,10 @@ INFO dhara_tool::ops::trid: build progress stage=ReduceDefinitions ... accepted=
 **After (target):**
 
 ```
-INFO dhara_tool::audit: dhara_tool 0.6.0 started — mode=direct, verbose=0, quiet=no, log=.../2026-06-27_dhara_tool_2.log
+INFO dhara_tool::audit: dhara_tool 0.7.0 started — mode=direct, minimal=no, trace=no, quiet=no, log=.../2026-06-27_dhara_tool_2.log
 INFO dhara_tool::audit: defs.inspect-trid-xml started — defaults
 DEBUG dhara_tool::audit: stage: reduce definitions — Reducing validated definitions
-DEBUG dhara_tool::audit: (5511/21692) BrainSuite Surface File Format — rejected: extension floodgate
+DEBUG dhara_tool::audit: (1000/21692) reduce in progress
 INFO dhara_tool::audit: TrID transform — parsed=21692, kept=5500, ...
 INFO dhara_tool::audit: defs.inspect-trid-xml finished in 4m12s at ... — Final Kept=5500, Total Parsed=21692
 INFO dhara_tool::audit: dhara_tool exiting 0 at ... — completed defs.inspect-trid-xml

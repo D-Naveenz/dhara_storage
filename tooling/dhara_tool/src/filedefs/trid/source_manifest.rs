@@ -4,7 +4,7 @@ use chrono::NaiveDate;
 use serde::Deserialize;
 use tracing::debug;
 
-use crate::ops::builder::BuilderError;
+use crate::filedefs::BuilderError;
 
 #[derive(Debug, Deserialize)]
 struct SourceManifest {

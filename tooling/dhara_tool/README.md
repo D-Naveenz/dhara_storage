@@ -34,9 +34,9 @@ Audit logs follow [docs/logging.md](../docs/logging.md). Each run writes to
 - subprocess milestones (verify, package, release)
 - failures with exit codes and timestamps
 
-Use `-v` for more console detail; `-q` suppresses command stdout in direct mode.
+Default logging is informative on the console and in the file log. Use `--minimal` to quiet the console, `--trace` for full reduce audit detail, and `-q` to suppress command stdout in direct mode.
 
-Repository-specific command logic lives in `tooling/dhara_tool/src/ops`. The TUI and CLI registry in `command` and `tui` call into that module through `DharaStorageCapability`.
+Source is organized by purpose under `tooling/dhara_tool/src/` (`filedefs/`, `logging/`, `registry.rs`, `commands.rs`, etc.). TrID parse/reduce uses Rayon when processing large archives; cap threads with `RAYON_NUM_THREADS` if needed. The TUI and CLI registry call domain modules through `DharaStorageCapability`.
 
 ## Output layout
 
