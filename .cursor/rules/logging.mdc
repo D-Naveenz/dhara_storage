@@ -1,0 +1,82 @@
+---
+description: Log level semantics (generic + Rust/tracing) and Dhara operator-log requirements
+alwaysApply: true
+---
+
+# Logging
+
+Human reference: `docs/logging.md`. When adding or changing logs, follow level semantics first, then Dhara conventions below.
+
+## Standard level hierarchy
+
+Severity decreases top → bottom; verbosity increases. **Configured level captures that level and everything more severe** (`logged >= threshold`).
+
+```
+FATAL/CRITICAL  — unrecoverable; process must stop
+ERROR           — operation failed; app continues
+WARN            — unusual but non-blocking; investigate later
+INFO            — healthy milestones operators rely on in production
+DEBUG           — engineer diagnostics; usually off in production
+TRACE           — line-by-line / per-item detail; highest volume
+```
+
+| Pick this level when… | Example |
+|---|---|
+| ERROR | Module/command aborts; user-visible failure | `defs.build-trid-xml failed — archive tool missing` |
+| WARN | Completed with caveats | skipped step, verification mismatch |
+| INFO | One sentence a reader needs without DEBUG | session open/close, phase **finish**, aggregate stats |
+| DEBUG | Supports troubleshooting; safe to omit from default runs | phase **start**, paths, flags, per-item trace |
+| TRACE | Only if `--trace` / explicit verbose mode | per-definition reduce outcomes |
+
+Do **not** emit DEBUG/TRACE content at INFO. Do **not** use INFO for progress counters when a phase-finish line or `--trace` detail is the right tier.
+
+## Rust / tracing (`dhara_tool`)
+
+Use `tracing` macros with explicit targets. Audit/operator events: `target: "dhara_tool::audit"`.
+
+`log` crate severity (lower number = more severe): Error=1, Warn=2, Info=3, Debug=4, Trace=5.  
+`tracing-subscriber` filters the same way: setting max level INFO shows INFO+WARN+ERROR, not DEBUG.
+
+Console vs file thresholds (numeric `log` scale: Info=3, Warn=2, Debug=4):
+
+| Flag | Console | File |
+|---|---|---|
+| default | 3 (INFO) | 3 (INFO) |
+| `--min` / `-m` | 3 (INFO) | 2 (WARN) |
+| `--trace` / `-t` | 3 (INFO) | 4 (DEBUG) |
+
+Console stays INFO until the new TUI policy lands.
+
+## Dhara operator logs — requirements
+
+Logs are for **humans and agents**, not aggregators. Write plain sentences, one fact per line.
+
+### Tiering (TrID and long modules)
+
+| Category | INFO | DEBUG |
+|---|---|---|
+| Performance | `phase {name} finished in {duration} — {summary}` | `phase {name} started` |
+| Reports | `TrID transform — …` once; module finish summary | per-definition reduce trace (`--trace` only) |
+| Environment | session `mode`, `workers`; module `started — {args}` | flags, log path, resolved paths |
+
+### Must do
+
+- Single audit dispatch path per progress event (no duplicate callbacks).
+- Session INFO: `dhara_tool {version} started — mode=…, workers=…` — **no log path on INFO**.
+- Long modules: begin INFO → phase finish INFO lines → aggregate stats once → finish INFO with duration.
+- Fast modules: config at DEBUG; one INFO finish line.
+- Reduce stage: **no** `(N/total) reduce in progress` milestones at any level.
+- `--trace` reduce lines: `({current}/{total}) {file_type} — accepted|rejected: …` with structured suffixes; stats once via `TrID transform —`.
+- Parse stage: never log every input file at INFO; phase finish with count/duration only.
+- Console progress (direct + TTY): throttled `parse:` / `reduce:` counters on stderr only.
+
+### Must not
+
+- Duplicate the same stage line from runner and caller.
+- Dump cumulative counters on every trace line.
+- Put self-referential noise on INFO (log file path, “logging initialized”).
+- Log field soup / JSON blobs where one sentence suffices.
+
+### When diagnosing
+
+Read `tooling/output/logs/{date}_dhara_tool*.log` → `started` → `{module} started/finished` → `phase ` / `TrID transform` → `exiting`.

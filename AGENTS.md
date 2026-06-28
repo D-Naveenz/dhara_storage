@@ -11,8 +11,8 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 
 ## Purpose
 
-- `src/static/dhara_storage` is the Rust-native core runtime for Dhara Storage.
-- `src/dynamic/dharastorage` is the C ABI layer for managed/native hosts.
+- `src/core/dhara_storage` is the Rust-native core runtime for Dhara Storage.
+- `src/dharastorage` is the C ABI layer for managed/native hosts.
 - `src/bindings/Dhara.Storage` is the active .NET binding project.
 - `dhara_tool` and `dhara.config.toml` are the supported operator surface for config sync, verification, packaging, and publishing flows.
 

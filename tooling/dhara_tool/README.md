@@ -20,16 +20,29 @@ cargo run -p dhara_tool -- release run --skip-cargo
 ```
 
 Launching `dhara_tool` without a subcommand in an interactive terminal opens the
-Dhara TUI. Explicit subcommands still use the minimal non-TUI execution path.
+Dhara TUI (**interactive** mode). Explicit subcommands use **direct** mode (no TUI).
 
 ## Logging
 
-`dhara_tool` now emits richer structured logs for:
+Audit logs follow [docs/logging.md](../docs/logging.md). Each run writes to
+`tooling/output/logs/{date}_dhara_tool[_N].log` with session-scoped files.
 
-- command start and completion
-- effective configuration
-- spawned external processes
-- package verification and publish milestones
-- failures and validation details
+`dhara_tool` emits human-readable audit lines for:
 
-Repository-specific command implementations live in `tooling/dhara_storage_ops`.
+- session and module lifecycle (start, steps, finish)
+- TrID transformation statistics
+- subprocess milestones (verify, package, release)
+- failures with exit codes and timestamps
+
+Default logging uses INFO (level 3) on console and file. Use `-m` / `--min` for WARN-only file logs, or `-t` / `--trace` for DEBUG file detail (including per-definition reduce trace).
+
+Parallel TrID parse/reduce uses Rayon with a capped global thread pool. Cap workers with `-w` / `--workers` (default 4) or `TOOL_MAX_WORKERS`; `RAYON_NUM_THREADS` is ignored.
+
+Source is organized by purpose under `tooling/dhara_tool/src/` (`filedefs/`, `logging/`, `registry.rs`, `commands.rs`, etc.). The TUI and CLI registry call domain modules through `DharaStorageCapability`.
+
+## Output layout
+
+- `tooling/output/` — generated artifacts (`filedefs.dat`, NuGet packages, logs)
+- `tooling/artifacts/` — gitignored staging for native staging, smoke builds, and local NuGet config during verification
+
+The canonical runtime `filedefs.dat` lives at `tooling/output/filedefs.dat` and is embedded into `dhara_storage_dal` at compile time. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`. See [docs/filedefs-dat.md](../docs/filedefs-dat.md) for the DSFD on-disk format.

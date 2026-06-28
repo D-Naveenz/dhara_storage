@@ -1,0 +1,54 @@
+# Changelog
+
+All notable changes to Dhara Storage are documented here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
+uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.7.0] — 2026-06-28
+
+Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0) (2026-06-22).
+
+### Added
+
+- **DSFD definition packages** — `filedefs.dat` now uses the Dhara Storage File Definition (DSFD) container format (version 2): fixed header, FlatBuffers payload, and XML metadata footer. See [docs/filedefs-dat.md](docs/filedefs-dat.md).
+- **FlatBuffers codec in `dhara_storage_dal`** — encode/decode pipeline, bundled definition loading, and container validation for DSFD packages.
+- **DSFD metadata schema** — XSD schema (`schema/dsfd-metadata.xsd`) and XML footer parsing for package revision, tags, and definition counts.
+- **Operator logging for `dhara_tool`** — structured audit logs with session/module lifecycle, phase timing, TrID transform stats, and subprocess milestones. Human reference: [docs/logging.md](docs/logging.md).
+- **Logging CLI flags** — `-m` / `--min` (WARN-only file detail) and `-t` / `--trace` (DEBUG file detail including per-definition reduce trace).
+- **Worker thread control** — `-w` / `--workers` caps Rayon parallelism for TrID parse/reduce (default 4); `TOOL_MAX_WORKERS` env support.
+- **Flexible global options** — verbose and other global flags may appear before or after subcommands.
+- **NuGet and release flows in `dhara_tool`** — packaging and publish capabilities previously in `dhara_storage_ops` are now part of the operator CLI.
+- **Workspace state management** — package revisioning and embedded-def sync workflows in `dhara_tool`.
+- **VS Code tasks** — build/verify task definitions in `.vscode/tasks.json`.
+- **Git LFS tracking** — `.dat` artifacts tracked via Git LFS.
+
+### Changed
+
+- **Version bump** — workspace, crates, NuGet package, and shared config synchronized to `0.7.0`.
+- **Directory layout** — runtime crates moved from `src/static/` to `src/core/`; C ABI crate moved from `src/dynamic/` to `src/dharastorage/`.
+- **`filedefs.dat` location** — canonical runtime artifact is now `tooling/output/filedefs.dat` (embedded into `dhara_storage_dal` at compile time).
+- **`dhara_tool` architecture** — consolidated command registry, filedefs/TrID modules, NuGet/release helpers, and capability routing; output staged under `tooling/output/` and `tooling/artifacts/`.
+- **Definition package identifier** — on-disk magic and FlatBuffers layout migrated from legacy `FDEF` to `DSFD` format version 2.
+- **Release workflow** — GitHub Actions release job updated for the new crate paths and tooling layout.
+- **Documentation** — README, AGENTS.md, and crate READMEs updated for new paths, DSFD format, and logging conventions.
+
+### Removed
+
+- **`dhara_storage_ops` crate** — operator capabilities merged into `dhara_tool`; workspace and docs no longer reference the separate ops package.
+- **Legacy FDEF container format** — version 1 packages with duplicate `DSFD`/`FDEF` markers are not supported.
+- **`authors` fields** — removed from workspace `Cargo.toml` files to streamline package metadata.
+
+### Migration notes
+
+- **Custom `filedefs.dat` files** must be rebuilt with `dhara_tool` using the DSFD format. Packages produced for 0.6.x (`FDEF`) will not load in 0.7.0.
+- **Import paths** — update any hard-coded references from `src/static/dhara_storage` or `src/dynamic/dharastorage` to `src/core/dhara_storage` and `src/dharastorage`.
+- **Tooling commands** — replace `dhara_storage_ops`-based workflows with `cargo run -p dhara_tool -- …` equivalents (`verify ci`, `verify package`, `release run`, `defs sync-embedded`, etc.).
+
+---
+
+## [0.6.0] — 2026-06-22
+
+Initial tagged release in this changelog series. See git history before `v0.6.0` for earlier changes.
+
+[0.7.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0

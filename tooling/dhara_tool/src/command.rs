@@ -118,7 +118,41 @@ impl CommandRegistry {
         let Some((command, rest)) = self.resolve(args) else {
             bail!("unknown command path: {}", args.join(" "));
         };
-        (command.handler)(context, rest)
+
+        crate::ensure_logging(crate::LoggingOptions::from_context(context))?;
+
+        let long_running = crate::is_long_running_module(command.id);
+        let started = std::time::Instant::now();
+        let args_summary = crate::format_command_args(rest);
+
+        if long_running {
+            crate::log_module_begin(command.id, &args_summary);
+        } else {
+            crate::log_module_begin_debug(command.id, &args_summary);
+        }
+
+        let result = (command.handler)(context, rest);
+
+        match &result {
+            Ok(command_result) => {
+                let summary = crate::summarize_command_result(command.id, command_result);
+                if long_running {
+                    crate::log_module_end(command.id, command_result.exit_code, &summary, started);
+                } else {
+                    crate::log_module_compact_finish(
+                        command.id,
+                        command_result.exit_code,
+                        &summary,
+                        started,
+                    );
+                }
+            }
+            Err(error) => {
+                crate::log_module_failed(command.id, &error.to_string(), started);
+            }
+        }
+
+        result
     }
 
     pub fn help_text(&self) -> String {
@@ -159,11 +193,28 @@ impl CommandUi {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RunMode {
+    Interactive,
+    Direct,
+}
+
+impl RunMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Interactive => "interactive",
+            Self::Direct => "direct",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolContext {
     pub repo_root: PathBuf,
-    pub silent: bool,
-    pub verbose: u8,
+    pub run_mode: RunMode,
+    pub min: bool,
+    pub trace: bool,
+    pub workers: usize,
     pub package_dir: Option<PathBuf>,
     pub output_dir: Option<PathBuf>,
     pub logs_dir: Option<PathBuf>,
@@ -221,8 +272,8 @@ impl CommandResult {
         }
     }
 
-    pub fn print(&self, silent: bool) {
-        if silent {
+    pub fn print(&self, context: &ToolContext) {
+        if context.run_mode != RunMode::Direct {
             return;
         }
 
@@ -263,8 +314,10 @@ mod tests {
     fn context() -> ToolContext {
         ToolContext {
             repo_root: PathBuf::from("."),
-            silent: false,
-            verbose: 0,
+            run_mode: RunMode::Direct,
+            min: false,
+            trace: false,
+            workers: 4,
             package_dir: None,
             output_dir: None,
             logs_dir: None,

@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use dhara_storage_ops::OutputStream;
+use crate::{OutputStream, WorkspaceSnapshot};
 
 use crate::command::{CommandRegistry, CommandResult, CommandSpec, ToolContext};
 
@@ -40,6 +40,7 @@ pub struct HistoryEntry {
 
 pub struct AppState {
     pub repository_label: String,
+    pub workspace: WorkspaceSnapshot,
     pub focus: Focus,
     pub main_view: MainView,
     pub selected_section: usize,
@@ -67,9 +68,10 @@ impl AppState {
         Self::with_repository_label("workspace")
     }
 
-    pub fn with_repository_label(label: impl Into<String>) -> Self {
+    pub fn with_workspace(label: impl Into<String>, workspace: WorkspaceSnapshot) -> Self {
         Self {
             repository_label: label.into(),
+            workspace,
             focus: Focus::Main,
             main_view: MainView::Dashboard,
             selected_section: 0,
@@ -85,6 +87,20 @@ impl AppState {
             status_message: "Ready.".to_owned(),
             should_quit: false,
         }
+    }
+
+    pub fn with_repository_label(label: impl Into<String>) -> Self {
+        Self::with_workspace(
+            label,
+            WorkspaceSnapshot {
+                defs_path: Path::new("tooling/output/filedefs.dat").to_path_buf(),
+                defs_status: crate::workspace::DefsPackageStatus::Missing,
+                package_revision: None,
+                definitions_release: None,
+                package_version: None,
+                definition_count: None,
+            },
+        )
     }
 
     pub fn repository_label_from_path(path: &Path) -> String {

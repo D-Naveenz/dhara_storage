@@ -3,15 +3,15 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
-use crate::capabilities::dhara_storage::register_dhara_storage_capability;
-use crate::command::{CommandRegistry, ToolContext};
+use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
 use crate::tui::{can_launch, run_tui};
+use crate::{DharaStorageCapability, ensure_workspace_state, log_session_end};
 
 pub fn run() -> Result<()> {
     let cli = parse_root_args(env::args().skip(1).collect())?;
 
     let mut registry = CommandRegistry::new();
-    register_dhara_storage_capability(&mut registry);
+    DharaStorageCapability.register(&mut registry);
 
     if cli.show_version {
         println!("{}", crate::version());
@@ -29,21 +29,48 @@ pub fn run() -> Result<()> {
         env::current_exe().ok(),
     )?;
 
+    let run_mode = if !cli.command.is_empty() {
+        RunMode::Direct
+    } else if can_launch() {
+        RunMode::Interactive
+    } else {
+        RunMode::Direct
+    };
+
+    let effective_workers = crate::workers::init_global_thread_pool(cli.workers)?;
+
     let context = ToolContext {
         repo_root,
-        silent: cli.silent,
-        verbose: cli.verbose,
+        run_mode,
+        min: cli.min,
+        trace: cli.trace,
+        workers: effective_workers,
         package_dir: cli.package_dir,
         output_dir: cli.output_dir,
         logs_dir: cli.logs_dir,
     };
 
+    ensure_workspace_state(&context);
+
     match determine_launch_mode(!cli.command.is_empty(), can_launch()) {
         LaunchMode::InteractiveTui => run_tui(&registry, &context)?,
         LaunchMode::PlainHelp => print!("{}", help_text(&registry)),
         LaunchMode::DirectCommand => {
-            let result = registry.execute(&context, &cli.command)?;
-            result.print(context.silent);
+            let command_id = registry
+                .resolve(&cli.command)
+                .map(|(command, _)| command.id)
+                .unwrap_or("unknown");
+            let result = match registry.execute(&context, &cli.command) {
+                Ok(result) => {
+                    log_session_end(result.exit_code, Some(command_id), None);
+                    result
+                }
+                Err(error) => {
+                    log_session_end(1, Some(command_id), Some(&error.to_string()));
+                    return Err(error);
+                }
+            };
+            result.print(&context);
             if result.exit_code != 0 {
                 std::process::exit(result.exit_code);
             }
@@ -139,8 +166,9 @@ fn normalize_repo_root(path: PathBuf) -> Result<PathBuf> {
 #[derive(Debug, Clone)]
 struct RootArgs {
     repo_root: Option<PathBuf>,
-    silent: bool,
-    verbose: u8,
+    min: bool,
+    trace: bool,
+    workers: Option<usize>,
     package_dir: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     logs_dir: Option<PathBuf>,
@@ -152,8 +180,9 @@ struct RootArgs {
 fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
     let mut parsed = RootArgs {
         repo_root: None,
-        silent: false,
-        verbose: 0,
+        min: false,
+        trace: false,
+        workers: None,
         package_dir: None,
         output_dir: None,
         logs_dir: None,
@@ -174,13 +203,22 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.show_version = true;
                 index += 1;
             }
-            "-s" | "--silent" => {
-                parsed.silent = true;
+            "-m" | "--min" => {
+                parsed.min = true;
                 index += 1;
             }
-            "-v" | "--verbose" => {
-                parsed.verbose += 1;
+            "-t" | "--trace" => {
+                parsed.trace = true;
                 index += 1;
+            }
+            "-w" | "--workers" => {
+                let value = next_value(&args, index, "--workers")?;
+                parsed.workers = Some(
+                    value
+                        .parse()
+                        .with_context(|| format!("'{value}' is not a valid worker count"))?,
+                );
+                index += 2;
             }
             "--repo-root" => {
                 parsed.repo_root = Some(PathBuf::from(next_value(&args, index, "--repo-root")?));
@@ -216,10 +254,18 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.logs_dir = Some(PathBuf::from(token.trim_start_matches("--logs-dir=")));
                 index += 1;
             }
-            _ if token.starts_with('-') => bail!("unknown global option: {token}"),
+            _ if token.starts_with("--workers=") => {
+                let value = token.trim_start_matches("--workers=");
+                parsed.workers = Some(
+                    value
+                        .parse()
+                        .with_context(|| format!("'{value}' is not a valid worker count"))?,
+                );
+                index += 1;
+            }
             _ => {
-                parsed.command.extend(args[index..].iter().cloned());
-                break;
+                parsed.command.push(token.clone());
+                index += 1;
             }
         }
     }
@@ -235,7 +281,21 @@ fn next_value<'a>(args: &'a [String], index: usize, option: &str) -> Result<&'a 
 
 fn help_text(registry: &CommandRegistry) -> String {
     format!(
-        "Usage: dhara_tool [global-options] <command>\n\nGlobal options:\n  --repo-root <path>\n  --package-dir <path>\n  --output-dir <path>\n  --logs-dir <path>\n  -s, --silent\n  -v, --verbose\n  -h, --help\n  --version\n\n{}",
+        "Usage: dhara_tool [global-options] <command> [command-options]\n\n\
+         Launch modes:\n\
+           interactive  no subcommand in a TTY — opens the guided TUI\n\
+           direct       subcommand present — runs immediately (CI, agents, scripts)\n\n\
+         Global options (may appear before or after the command):\n\
+           --repo-root <path>\n\
+           --package-dir <path>\n\
+           --output-dir <path>\n\
+           --logs-dir <path>\n\
+           -m, --min         file log WARN only (console stays INFO)\n\
+           -t, --trace       file log DEBUG (console stays INFO)\n\
+           -w, --workers <n>  cap Rayon worker threads (default 4; env TOOL_MAX_WORKERS)\n\
+           -h, --help\n\
+           --version\n\n\
+         {}",
         registry.help_text()
     )
 }
@@ -248,7 +308,7 @@ mod tests {
 
     use super::{
         LaunchMode, determine_launch_mode, discover_repo_root_from, normalize_repo_root,
-        resolve_repo_root,
+        parse_root_args, resolve_repo_root,
     };
 
     #[test]
@@ -304,6 +364,64 @@ mod tests {
         let resolved = discover_repo_root_from(&nested).unwrap();
 
         assert_eq!(resolved, normalize_repo_root(root).unwrap());
+    }
+
+    #[test]
+    fn trace_flag_may_follow_subcommand() {
+        let parsed = parse_root_args(vec![
+            "defs".to_owned(),
+            "inspect-trid-xml".to_owned(),
+            "--trace".to_owned(),
+        ])
+        .unwrap();
+
+        assert!(parsed.trace);
+        assert_eq!(parsed.command, vec!["defs", "inspect-trid-xml"]);
+    }
+
+    #[test]
+    fn min_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "defs".to_owned(),
+            "inspect".to_owned(),
+            "--min".to_owned(),
+        ])
+        .unwrap();
+        assert!(parsed.min);
+    }
+
+    #[test]
+    fn min_short_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "-m".to_owned(),
+            "defs".to_owned(),
+            "inspect".to_owned(),
+        ])
+        .unwrap();
+        assert!(parsed.min);
+    }
+
+    #[test]
+    fn trace_short_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "-t".to_owned(),
+            "defs".to_owned(),
+            "inspect-trid-xml".to_owned(),
+        ])
+        .unwrap();
+        assert!(parsed.trace);
+    }
+
+    #[test]
+    fn workers_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "-w".to_owned(),
+            "2".to_owned(),
+            "defs".to_owned(),
+            "inspect".to_owned(),
+        ])
+        .unwrap();
+        assert_eq!(parsed.workers, Some(2));
     }
 
     #[test]

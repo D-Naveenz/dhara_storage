@@ -2,7 +2,6 @@
 name = "dhara_tool"
 version.workspace = true
 edition.workspace = true
-authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
@@ -15,11 +14,25 @@ publish = false
 
 [dependencies]
 anyhow = "1.0"
+chrono = "0.4"
+clap = { version = "4.6", features = ["derive"] }
 crossterm = "0.29"
-dhara_storage_ops.workspace = true
+dhara_storage_dal.workspace = true
+once_cell = "1.21"
+quick-xml = { version = "0.40.1", features = ["serialize"] }
+rayon = "1.10"
 ratatui = { version = "0.30.2", default-features = false, features = ["crossterm"] }
+semver = "1.0"
+serde = { version = "1.0", features = ["derive"] }
 shlex = "2.0"
+tempfile = "3.27"
+thiserror = "2.0"
+toml = "1.1.2"
+toml_edit = "0.25.12"
 tracing = "0.1"
+tracing-appender = "0.2"
+tracing-subscriber = { version = "0.3", features = ["fmt"] }
+xmltree = "0.12.0"
 zip = { version = "8.6.0", default-features = false, features = ["deflate"] }
 
 [dev-dependencies]

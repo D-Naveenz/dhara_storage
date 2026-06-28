@@ -10,18 +10,17 @@ debounced watching, a FlatBuffers-backed definitions data layer, and a managed .
 the native core.
 
 Rust crates and the `Dhara.Storage` NuGet package are versioned together from
-shared release metadata. The current publish target is `0.6.0`.
+shared release metadata. The current publish target is `0.7.0`.
 
 ## Workspace
 
 | Project                            | Purpose                                                                                               |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `src/static/dhara_storage_dal` | FlatBuffers data access layer for the internal `filedefs.dat` definitions artifact                    |
-| `src/static/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
-| `src/dynamic/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
+| `src/core/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `tooling/output/filedefs.dat` |
+| `src/core/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
+| `src/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
 | `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |
 | `tooling/dhara_tool`           | Operator CLI for verification, packaging, release, and defs workflows                                 |
-| `tooling/dhara_storage_ops`    | Repository-specific capability pack used by `dhara_tool`                                             |
 
 ## Highlights
 
@@ -38,7 +37,7 @@ Rust runtime:
 
 ```toml
 [dependencies]
-dhara_storage = "0.6.0"
+dhara_storage = "0.7.0"
 ```
 
 ```rust
@@ -52,7 +51,7 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 .NET wrapper:
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.6.0
+dotnet add package Dhara.Storage --version 0.7.0
 ```
 
 ```csharp
@@ -92,7 +91,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - Rust crates emit structured `tracing` events for analysis, metadata loading, operations, watching, package verification, and release flows.
 - `dharastorage` exposes a native logger registration API that forwards JSON log records across the ABI.
 - `Dhara.Storage` forwards both managed wrapper logs and native runtime logs into a host `ILoggerFactory`.
-- `dhara_tool` and `dhara_storage_ops` now emit richer command, configuration, transfer, and verification logs for release diagnostics.
+- `dhara_tool` now emits richer command, configuration, transfer, and verification logs for release diagnostics.
 
 ## Release Flow
 
@@ -106,7 +105,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 
 ## Docs
 
-- [dhara_storage_dal README](./src/static/dhara_storage_dal/README.md)
-- [dhara_storage README](./src/static/dhara_storage/README.md)
-- [dharastorage README](./src/dynamic/dharastorage/README.md)
+- [dhara_storage_dal README](./src/core/dhara_storage_dal/README.md)
+- [dhara_storage README](./src/core/dhara_storage/README.md)
+- [dharastorage README](./src/dharastorage/README.md)
 - [Dhara.Storage README](./src/bindings/Dhara.Storage/README.md)

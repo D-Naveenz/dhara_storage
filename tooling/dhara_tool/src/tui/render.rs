@@ -118,8 +118,46 @@ fn render_dashboard(
         })
         .collect::<Vec<_>>()
         .join("\n");
+    let tool_version = crate::version();
+    let next_revision = state
+        .workspace
+        .next_package_revision(tool_version)
+        .map(|value| value.to_string())
+        .unwrap_or_else(|_| "?".to_owned());
+    let package_version = state.workspace.package_version.as_deref().unwrap_or("—");
+    let revision = state
+        .workspace
+        .package_revision
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "—".to_owned());
+    let release = state
+        .workspace
+        .definitions_release
+        .as_deref()
+        .unwrap_or("—");
+    let definitions = state
+        .workspace
+        .definition_count
+        .map(|value| value.to_string())
+        .unwrap_or_else(|| "—".to_owned());
     let context = format!(
-        "Dhara TUI command hub\n\nQuick actions\n{quick_actions}\n\nCurrent section: {}\nCommands in section: {}\nRepo root: {}\nOutput lines: {}\nRecent history: {}",
+        "Dhara TUI command hub\n\n\
+         Definitions package\n\
+         Path: {}\n\
+         Status: {}\n\
+         Package version: {package_version} (tool: {tool_version}, {})\n\
+         Revision: {revision} (next build: {next_revision})\n\
+         Release: {release}\n\
+         Definitions: {definitions}\n\n\
+         Quick actions\n{quick_actions}\n\n\
+         Current section: {}\n\
+         Commands in section: {}\n\
+         Repo root: {}\n\
+         Output lines: {}\n\
+         Recent history: {}",
+        state.workspace.defs_path.display(),
+        state.workspace.status_label(),
+        state.workspace.version_match_label(tool_version),
         state.current_section(registry).unwrap_or("none"),
         state.commands_for_current_section(registry).len(),
         std::env::current_dir()

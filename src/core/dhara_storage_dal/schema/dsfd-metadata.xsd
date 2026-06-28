@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    targetNamespace="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"
+    elementFormDefault="qualified">
+
+  <xs:element name="dsfd" type="DsfdMetadata"/>
+
+  <xs:complexType name="DsfdMetadata">
+    <xs:sequence>
+      <xs:element name="signature" type="xs:string"/>
+      <xs:element name="packageVersion" type="xs:string"/>
+      <xs:element name="definitionsRelease" type="xs:string"/>
+      <xs:element name="packageRevision" type="xs:unsignedShort"/>
+      <xs:element name="tags" type="xs:unsignedInt"/>
+      <xs:element name="definitionCount" type="xs:unsignedInt"/>
+    </xs:sequence>
+    <xs:attribute name="xmlns" type="xs:anyURI" use="required"/>
+  </xs:complexType>
+</xs:schema>
