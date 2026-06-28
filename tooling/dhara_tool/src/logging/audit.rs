@@ -26,9 +26,8 @@ const AUDIT_TARGET: &str = "dhara_tool::audit";
 #[derive(Debug, Clone)]
 pub struct LoggingOptions {
     pub run_mode: RunMode,
-    pub minimal: bool,
+    pub min: bool,
     pub trace: bool,
-    pub quiet: bool,
     pub logs_dir: PathBuf,
     pub context: ToolContext,
 }
@@ -42,9 +41,8 @@ impl LoggingOptions {
     pub fn from_context(context: &ToolContext) -> Self {
         Self {
             run_mode: context.run_mode,
-            minimal: context.minimal,
+            min: context.min,
             trace: context.trace,
-            quiet: context.quiet,
             logs_dir: resolve_logs_dir(
                 &context.repo_root,
                 context.output_dir.as_deref(),
@@ -77,21 +75,7 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
 
     let (writer, guard) = tracing_appender::non_blocking(file);
 
-    let console_max_level = if options.run_mode == RunMode::Interactive {
-        LevelFilter::ERROR
-    } else if options.minimal {
-        LevelFilter::WARN
-    } else if options.trace {
-        LevelFilter::DEBUG
-    } else {
-        LevelFilter::INFO
-    };
-
-    let file_max_level = if options.trace {
-        LevelFilter::DEBUG
-    } else {
-        LevelFilter::INFO
-    };
+    let (console_max_level, file_max_level) = resolve_log_levels(options.min, options.trace);
 
     let console_layer = fmt::layer()
         .with_target(false)
@@ -133,6 +117,19 @@ fn io_error_from_set_global_default(
     std::io::Error::other(error)
 }
 
+/// Console stays at INFO (level 3). File level depends on `--min` / `--trace`.
+fn resolve_log_levels(min: bool, trace: bool) -> (LevelFilter, LevelFilter) {
+    let console = LevelFilter::INFO;
+    let file = if trace {
+        LevelFilter::DEBUG
+    } else if min {
+        LevelFilter::WARN
+    } else {
+        LevelFilter::INFO
+    };
+    (console, file)
+}
+
 pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
     let version = crate::version();
     let mode = options.run_mode.as_str();
@@ -143,12 +140,11 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
         "dhara_tool {version} started — mode={mode}, workers={workers}"
     );
 
-    let quiet = if options.quiet { "yes" } else { "no" };
-    let minimal = if options.minimal { "yes" } else { "no" };
+    let min = if options.min { "yes" } else { "no" };
     let trace = if options.trace { "yes" } else { "no" };
     debug!(
         target: AUDIT_TARGET,
-        "flags minimal={minimal}, trace={trace}, quiet={quiet}, log={}",
+        "flags min={min}, trace={trace}, log={}",
         log_path.display()
     );
 
@@ -449,8 +445,12 @@ pub fn log_build_progress(update: &TridBuildProgress) {
 mod tests {
     use chrono::NaiveDate;
     use tempfile::tempdir;
+    use tracing_subscriber::filter::LevelFilter;
 
-    use super::{format_duration, log_file_name_for, next_log_session, parse_log_session};
+    use super::{
+        format_duration, log_file_name_for, next_log_session, parse_log_session,
+        resolve_log_levels,
+    };
     use std::time::Duration;
 
     #[test]
@@ -499,5 +499,26 @@ mod tests {
     fn format_duration_scales_units() {
         assert_eq!(format_duration(Duration::from_millis(450)), "450ms");
         assert_eq!(format_duration(Duration::from_secs(65)), "1m5s");
+    }
+
+    #[test]
+    fn default_log_levels_use_info_on_console_and_file() {
+        let (console, file) = resolve_log_levels(false, false);
+        assert_eq!(console, LevelFilter::INFO);
+        assert_eq!(file, LevelFilter::INFO);
+    }
+
+    #[test]
+    fn min_lowers_file_log_to_warn_only() {
+        let (console, file) = resolve_log_levels(true, false);
+        assert_eq!(console, LevelFilter::INFO);
+        assert_eq!(file, LevelFilter::WARN);
+    }
+
+    #[test]
+    fn trace_raises_file_log_to_debug() {
+        let (console, file) = resolve_log_levels(false, true);
+        assert_eq!(console, LevelFilter::INFO);
+        assert_eq!(file, LevelFilter::DEBUG);
     }
 }

@@ -10,10 +10,8 @@ Logs are written for **humans and AI agents**, not log aggregators. Prefer plain
 
 | Mode | When | Console | Command stdout | File log |
 |------|------|---------|----------------|----------|
-| **interactive** | No subcommand in a TTY | Errors only (TUI owns the screen) | Captured in TUI panel | Full audit trail |
-| **direct** | Subcommand present (CI, agents, scripts) | INFO (WARN with `--minimal`, DEBUG with `--trace`) | Structured report printed | Full audit trail |
-
-Use `-q` / `--quiet` in **direct** mode to suppress command stdout while keeping the file log.
+| **direct** | Subcommand present (CI, agents, scripts) | INFO (level 3) | Structured report printed | INFO (level 3); WARN with `--min`; DEBUG with `--trace` |
+| **interactive** | No subcommand in a TTY | INFO (level 3) | Captured in TUI panel | INFO (level 3); same file rules as direct |
 
 ## Worker threads
 
@@ -35,16 +33,19 @@ Session INFO includes `workers={effective}`.
 - Naming: `{date}_dhara_tool.log` (session 0), `{date}_dhara_tool_{n}.log` (session n > 0)
 - Each process invocation allocates the next session file for that day.
 
-## Level policy
+## Log levels (`log` / `tracing` numeric scale)
 
-| Level | Use for |
-|-------|---------|
-| **INFO** | Session open/close, module begin/end, phase finish timings, transform statistics, warnings that affect outcome |
-| **DEBUG** | Phase start timestamps, flags/paths/log file path, per-definition reduce trace (`--trace` only), subprocess commands |
-| **WARN** | Non-fatal issues: skipped steps, verification mismatches, update required |
-| **ERROR** | Failures that stop the current module |
+Error=1, Warn=2, **Info=3**, Debug=4, Trace=5. A configured threshold captures that level and everything more severe.
 
-Default file log level: **INFO**. Use `--minimal` to quiet the console to WARN while keeping INFO in the file log. Use `--trace` for DEBUG on console and file (including per-definition reduce audit lines). `-v` / `--verbose` is a deprecated alias for `--trace`.
+| Mode | Console | File |
+|------|---------|------|
+| **Default** | 3 (INFO) | 3 (INFO) |
+| **`--min` / `-m`** | 3 (INFO) | 2 (WARN) |
+| **`--trace` / `-t`** | 3 (INFO) | 4 (DEBUG) |
+
+Console stays at INFO for now; TUI-specific console policy will change later.
+
+Default file log captures INFO audit lines. Use `--min` when only WARN+ should hit the file. Use `--trace` for DEBUG file detail (per-definition reduce trace, phase starts, flags/paths).
 
 ### INFO vs DEBUG matrix (TrID build)
 
@@ -52,7 +53,7 @@ Default file log level: **INFO**. Use `--minimal` to quiet the console to WARN w
 |----------|------|-------|
 | **Performance** | Phase **finish** with duration (extract, parse, reduce, finalize) | Phase **start** (`phase {name} started`) |
 | **Accuracy (reports)** | `TrID transform — …`; module finish summary | Per-definition reduce trace (`--trace` only) |
-| **Environment** | `mode`, **effective worker count**, module begin args | `minimal`/`trace`/`quiet`, resolved paths, workspace snapshot, **log file path** |
+| **Environment** | `mode`, **effective worker count**, module begin args | `min`/`trace`, resolved paths, workspace snapshot, **log file path** |
 
 **No reduce milestones** — `(N/total) reduce in progress` lines are not emitted at any level.
 
@@ -80,7 +81,7 @@ Do **not** include the log file path on INFO (no self-reference).
 ### Session open detail (DEBUG)
 
 ```
-flags minimal=no, trace=no, quiet=no, log=.../2026-06-27_dhara_tool_1.log
+flags min=no, trace=no, log=.../2026-06-27_dhara_tool_1.log
 ```
 
 Resolved paths, non-default overrides, workspace snapshot.
@@ -143,7 +144,7 @@ Rule of thumb: fewer than ~3 trivial steps and no heavy subprocess loop → comp
 
 ## Console progress (direct mode)
 
-When stderr is a TTY and `--minimal` is not set, long TrID builds emit throttled progress on stderr:
+When stderr is a TTY in direct mode, long TrID builds emit throttled progress on stderr:
 
 ```
 parse: 1234/21692
@@ -188,7 +189,7 @@ Target: `dhara_tool::audit` for all audit events.
 ```rust
 // Session
 info!(target: "dhara_tool::audit", "dhara_tool {version} started — mode={mode}, workers={workers}");
-debug!(target: "dhara_tool::audit", "flags minimal={minimal}, trace={trace}, quiet={quiet}, log={path}");
+debug!(target: "dhara_tool::audit", "flags min={min}, trace={trace}, log={path}");
 
 // Phase timing
 debug!(target: "dhara_tool::audit", "phase {name} started");

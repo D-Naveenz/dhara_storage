@@ -408,9 +408,8 @@ mod tests {
         ToolContext {
             repo_root: PathBuf::from("."),
             run_mode: crate::command::RunMode::Direct,
-            minimal: false,
+            min: false,
             trace: false,
-            quiet: false,
             workers: 4,
             package_dir: None,
             output_dir: None,

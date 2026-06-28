@@ -204,9 +204,8 @@ mod tests {
         ToolContext {
             repo_root: root.to_path_buf(),
             run_mode: RunMode::Direct,
-            minimal: false,
+            min: false,
             trace: false,
-            quiet: false,
             workers: 4,
             package_dir: None,
             output_dir: None,

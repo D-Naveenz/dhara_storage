@@ -17,7 +17,6 @@ const AUDIT_TARGET: &str = "dhara_tool::audit";
 
 #[derive(Debug, Clone, Copy)]
 pub struct ProgressSettings {
-    pub minimal: bool,
     pub trace: bool,
     pub run_mode: RunMode,
 }
@@ -25,14 +24,13 @@ pub struct ProgressSettings {
 impl ProgressSettings {
     pub fn from_context(context: &ToolContext) -> Self {
         Self {
-            minimal: context.minimal,
             trace: context.trace,
             run_mode: context.run_mode,
         }
     }
 
     pub fn console_enabled(self) -> bool {
-        self.run_mode == RunMode::Direct && !self.minimal && std::io::stderr().is_terminal()
+        self.run_mode == RunMode::Direct && std::io::stderr().is_terminal()
     }
 }
 
@@ -45,7 +43,6 @@ fn settings() -> ProgressSettings {
         .get()
         .copied()
         .unwrap_or(ProgressSettings {
-            minimal: false,
             trace: false,
             run_mode: RunMode::Direct,
         })

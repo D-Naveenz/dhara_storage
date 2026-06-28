@@ -212,9 +212,8 @@ impl RunMode {
 pub struct ToolContext {
     pub repo_root: PathBuf,
     pub run_mode: RunMode,
-    pub minimal: bool,
+    pub min: bool,
     pub trace: bool,
-    pub quiet: bool,
     pub workers: usize,
     pub package_dir: Option<PathBuf>,
     pub output_dir: Option<PathBuf>,
@@ -274,7 +273,7 @@ impl CommandResult {
     }
 
     pub fn print(&self, context: &ToolContext) {
-        if context.run_mode != RunMode::Direct || context.quiet {
+        if context.run_mode != RunMode::Direct {
             return;
         }
 
@@ -316,9 +315,8 @@ mod tests {
         ToolContext {
             repo_root: PathBuf::from("."),
             run_mode: RunMode::Direct,
-            minimal: false,
+            min: false,
             trace: false,
-            quiet: false,
             workers: 4,
             package_dir: None,
             output_dir: None,

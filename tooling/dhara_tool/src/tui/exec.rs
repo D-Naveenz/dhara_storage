@@ -105,9 +105,8 @@ mod tests {
         let context = ToolContext {
             repo_root: ".".into(),
             run_mode: RunMode::Interactive,
-            minimal: false,
+            min: false,
             trace: false,
-            quiet: false,
             workers: 4,
             package_dir: None,
             output_dir: None,

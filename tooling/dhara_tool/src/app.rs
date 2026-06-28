@@ -42,9 +42,8 @@ pub fn run() -> Result<()> {
     let context = ToolContext {
         repo_root,
         run_mode,
-        minimal: cli.minimal,
+        min: cli.min,
         trace: cli.trace,
-        quiet: cli.quiet,
         workers: effective_workers,
         package_dir: cli.package_dir,
         output_dir: cli.output_dir,
@@ -167,8 +166,7 @@ fn normalize_repo_root(path: PathBuf) -> Result<PathBuf> {
 #[derive(Debug, Clone)]
 struct RootArgs {
     repo_root: Option<PathBuf>,
-    quiet: bool,
-    minimal: bool,
+    min: bool,
     trace: bool,
     workers: Option<usize>,
     package_dir: Option<PathBuf>,
@@ -182,8 +180,7 @@ struct RootArgs {
 fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
     let mut parsed = RootArgs {
         repo_root: None,
-        quiet: false,
-        minimal: false,
+        min: false,
         trace: false,
         workers: None,
         package_dir: None,
@@ -206,15 +203,11 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.show_version = true;
                 index += 1;
             }
-            "-q" | "--quiet" => {
-                parsed.quiet = true;
+            "-m" | "--min" => {
+                parsed.min = true;
                 index += 1;
             }
-            "--minimal" => {
-                parsed.minimal = true;
-                index += 1;
-            }
-            "--trace" => {
+            "-t" | "--trace" => {
                 parsed.trace = true;
                 index += 1;
             }
@@ -226,10 +219,6 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                         .with_context(|| format!("'{value}' is not a valid worker count"))?,
                 );
                 index += 2;
-            }
-            "-v" | "--verbose" => {
-                parsed.trace = true;
-                index += 1;
             }
             "--repo-root" => {
                 parsed.repo_root = Some(PathBuf::from(next_value(&args, index, "--repo-root")?));
@@ -301,11 +290,9 @@ fn help_text(registry: &CommandRegistry) -> String {
            --package-dir <path>\n\
            --output-dir <path>\n\
            --logs-dir <path>\n\
-           -q, --quiet     suppress command stdout in direct mode\n\
-           --minimal       quieter console output and no live progress\n\
-           --trace         verbose audit trail (full reduce detail in log file)\n\
+           -m, --min         file log WARN only (console stays INFO)\n\
+           -t, --trace       file log DEBUG (console stays INFO)\n\
            -w, --workers <n>  cap Rayon worker threads (default 4; env TOOL_MAX_WORKERS)\n\
-           -v, --verbose   deprecated alias for --trace\n\
            -h, --help\n\
            --version\n\n\
          {}",
@@ -393,38 +380,36 @@ mod tests {
     }
 
     #[test]
-    fn minimal_flag_parsed() {
+    fn min_flag_parsed() {
         let parsed = parse_root_args(vec![
             "defs".to_owned(),
             "inspect".to_owned(),
-            "--minimal".to_owned(),
+            "--min".to_owned(),
         ])
         .unwrap();
-        assert!(parsed.minimal);
+        assert!(parsed.min);
     }
 
     #[test]
-    fn verbose_flag_aliases_trace() {
+    fn min_short_flag_parsed() {
         let parsed = parse_root_args(vec![
-            "-v".to_owned(),
+            "-m".to_owned(),
             "defs".to_owned(),
             "inspect".to_owned(),
         ])
         .unwrap();
+        assert!(parsed.min);
+    }
 
+    #[test]
+    fn trace_short_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "-t".to_owned(),
+            "defs".to_owned(),
+            "inspect-trid-xml".to_owned(),
+        ])
+        .unwrap();
         assert!(parsed.trace);
-        assert_eq!(parsed.command, vec!["defs", "inspect"]);
-    }
-
-    #[test]
-    fn quiet_flag_parsed() {
-        let parsed = parse_root_args(vec![
-            "defs".to_owned(),
-            "inspect".to_owned(),
-            "--quiet".to_owned(),
-        ])
-        .unwrap();
-        assert!(parsed.quiet);
     }
 
     #[test]

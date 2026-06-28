@@ -34,7 +34,7 @@ Audit logs follow [docs/logging.md](../docs/logging.md). Each run writes to
 - subprocess milestones (verify, package, release)
 - failures with exit codes and timestamps
 
-Default logging is informative on the console and in the file log. Use `--minimal` to quiet the console, `--trace` for full reduce audit detail, and `-q` to suppress command stdout in direct mode.
+Default logging uses INFO (level 3) on console and file. Use `-m` / `--min` for WARN-only file logs, or `-t` / `--trace` for DEBUG file detail (including per-definition reduce trace).
 
 Parallel TrID parse/reduce uses Rayon with a capped global thread pool. Cap workers with `-w` / `--workers` (default 4) or `TOOL_MAX_WORKERS`; `RAYON_NUM_THREADS` is ignored.
 
