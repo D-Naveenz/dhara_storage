@@ -710,17 +710,17 @@ mod tests {
     #[test]
     fn sync_cargo_toml_updates_workspace_version() {
         let updated = sync_cargo_toml(
-            "[workspace]\n[workspace.package]\nversion = \"0.1.0\"\n[workspace.dependencies]\ndhara_storage_dal = { version = \"0.1.0\", path = \"src/static/dhara_storage_dal\" }\ndhara_storage = { version = \"0.1.0\", path = \"src/static/dhara_storage\" }\n",
+            "[workspace]\n[workspace.package]\nversion = \"0.1.0\"\n[workspace.dependencies]\ndhara_storage_dal = { version = \"0.1.0\", path = \"src/core/dhara_storage_dal\" }\ndhara_storage = { version = \"0.1.0\", path = \"src/core/dhara_storage\" }\n",
             "0.2.0",
         )
         .unwrap();
 
         assert!(updated.contains("version = \"0.2.0\""));
         assert!(updated.contains(
-            "dhara_storage_dal = { version = \"0.2.0\", path = \"src/static/dhara_storage_dal\" }"
+            "dhara_storage_dal = { version = \"0.2.0\", path = \"src/core/dhara_storage_dal\" }"
         ));
         assert!(updated.contains(
-            "dhara_storage = { version = \"0.2.0\", path = \"src/static/dhara_storage\" }"
+            "dhara_storage = { version = \"0.2.0\", path = \"src/core/dhara_storage\" }"
         ));
     }
 

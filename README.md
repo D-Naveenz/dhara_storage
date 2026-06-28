@@ -16,9 +16,9 @@ shared release metadata. The current publish target is `0.6.0`.
 
 | Project                            | Purpose                                                                                               |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `src/static/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `tooling/output/filedefs.dat` |
-| `src/static/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
-| `src/dynamic/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
+| `src/core/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `tooling/output/filedefs.dat` |
+| `src/core/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
+| `src/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
 | `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |
 | `tooling/dhara_tool`           | Operator CLI for verification, packaging, release, and defs workflows                                 |
 
@@ -105,7 +105,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 
 ## Docs
 
-- [dhara_storage_dal README](./src/static/dhara_storage_dal/README.md)
-- [dhara_storage README](./src/static/dhara_storage/README.md)
-- [dharastorage README](./src/dynamic/dharastorage/README.md)
+- [dhara_storage_dal README](./src/core/dhara_storage_dal/README.md)
+- [dhara_storage README](./src/core/dhara_storage/README.md)
+- [dharastorage README](./src/dharastorage/README.md)
 - [Dhara.Storage README](./src/bindings/Dhara.Storage/README.md)

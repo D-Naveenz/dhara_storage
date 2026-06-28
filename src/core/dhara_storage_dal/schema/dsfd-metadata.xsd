@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <xs:schema
     xmlns:xs="http://www.w3.org/2001/XMLSchema"
-    targetNamespace="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/static/dhara_storage_dal/schema/dsfd-metadata.xsd"
+    targetNamespace="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"
     elementFormDefault="qualified">
 
   <xs:element name="dsfd" type="DsfdMetadata"/>

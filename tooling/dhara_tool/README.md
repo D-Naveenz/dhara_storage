@@ -43,4 +43,4 @@ Repository-specific command logic lives in `tooling/dhara_tool/src/ops`. The TUI
 - `tooling/output/` — generated artifacts (`filedefs.dat`, NuGet packages, logs)
 - `tooling/artifacts/` — gitignored staging for native staging, smoke builds, and local NuGet config during verification
 
-The canonical runtime `filedefs.dat` lives at `tooling/output/filedefs.dat` and is embedded into `dhara_storage_dal` at compile time. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`.
+The canonical runtime `filedefs.dat` lives at `tooling/output/filedefs.dat` and is embedded into `dhara_storage_dal` at compile time. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`. See [docs/filedefs-dat.md](../docs/filedefs-dat.md) for the DSFD on-disk format.

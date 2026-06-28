@@ -293,8 +293,8 @@ mod tests {
 [workspace.package]
 version = "{cargo_version}"
 [workspace.dependencies]
-dhara_storage_dal = {{ version = "{cargo_version}", path = "src/static/dhara_storage_dal" }}
-dhara_storage = {{ version = "{cargo_version}", path = "src/static/dhara_storage" }}
+dhara_storage_dal = {{ version = "{cargo_version}", path = "src/core/dhara_storage_dal" }}
+dhara_storage = {{ version = "{cargo_version}", path = "src/core/dhara_storage" }}
 "#
             ),
         )

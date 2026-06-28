@@ -78,4 +78,4 @@ Applications can install any standard `tracing` subscriber before calling into t
 ## Related Docs
 
 - Workspace overview: <https://github.com/D-Naveenz/dhara_storage>
-- Native ABI wrapper: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/dynamic/dharastorage>
+- Native ABI wrapper: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/dharastorage>

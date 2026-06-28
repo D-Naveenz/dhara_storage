@@ -61,5 +61,5 @@ invocation receives a UTF-8 JSON record with:
 
 ## Related Docs
 
-- Core runtime: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/static/dhara_storage>
+- Core runtime: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage>
 - .NET wrapper: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/Dhara.Storage>
