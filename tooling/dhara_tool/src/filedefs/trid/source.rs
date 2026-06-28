@@ -68,6 +68,7 @@ fn load_from_directory(
         total: Some(total_files),
         current_item: None,
         stats: TridBuildStats::default(),
+        trace_detail: None,
     });
 
     let definitions = if total_files <= PARALLEL_PARSE_THRESHOLD {
@@ -87,6 +88,7 @@ fn load_from_directory(
             parsed_count: total_files,
             ..TridBuildStats::default()
         },
+        trace_detail: None,
     });
 
     debug!(
@@ -143,6 +145,7 @@ fn report_parse_progress(progress: &mut dyn FnMut(TridBuildProgress), done: usiz
             parsed_count: done,
             ..TridBuildStats::default()
         },
+        trace_detail: None,
     });
 }
 
@@ -167,8 +170,18 @@ fn load_from_archive(
         total: None,
         current_item: Some(source.display().to_string()),
         stats: TridBuildStats::default(),
+        trace_detail: None,
     });
     let extraction_dir = extract_archive(source)?;
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ExtractArchive,
+        message: "extracted archive".to_owned(),
+        current: 1,
+        total: Some(1),
+        current_item: None,
+        stats: TridBuildStats::default(),
+        trace_detail: None,
+    });
     load_from_directory(extraction_dir.path(), progress)
 }
 

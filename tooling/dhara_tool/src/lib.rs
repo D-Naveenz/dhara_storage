@@ -13,13 +13,15 @@ pub mod repo_config;
 pub mod subprocess;
 pub mod tui;
 pub mod verify;
+pub mod workers;
 pub mod workspace;
 
 pub use filedefs::{
-    BuilderError, DefsCommand, DefsPaths, LoadedPackage, PackageSummary, SyncEmbeddedOutcome,
-    SyncEmbeddedStatus, TridBuildProgress, TridBuildStage, TridTransformReport,
-    execute as execute_defs, inspect_package, load_bundled_package, load_package,
-    normalize_package, packages_match, print_defs_help, sync_embedded_package, write_package,
+    BuilderError, DefsCommand, DefsPaths, LoadedPackage, PackageSummary, ReduceTraceDetail,
+    SyncEmbeddedOutcome, SyncEmbeddedStatus, TridBuildProgress, TridBuildStage,
+    TridTransformReport, execute as execute_defs, inspect_package, load_bundled_package,
+    load_package, normalize_package, packages_match, print_defs_help, sync_embedded_package,
+    write_package,
 };
 pub use logging::{
     LoggingOptions, LoggingRuntime, current_log_path, ensure_logging, format_command_args,

@@ -15,6 +15,20 @@ Logs are written for **humans and AI agents**, not log aggregators. Prefer plain
 
 Use `-q` / `--quiet` in **direct** mode to suppress command stdout while keeping the file log.
 
+## Worker threads
+
+Parallel TrID parse/reduce uses a global Rayon pool initialized once at startup:
+
+| Source | Precedence |
+|--------|------------|
+| `-w` / `--workers <n>` | Highest |
+| `TOOL_MAX_WORKERS` env | Second |
+| Default | 4 |
+
+Effective threads = `min(available_parallelism - 1, configured cap)` (minimum 1). `RAYON_NUM_THREADS` is **ignored**.
+
+Session INFO includes `workers={effective}`.
+
 ## Log files
 
 - Directory: `tooling/output/logs/`
@@ -25,21 +39,31 @@ Use `-q` / `--quiet` in **direct** mode to suppress command stdout while keeping
 
 | Level | Use for |
 |-------|---------|
-| **INFO** | Session open/close, module begin/end, final statistics, warnings that affect outcome |
-| **DEBUG** | Step detail: subprocess commands, per-object progress, file paths, intermediate decisions |
+| **INFO** | Session open/close, module begin/end, phase finish timings, transform statistics, warnings that affect outcome |
+| **DEBUG** | Phase start timestamps, flags/paths/log file path, per-definition reduce trace (`--trace` only), subprocess commands |
 | **WARN** | Non-fatal issues: skipped steps, verification mismatches, update required |
 | **ERROR** | Failures that stop the current module |
 
-Default file log level: **INFO**. Use `--minimal` to quiet the console to WARN while keeping INFO in the file log. Use `--trace` for DEBUG on console and file (including per-item reduce audit lines). `-v` / `--verbose` is a deprecated alias for `--trace`.
+Default file log level: **INFO**. Use `--minimal` to quiet the console to WARN while keeping INFO in the file log. Use `--trace` for DEBUG on console and file (including per-definition reduce audit lines). `-v` / `--verbose` is a deprecated alias for `--trace`.
+
+### INFO vs DEBUG matrix (TrID build)
+
+| Category | INFO | DEBUG |
+|----------|------|-------|
+| **Performance** | Phase **finish** with duration (extract, parse, reduce, finalize) | Phase **start** (`phase {name} started`) |
+| **Accuracy (reports)** | `TrID transform — …`; module finish summary | Per-definition reduce trace (`--trace` only) |
+| **Environment** | `mode`, **effective worker count**, module begin args | `minimal`/`trace`/`quiet`, resolved paths, workspace snapshot, **log file path** |
+
+**No reduce milestones** — `(N/total) reduce in progress` lines are not emitted at any level.
 
 ## Session lifecycle
 
 ```mermaid
 flowchart TD
   start[Process start] --> init[Initialize logging]
-  init --> sessionOpen["INFO: dhara_tool VERSION started — mode=..., log=..."]
-  sessionOpen --> debugPaths["DEBUG: resolved paths"]
-  debugPaths --> modules[Run one or more modules]
+  init --> sessionOpen["INFO: dhara_tool VERSION started — mode=..., workers=..."]
+  sessionOpen --> debugFlags["DEBUG: flags, log path, resolved paths"]
+  debugFlags --> modules[Run one or more modules]
   modules --> sessionClose["INFO: dhara_tool exiting CODE — summary"]
 ```
 
@@ -48,14 +72,18 @@ flowchart TD
 One line with what matters to orient a reader:
 
 ```
-dhara_tool 0.7.0 started — mode=direct, minimal=no, trace=no, quiet=no, log=.../2026-06-27_dhara_tool_1.log
+dhara_tool 0.7.0 started — mode=direct, workers=4
 ```
 
-Do **not** emit a separate “logging initialized” event.
+Do **not** include the log file path on INFO (no self-reference).
 
 ### Session open detail (DEBUG)
 
-Resolved paths, non-default overrides, full argv when useful.
+```
+flags minimal=no, trace=no, quiet=no, log=.../2026-06-27_dhara_tool_1.log
+```
+
+Resolved paths, non-default overrides, workspace snapshot.
 
 ### Session close (INFO)
 
@@ -82,21 +110,24 @@ flowchart TD
 
 ### Long-running modules
 
-Full begin / DEBUG steps / end with stats and duration:
+Full begin / phase timings / end with stats and duration:
 
 - TrID build, inspect, and sync-embedded (`defs.build-trid-xml`, `defs.inspect-trid-xml`, `defs.sync-embedded`)
 - CI verification (`verify.ci`)
 - NuGet pack/verify/publish (`package.*`)
 - Release (`release.run`)
 
-Example:
+Example (default mode):
 
 ```
-INFO  defs.inspect-trid-xml started — defaults
-DEBUG stage: load source — Loading source .../triddefs_xml.7z
-DEBUG (1000/21692) reduce in progress
+INFO  dhara_tool 0.7.0 started — mode=direct, workers=4
+INFO  defs.build-trid-xml started — defaults
+INFO  phase extract finished in 15.4s — extracted archive
+INFO  phase parse finished in 21.7s — parsed 21692 definitions
+INFO  phase reduce finished in 2.1s — kept 5500 of 21692
+INFO  phase finalize finished in 12ms — trimmed to 5500 definitions
 INFO  TrID transform — parsed=21692, kept=5500, mime_corrected=258, ...
-INFO  defs.inspect-trid-xml finished in 4m12s at ... — Final Kept=5500, Total Parsed=21692, ...
+INFO  defs.build-trid-xml finished in 43.7s at ... — Output=..., Total Parsed=21692, Final Kept=5500
 ```
 
 ### Fast modules
@@ -125,22 +156,26 @@ Interactive TUI mode does not show this progress yet (see `tui/exec.rs` TODO).
 
 | Stage | Default file log | `--trace` file log |
 |-------|------------------|-------------------|
-| LoadSource, ExtractArchive, FinalizePackage | INFO stage line | same |
-| ParseDefinitions | INFO start + INFO end with count/duration only | same (never per-file) |
-| ReduceDefinitions | INFO start + milestone every 1,000 + INFO end + transform stats | per-item accept/reject lines |
+| ExtractArchive | INFO phase finish only | DEBUG phase start + INFO finish |
+| ParseDefinitions | INFO phase finish only (count/duration) | same (never per-file) |
+| ReduceDefinitions | INFO phase finish + transform stats | DEBUG one line per definition (accept/reject + MIME detail) |
+| FinalizePackage | INFO phase finish only | DEBUG phase start + INFO finish |
 
 Console progress uses the same counters; file logs omit per-file parse lines entirely.
 
-## Progress events (object + outcome)
+## Progress events (reduce trace, `--trace` only)
 
 During TrID reduction with `--trace`, log **one fact per line** at DEBUG:
 
 ```
-(5511/21692) BrainSuite Surface File Format — rejected: extension floodgate
+(5511/21692) BrainSuite Surface File Format — rejected: invalid MIME: application/x-foo
+(4200/21692) Obscure Format — rejected: extension floodgate
+(8000/21692) Empty Sig Type — rejected: no patterns
 (1768/21692) PNG Image — accepted
+(1234/21692) JPEG Image — accepted: fix: (application/octet-stream -> image/jpeg)
 ```
 
-Do **not** repeat cumulative counters on every line (`accepted=1768 mime_corrected=51 ...`). Emit aggregate stats **once** at module end:
+Do **not** repeat cumulative counters on every line. Emit aggregate stats **once** after reduce:
 
 ```
 TrID transform — parsed=21692, kept=5500, mime_corrected=258, mime_rejected=343, ext_rejected=14764, sig_rejected=0, trimmed=1085
@@ -152,13 +187,15 @@ Target: `dhara_tool::audit` for all audit events.
 
 ```rust
 // Session
-info!(target: "dhara_tool::audit", "dhara_tool {version} started — mode={mode}, minimal={minimal}, trace={trace}, log={path}");
+info!(target: "dhara_tool::audit", "dhara_tool {version} started — mode={mode}, workers={workers}");
+debug!(target: "dhara_tool::audit", "flags minimal={minimal}, trace={trace}, quiet={quiet}, log={path}");
+
+// Phase timing
+debug!(target: "dhara_tool::audit", "phase {name} started");
+info!(target: "dhara_tool::audit", "phase {name} finished in {duration} — {summary}");
 
 // Module begin (long)
 info!(target: "dhara_tool::audit", "{module_id} started — {config_summary}");
-
-// Module step
-debug!(target: "dhara_tool::audit", "{message}");
 
 // Module end
 info!(target: "dhara_tool::audit", "{module_id} finished in {duration} at {timestamp} — {summary}");
@@ -173,51 +210,31 @@ Language-agnostic equivalent: `{timestamp} {LEVEL} {scope}: {single human-readab
 
 | Bad | Good |
 |-----|------|
-| `build progress stage=ReduceDefinitions current=5511 accepted=1768 mime_corrected=51 ...` | `(5511/21692) BrainSuite Surface File Format — rejected: extension floodgate` |
-| Separate `logging initialized` + `command started` + `starting defs command` | One session open + one module begin |
-| Duplicate report fields logged in runner and command layer | Stats once at module end; stdout report separate |
+| Duplicate stage lines from runner + defs callback | Single audit entry point in `defs/mod.rs` |
+| `build progress stage=ReduceDefinitions current=5511 accepted=1768 ...` | `(5511/21692) BrainSuite Surface File Format — rejected: extension floodgate` (trace only) |
+| `(1000/21692) reduce in progress` milestones | Phase finish INFO only |
+| Log path on INFO session line | Log path on DEBUG only |
+| Separate `logging initialized` + `command started` | One session open + one module begin |
 | `--silent` to mean “no TUI” | Automatic `interactive` / `direct` run modes |
-| INFO on every parsed XML file (21k lines) | INFO at parse stage start/end only; console `(n/total)` throttled |
+| INFO on every parsed XML file (21k lines) | INFO at parse phase finish only; console `(n/total)` throttled |
 
 ## Agent checklist
 
 When diagnosing a run from logs alone:
 
 1. Open the latest `tooling/output/logs/{date}_dhara_tool*.log` for today.
-2. Find `dhara_tool ... started` — note mode, minimal, trace, log path.
+2. Find `dhara_tool ... started` — note mode and workers.
 3. Find `{module} started` or `{module} finished` / `failed`.
-4. For TrID work, grep `TrID transform —` for final stats.
+4. For TrID work, grep `phase ` for timings and `TrID transform —` for final stats.
 5. Read `dhara_tool exiting` for exit code and timestamp.
-6. Use DEBUG sections only when INFO summary is insufficient.
+6. Use DEBUG sections only when INFO summary is insufficient (`--trace` for per-definition reduce detail).
 
 Grep hints:
 
 ```
 grep "started —" logfile
+grep "phase " logfile
 grep "finished in" logfile
-grep "failed in" logfile
 grep "TrID transform" logfile
 grep "exiting" logfile
-```
-
-## Before / after example
-
-**Before (avoid):**
-
-```
-INFO dhara_tool::audit: dhara_tool logging initialized log_path=... verbose=0 silent=false interactive=false
-INFO dhara_tool::audit: command started command_id="defs.inspect-trid-xml" command="..." repo_root=... silent=false verbose=0
-INFO dhara_tool::ops::trid: build progress stage=ReduceDefinitions ... accepted=1768 mime_corrected=51 extension_rejected=3626 ...
-```
-
-**After (target):**
-
-```
-INFO dhara_tool::audit: dhara_tool 0.7.0 started — mode=direct, minimal=no, trace=no, quiet=no, log=.../2026-06-27_dhara_tool_2.log
-INFO dhara_tool::audit: defs.inspect-trid-xml started — defaults
-DEBUG dhara_tool::audit: stage: reduce definitions — Reducing validated definitions
-DEBUG dhara_tool::audit: (1000/21692) reduce in progress
-INFO dhara_tool::audit: TrID transform — parsed=21692, kept=5500, ...
-INFO dhara_tool::audit: defs.inspect-trid-xml finished in 4m12s at ... — Final Kept=5500, Total Parsed=21692
-INFO dhara_tool::audit: dhara_tool exiting 0 at ... — completed defs.inspect-trid-xml
 ```

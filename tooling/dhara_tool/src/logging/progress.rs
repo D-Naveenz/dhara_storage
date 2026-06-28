@@ -1,4 +1,5 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
+use std::collections::HashMap;
 use std::io::{IsTerminal, Write};
 use std::sync::Mutex;
 use std::sync::OnceLock;
@@ -8,7 +9,7 @@ use tracing::{debug, info};
 
 use crate::command::{RunMode, ToolContext};
 
-use crate::filedefs::{TridBuildProgress, TridBuildStage};
+use crate::filedefs::{ReduceTraceDetail, TridBuildProgress, TridBuildStage};
 
 static PROGRESS_SETTINGS: OnceLock<ProgressSettings> = OnceLock::new();
 
@@ -52,14 +53,14 @@ fn settings() -> ProgressSettings {
 
 thread_local! {
     static LAST_BUILD_STAGE: Cell<Option<TridBuildStage>> = const { Cell::new(None) };
-    static LAST_BUILD_MILESTONE: Cell<usize> = const { Cell::new(0) };
     static LAST_CONSOLE_UPDATE: Cell<Option<Instant>> = const { Cell::new(None) };
+    static PHASE_STARTS: RefCell<HashMap<TridBuildStage, Instant>> = RefCell::new(HashMap::new());
 }
 
 pub fn reset_build_progress_logging() {
     LAST_BUILD_STAGE.with(|stage| stage.set(None));
-    LAST_BUILD_MILESTONE.with(|milestone| milestone.set(0));
     LAST_CONSOLE_UPDATE.with(|last| last.set(None));
+    PHASE_STARTS.with(|starts| starts.borrow_mut().clear());
 }
 
 static PROGRESS_DISPATCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -138,7 +139,7 @@ fn should_refresh_console(current: usize, total: usize) -> bool {
 
 fn console_stage_label(stage: TridBuildStage) -> Option<&'static str> {
     match stage {
-        TridBuildStage::LoadSource => Some("load"),
+        TridBuildStage::LoadSource => None,
         TridBuildStage::ExtractArchive => Some("extract"),
         TridBuildStage::ParseDefinitions => Some("parse"),
         TridBuildStage::ReduceDefinitions => Some("reduce"),
@@ -147,68 +148,60 @@ fn console_stage_label(stage: TridBuildStage) -> Option<&'static str> {
 }
 
 fn log_audit_progress(update: &TridBuildProgress) {
-    let Some(line) = format_audit_line(update) else {
+    maybe_log_reduce_trace(update);
+    handle_phase_timing(update);
+}
+
+fn maybe_log_reduce_trace(update: &TridBuildProgress) {
+    if !settings().trace {
+        return;
+    }
+    if update.stage != TridBuildStage::ReduceDefinitions {
+        return;
+    }
+    let Some(detail) = &update.trace_detail else {
         return;
     };
-
-    if audit_should_log_at_info(update) {
-        info!(target: AUDIT_TARGET, "{line}");
-    } else if settings().trace {
-        debug!(target: AUDIT_TARGET, "{line}");
-    }
+    let file_type = update.current_item.as_deref().unwrap_or("unknown");
+    let Some(total) = update.total.filter(|total| *total > 0) else {
+        return;
+    };
+    let line = format_reduce_trace_line(update.current, total, file_type, detail);
+    debug!(target: AUDIT_TARGET, "{line}");
 }
 
-fn format_audit_line(update: &TridBuildProgress) -> Option<String> {
-    match update.stage {
-        TridBuildStage::LoadSource => Some(format!("stage: load source — {}", update.message)),
-        TridBuildStage::ExtractArchive => {
-            Some(format!("stage: extract archive — {}", update.message))
+pub fn format_reduce_trace_line(
+    current: usize,
+    total: usize,
+    file_type: &str,
+    detail: &ReduceTraceDetail,
+) -> String {
+    let suffix = match detail {
+        ReduceTraceDetail::RejectedNoPatterns => "rejected: no patterns".to_string(),
+        ReduceTraceDetail::RejectedExtensionFloodgate => {
+            "rejected: extension floodgate".to_string()
         }
-        TridBuildStage::FinalizePackage => {
-            Some(format!("stage: finalize package — {}", update.message))
+        ReduceTraceDetail::RejectedInvalidMime { raw_mime } => {
+            format!("rejected: invalid MIME: {raw_mime}")
         }
-        TridBuildStage::ParseDefinitions => {
-            if update.current == 0 {
-                return Some(format!("stage: parse definitions — {}", update.message));
-            }
-            if update.message.starts_with("Parsed ") {
-                return Some(format!("stage: parse definitions — {}", update.message));
-            }
-            None
+        ReduceTraceDetail::Accepted => "accepted".to_string(),
+        ReduceTraceDetail::AcceptedMimeFix { from, to } => {
+            format!("accepted: fix: ({from} -> {to})")
         }
-        TridBuildStage::ReduceDefinitions => {
-            if update.current == 0 {
-                return Some(format!("stage: reduce definitions — {}", update.message));
-            }
-            let total = update.total?;
-            if settings().trace {
-                let item = update.current_item.as_deref()?;
-                let outcome = humanize_reduce_message(&update.message);
-                return Some(format!("({}/{}) {item} — {outcome}", update.current, total));
-            }
-            if update.current >= total || update.current.is_multiple_of(1_000) {
-                return Some(format!("({}/{}) reduce in progress", update.current, total));
-            }
-            None
-        }
-    }
+    };
+    format!("({current}/{total}) {file_type} — {suffix}")
 }
 
-fn humanize_reduce_message(message: &str) -> &str {
-    match message {
-        "Accepting validated definition" => "accepted",
-        "Rejecting definition without patterns" => "rejected: no patterns",
-        "Rejecting definition by extension floodgate" => "rejected: extension floodgate",
-        "Rejecting definition by MIME validation" => "rejected: invalid MIME",
-        other => other,
+fn handle_phase_timing(update: &TridBuildProgress) {
+    let stage = update.stage;
+    if stage == TridBuildStage::LoadSource {
+        return;
     }
-}
 
-fn audit_should_log_at_info(update: &TridBuildProgress) -> bool {
     let stage_changed = LAST_BUILD_STAGE.with(|last| {
         let previous = last.get();
-        if previous != Some(update.stage) {
-            last.set(Some(update.stage));
+        if previous != Some(stage) {
+            last.set(Some(stage));
             true
         } else {
             false
@@ -216,74 +209,142 @@ fn audit_should_log_at_info(update: &TridBuildProgress) -> bool {
     });
 
     if stage_changed || update.current == 0 {
-        return true;
+        let now = Instant::now();
+        PHASE_STARTS.with(|starts| {
+            starts.borrow_mut().insert(stage, now);
+        });
+        debug!(
+            target: AUDIT_TARGET,
+            "phase {} started",
+            phase_name(stage)
+        );
     }
 
-    if update.stage == TridBuildStage::ParseDefinitions {
-        return update.message.starts_with("Parsed ");
-    }
+    let Some(summary) = phase_finish_summary(update) else {
+        return;
+    };
 
-    if update.stage == TridBuildStage::ReduceDefinitions {
-        let at_total = update
-            .total
-            .is_some_and(|total| total > 0 && update.current == total);
-        let at_milestone = update.current > 0
-            && LAST_BUILD_MILESTONE.with(|last| {
-                let previous = last.get();
-                let milestone = update.current / 1_000;
-                let previous_milestone = previous / 1_000;
-                if milestone > previous_milestone {
-                    last.set(update.current);
-                    true
-                } else {
-                    false
-                }
-            });
-        return at_total || at_milestone;
-    }
+    let duration = PHASE_STARTS.with(|starts| {
+        starts
+            .borrow()
+            .get(&stage)
+            .map(|start| format_phase_duration(start.elapsed()))
+            .unwrap_or_else(|| "0ms".to_owned())
+    });
 
-    true
+    info!(
+        target: AUDIT_TARGET,
+        "phase {} finished in {duration} — {summary}",
+        phase_name(stage)
+    );
+}
+
+fn phase_name(stage: TridBuildStage) -> &'static str {
+    match stage {
+        TridBuildStage::LoadSource => "load",
+        TridBuildStage::ExtractArchive => "extract",
+        TridBuildStage::ParseDefinitions => "parse",
+        TridBuildStage::ReduceDefinitions => "reduce",
+        TridBuildStage::FinalizePackage => "finalize",
+    }
+}
+
+pub fn phase_finish_summary(update: &TridBuildProgress) -> Option<&str> {
+    match update.stage {
+        TridBuildStage::ExtractArchive if update.message.starts_with("extracted") => {
+            Some(update.message.as_str())
+        }
+        TridBuildStage::ParseDefinitions if update.message.starts_with("Parsed ") => {
+            Some(update.message.as_str())
+        }
+        TridBuildStage::ReduceDefinitions if update.message.starts_with("kept ") => {
+            Some(update.message.as_str())
+        }
+        TridBuildStage::FinalizePackage if update.message.starts_with("trimmed ") => {
+            Some(update.message.as_str())
+        }
+        _ => None,
+    }
+}
+
+fn format_phase_duration(duration: Duration) -> String {
+    let secs = duration.as_secs_f64();
+    if secs >= 1.0 {
+        format!("{secs:.1}s")
+    } else {
+        format!("{}ms", duration.as_millis())
+    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{format_audit_line, humanize_reduce_message};
-    use crate::filedefs::{TridBuildProgress, TridBuildStage, TridBuildStats};
+    use super::{format_reduce_trace_line, phase_finish_summary};
+    use crate::filedefs::{ReduceTraceDetail, TridBuildProgress, TridBuildStage, TridBuildStats};
 
     #[test]
-    fn parse_stage_skips_per_file_audit_lines() {
-        assert!(
-            format_audit_line(&TridBuildProgress {
-                stage: TridBuildStage::ParseDefinitions,
-                message: "Parsing XML definition".to_owned(),
-                current: 42,
-                total: Some(100),
-                current_item: Some("sample.trid.xml".to_owned()),
-                stats: TridBuildStats::default(),
-            })
-            .is_none()
+    fn format_reduce_trace_line_rejects_invalid_mime_with_value() {
+        let line = format_reduce_trace_line(
+            5511,
+            21692,
+            "BrainSuite Surface File Format",
+            &ReduceTraceDetail::RejectedInvalidMime {
+                raw_mime: "application/x-foo".to_owned(),
+            },
+        );
+        assert!(line.contains("rejected: invalid MIME: application/x-foo"));
+    }
+
+    #[test]
+    fn format_reduce_trace_line_accepts_without_fix() {
+        let line = format_reduce_trace_line(1768, 21692, "PNG Image", &ReduceTraceDetail::Accepted);
+        assert_eq!(line, "(1768/21692) PNG Image — accepted");
+    }
+
+    #[test]
+    fn format_reduce_trace_line_accepts_with_mime_fix() {
+        let line = format_reduce_trace_line(
+            1234,
+            21692,
+            "JPEG Image",
+            &ReduceTraceDetail::AcceptedMimeFix {
+                from: "application/octet-stream".to_owned(),
+                to: "image/jpeg".to_owned(),
+            },
+        );
+        assert_eq!(
+            line,
+            "(1234/21692) JPEG Image — accepted: fix: (application/octet-stream -> image/jpeg)"
         );
     }
 
     #[test]
-    fn parse_stage_keeps_completion_summary() {
-        let line = format_audit_line(&TridBuildProgress {
+    fn phase_finish_detects_parse_completion() {
+        let update = TridBuildProgress {
             stage: TridBuildStage::ParseDefinitions,
             message: "Parsed 100 definitions in 3.2s".to_owned(),
             current: 100,
             total: Some(100),
             current_item: None,
             stats: TridBuildStats::default(),
-        })
-        .unwrap();
-        assert!(line.contains("Parsed 100 definitions"));
+            trace_detail: None,
+        };
+        assert_eq!(
+            phase_finish_summary(&update),
+            Some("Parsed 100 definitions in 3.2s")
+        );
     }
 
     #[test]
-    fn humanize_reduce_message_maps_known_outcomes() {
-        assert_eq!(
-            humanize_reduce_message("Rejecting definition by extension floodgate"),
-            "rejected: extension floodgate"
-        );
+    fn reduce_milestone_progress_has_no_phase_finish() {
+        let update = TridBuildProgress {
+            stage: TridBuildStage::ReduceDefinitions,
+            message: String::new(),
+            current: 1000,
+            total: Some(21692),
+            current_item: Some("Sample Format".to_owned()),
+            stats: TridBuildStats::default(),
+            trace_detail: Some(ReduceTraceDetail::Accepted),
+        };
+        assert!(phase_finish_summary(&update).is_none());
     }
 }

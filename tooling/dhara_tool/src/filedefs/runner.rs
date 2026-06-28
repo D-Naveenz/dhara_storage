@@ -5,9 +5,7 @@ use crate::filedefs::{
     build_trid_xml_package_with_progress, inspect_package, load_bundled_package, normalize_package,
     packages_match, sync_embedded_package, write_package,
 };
-use crate::logging::{
-    log_build_progress, log_module_step_debug, log_module_step_warn, log_transform_statistics,
-};
+use crate::logging::{log_module_step_debug, log_module_step_warn, log_transform_statistics};
 use crate::output::emit_stdout_line;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,7 +143,6 @@ where
                 ));
             }
             let build = build_trid_xml_package_with_progress(&input, |update| {
-                log_build_progress(&update);
                 progress(update);
             })?;
             log_transform_statistics(&build.report);
@@ -194,7 +191,6 @@ where
                 ));
             }
             let build = build_trid_xml_package_with_progress(&input, |update| {
-                log_build_progress(&update);
                 progress(update);
             })?;
             log_transform_statistics(&build.report);
@@ -261,7 +257,6 @@ where
                 ));
             }
             let outcome = sync_embedded_package(&input, &output, check, |update| {
-                log_build_progress(&update);
                 progress(update);
             })?;
             let (status, exit_code, result) = match outcome.status {

@@ -181,3 +181,20 @@ fn resolve_action(command: DefsCommand, paths: &DefsPaths) -> BuilderAction {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn runner_forwards_progress_without_duplicate_audit_logging() {
+        let source = include_str!("runner.rs");
+        let production = source
+            .lines()
+            .take_while(|line| !line.starts_with("#[cfg(test)]"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !production.contains("log_build_progress("),
+            "runner must forward progress only; audit logging belongs in defs/mod.rs"
+        );
+    }
+}

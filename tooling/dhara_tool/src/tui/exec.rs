@@ -108,6 +108,7 @@ mod tests {
             minimal: false,
             trace: false,
             quiet: false,
+            workers: 4,
             package_dir: None,
             output_dir: None,
             logs_dir: None,

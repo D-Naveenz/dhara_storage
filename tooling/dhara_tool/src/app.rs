@@ -37,12 +37,15 @@ pub fn run() -> Result<()> {
         RunMode::Direct
     };
 
+    let effective_workers = crate::workers::init_global_thread_pool(cli.workers)?;
+
     let context = ToolContext {
         repo_root,
         run_mode,
         minimal: cli.minimal,
         trace: cli.trace,
         quiet: cli.quiet,
+        workers: effective_workers,
         package_dir: cli.package_dir,
         output_dir: cli.output_dir,
         logs_dir: cli.logs_dir,
@@ -167,6 +170,7 @@ struct RootArgs {
     quiet: bool,
     minimal: bool,
     trace: bool,
+    workers: Option<usize>,
     package_dir: Option<PathBuf>,
     output_dir: Option<PathBuf>,
     logs_dir: Option<PathBuf>,
@@ -181,6 +185,7 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
         quiet: false,
         minimal: false,
         trace: false,
+        workers: None,
         package_dir: None,
         output_dir: None,
         logs_dir: None,
@@ -212,6 +217,15 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
             "--trace" => {
                 parsed.trace = true;
                 index += 1;
+            }
+            "-w" | "--workers" => {
+                let value = next_value(&args, index, "--workers")?;
+                parsed.workers = Some(
+                    value
+                        .parse()
+                        .with_context(|| format!("'{value}' is not a valid worker count"))?,
+                );
+                index += 2;
             }
             "-v" | "--verbose" => {
                 parsed.trace = true;
@@ -251,6 +265,15 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.logs_dir = Some(PathBuf::from(token.trim_start_matches("--logs-dir=")));
                 index += 1;
             }
+            _ if token.starts_with("--workers=") => {
+                let value = token.trim_start_matches("--workers=");
+                parsed.workers = Some(
+                    value
+                        .parse()
+                        .with_context(|| format!("'{value}' is not a valid worker count"))?,
+                );
+                index += 1;
+            }
             _ => {
                 parsed.command.push(token.clone());
                 index += 1;
@@ -281,6 +304,7 @@ fn help_text(registry: &CommandRegistry) -> String {
            -q, --quiet     suppress command stdout in direct mode\n\
            --minimal       quieter console output and no live progress\n\
            --trace         verbose audit trail (full reduce detail in log file)\n\
+           -w, --workers <n>  cap Rayon worker threads (default 4; env TOOL_MAX_WORKERS)\n\
            -v, --verbose   deprecated alias for --trace\n\
            -h, --help\n\
            --version\n\n\
@@ -401,6 +425,18 @@ mod tests {
         ])
         .unwrap();
         assert!(parsed.quiet);
+    }
+
+    #[test]
+    fn workers_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "-w".to_owned(),
+            "2".to_owned(),
+            "defs".to_owned(),
+            "inspect".to_owned(),
+        ])
+        .unwrap();
+        assert_eq!(parsed.workers, Some(2));
     }
 
     #[test]

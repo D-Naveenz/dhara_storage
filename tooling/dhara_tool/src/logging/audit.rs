@@ -136,13 +136,19 @@ fn io_error_from_set_global_default(
 pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
     let version = crate::version();
     let mode = options.run_mode.as_str();
-    let quiet = if options.quiet { "yes" } else { "no" };
-    let minimal = if options.minimal { "yes" } else { "no" };
-    let trace = if options.trace { "yes" } else { "no" };
+    let workers = options.context.workers;
 
     info!(
         target: AUDIT_TARGET,
-        "dhara_tool {version} started — mode={mode}, minimal={minimal}, trace={trace}, quiet={quiet}, log={}",
+        "dhara_tool {version} started — mode={mode}, workers={workers}"
+    );
+
+    let quiet = if options.quiet { "yes" } else { "no" };
+    let minimal = if options.minimal { "yes" } else { "no" };
+    let trace = if options.trace { "yes" } else { "no" };
+    debug!(
+        target: AUDIT_TARGET,
+        "flags minimal={minimal}, trace={trace}, quiet={quiet}, log={}",
         log_path.display()
     );
 

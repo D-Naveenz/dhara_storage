@@ -26,7 +26,7 @@ const VALIDATED_TAGS: u32 = 48;
 const TARGET_DEFINITION_COUNT: usize = 5_500;
 
 /// Progress stages emitted while transforming TrID XML into a reduced package.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TridBuildStage {
     /// Reading the source path and deciding how to load it.
     LoadSource,
@@ -38,6 +38,16 @@ pub enum TridBuildStage {
     ReduceDefinitions,
     /// Ordering and trimming the reduced definition set.
     FinalizePackage,
+}
+
+/// Structured reduce outcome for `--trace` audit lines.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReduceTraceDetail {
+    RejectedNoPatterns,
+    RejectedExtensionFloodgate,
+    RejectedInvalidMime { raw_mime: String },
+    Accepted,
+    AcceptedMimeFix { from: String, to: String },
 }
 
 /// A progress update emitted while building a reduced TrID package.
@@ -55,6 +65,8 @@ pub struct TridBuildProgress {
     pub current_item: Option<String>,
     /// Live counters collected while the build is running.
     pub stats: TridBuildStats,
+    /// Per-definition reduce trace detail when applicable.
+    pub trace_detail: Option<ReduceTraceDetail>,
 }
 
 /// Live counters exposed during TrID package building.
@@ -168,14 +180,6 @@ fn build_trid_xml_package_with_report_internal(
     progress: &mut dyn FnMut(TridBuildProgress),
 ) -> Result<TridBuildOutput, BuilderError> {
     debug!(source = %source.display(), "building reduced TrID XML package");
-    progress(TridBuildProgress {
-        stage: TridBuildStage::LoadSource,
-        message: format!("Loading source {}", source.display()),
-        current: 0,
-        total: None,
-        current_item: Some(source.display().to_string()),
-        stats: TridBuildStats::default(),
-    });
     let parsed = source::load_trid_definitions(source, progress)?;
     let definitions_release = load_definitions_release(source)?;
     let mut report = TridTransformReport {
@@ -192,13 +196,50 @@ fn build_trid_xml_package_with_report_internal(
             parsed_count: report.total_parsed,
             ..TridBuildStats::default()
         },
+        trace_detail: None,
     });
 
     let mut survivors = if report.total_parsed <= PARALLEL_REDUCE_THRESHOLD {
         reduce_definitions_sequential(parsed, &mut report, progress)
     } else {
-        reduce_definitions_parallel(parsed, &mut report)
+        reduce_definitions_parallel(parsed, &mut report, progress)
     };
+
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ReduceDefinitions,
+        message: format!("kept {} of {}", survivors.len(), report.total_parsed),
+        current: report.total_parsed,
+        total: Some(report.total_parsed),
+        current_item: None,
+        stats: TridBuildStats {
+            parsed_count: report.total_parsed,
+            accepted_count: survivors.len(),
+            mime_corrected: report.mime_corrected,
+            mime_rejected: report.mime_rejected,
+            extension_rejected: report.extension_rejected,
+            signature_rejected: report.signature_rejected,
+            final_trimmed: report.final_trimmed,
+        },
+        trace_detail: None,
+    });
+
+    progress(TridBuildProgress {
+        stage: TridBuildStage::FinalizePackage,
+        message: String::new(),
+        current: 0,
+        total: Some(survivors.len()),
+        current_item: None,
+        stats: TridBuildStats {
+            parsed_count: report.total_parsed,
+            accepted_count: survivors.len(),
+            mime_corrected: report.mime_corrected,
+            mime_rejected: report.mime_rejected,
+            extension_rejected: report.extension_rejected,
+            signature_rejected: report.signature_rejected,
+            final_trimmed: report.final_trimmed,
+        },
+        trace_detail: None,
+    });
 
     debug!(
         total_parsed = report.total_parsed,
@@ -228,7 +269,7 @@ fn build_trid_xml_package_with_report_internal(
     report.final_kept = survivors.len();
     progress(TridBuildProgress {
         stage: TridBuildStage::FinalizePackage,
-        message: "Finalizing reduced package".to_string(),
+        message: format!("trimmed to {} definitions", report.final_kept),
         current: report.final_kept,
         total: Some(report.final_kept),
         current_item: None,
@@ -241,6 +282,7 @@ fn build_trid_xml_package_with_report_internal(
             signature_rejected: report.signature_rejected,
             final_trimmed: report.final_trimmed,
         },
+        trace_detail: None,
     });
     debug!(
         final_kept = report.final_kept,
@@ -312,37 +354,60 @@ pub(crate) struct ParsedTridDefinition {
 
 const PARALLEL_REDUCE_THRESHOLD: usize = 8;
 
-enum ReduceOutcome {
-    SignatureRejected,
-    ExtensionRejected,
-    MimeRejected,
-    Accepted(SluiceCandidate),
+struct ReduceDecision {
+    survivor: Option<SluiceCandidate>,
+    file_type: String,
+    trace: ReduceTraceDetail,
 }
 
-fn reduce_definition(
+fn evaluate_definition(
     definition: ParsedTridDefinition,
     catalog: &mime::MimeCatalog,
     seeds: &sluice::ExtensionSeeds,
-) -> (ReduceOutcome, bool) {
+    mime_cache: &mut HashMap<String, Option<mime::MimeResolution>>,
+) -> ReduceDecision {
+    let file_type = definition.file_type.clone();
+
     if definition.signature.patterns.is_empty() {
-        return (ReduceOutcome::SignatureRejected, false);
+        return ReduceDecision {
+            survivor: None,
+            file_type,
+            trace: ReduceTraceDetail::RejectedNoPatterns,
+        };
     }
 
     let Some(level) = seeds.best_level(&definition.extensions) else {
-        return (ReduceOutcome::ExtensionRejected, false);
+        return ReduceDecision {
+            survivor: None,
+            file_type,
+            trace: ReduceTraceDetail::RejectedExtensionFloodgate,
+        };
     };
 
     let raw_mime = definition.mime_type.clone();
-    let mut mime_cache = HashMap::new();
-    let Some(mime) = catalog.canonicalize(&raw_mime, &mut mime_cache) else {
-        return (ReduceOutcome::MimeRejected, false);
+    let Some(mime) = catalog.canonicalize(&raw_mime, mime_cache) else {
+        return ReduceDecision {
+            survivor: None,
+            file_type,
+            trace: ReduceTraceDetail::RejectedInvalidMime { raw_mime },
+        };
     };
 
-    let mime_corrected = raw_mime.trim().to_ascii_lowercase() != mime.canonical;
-    (
-        ReduceOutcome::Accepted(SluiceCandidate::from_definition(definition, level, &mime)),
-        mime_corrected,
-    )
+    let normalized_raw = raw_mime.trim().to_ascii_lowercase();
+    let trace = if normalized_raw != mime.canonical {
+        ReduceTraceDetail::AcceptedMimeFix {
+            from: raw_mime,
+            to: mime.canonical.clone(),
+        }
+    } else {
+        ReduceTraceDetail::Accepted
+    };
+
+    ReduceDecision {
+        survivor: Some(SluiceCandidate::from_definition(definition, level, &mime)),
+        file_type,
+        trace,
+    }
 }
 
 fn reduce_definitions_sequential(
@@ -357,52 +422,17 @@ fn reduce_definitions_sequential(
     let total = report.total_parsed;
 
     for (index, definition) in parsed.into_iter().enumerate() {
-        let (outcome, mime_corrected) =
-            reduce_definition_with_cache(definition, catalog, seeds, &mut mime_cache);
-        apply_reduce_outcome(
-            outcome,
-            mime_corrected,
-            index + 1,
-            total,
-            report,
-            &mut survivors,
-            progress,
-            true,
-        );
+        let decision = evaluate_definition(definition, catalog, seeds, &mut mime_cache);
+        apply_reduce_decision(decision, index + 1, total, report, &mut survivors, progress);
     }
 
     survivors
 }
 
-fn reduce_definition_with_cache(
-    definition: ParsedTridDefinition,
-    catalog: &mime::MimeCatalog,
-    seeds: &sluice::ExtensionSeeds,
-    mime_cache: &mut HashMap<String, Option<mime::MimeResolution>>,
-) -> (ReduceOutcome, bool) {
-    if definition.signature.patterns.is_empty() {
-        return (ReduceOutcome::SignatureRejected, false);
-    }
-
-    let Some(level) = seeds.best_level(&definition.extensions) else {
-        return (ReduceOutcome::ExtensionRejected, false);
-    };
-
-    let raw_mime = definition.mime_type.clone();
-    let Some(mime) = catalog.canonicalize(&raw_mime, mime_cache) else {
-        return (ReduceOutcome::MimeRejected, false);
-    };
-
-    let mime_corrected = raw_mime.trim().to_ascii_lowercase() != mime.canonical;
-    (
-        ReduceOutcome::Accepted(SluiceCandidate::from_definition(definition, level, &mime)),
-        mime_corrected,
-    )
-}
-
 fn reduce_definitions_parallel(
     parsed: Vec<ParsedTridDefinition>,
     report: &mut TridTransformReport,
+    _progress: &mut dyn FnMut(TridBuildProgress),
 ) -> Vec<SluiceCandidate> {
     let catalog = mime_catalog();
     let seeds = extension_seeds();
@@ -414,84 +444,47 @@ fn reduce_definitions_parallel(
     let mime_corrected = AtomicUsize::new(0);
     let accepted_count = AtomicUsize::new(0);
 
-    let outcomes: Vec<(ReduceOutcome, bool)> = parsed
+    let outcomes: Vec<ReduceDecision> = parsed
         .into_par_iter()
         .map(|definition| {
-            let file_type = definition.file_type.clone();
-            let (outcome, corrected) = reduce_definition(definition, catalog, seeds);
+            let mut mime_cache = HashMap::new();
+            let decision = evaluate_definition(definition, catalog, seeds, &mut mime_cache);
             let done = completed.fetch_add(1, Ordering::Relaxed) + 1;
 
-            match &outcome {
-                ReduceOutcome::SignatureRejected => {
+            match &decision.trace {
+                ReduceTraceDetail::RejectedNoPatterns => {
                     signature_rejected.fetch_add(1, Ordering::Relaxed);
-                    emit_parallel_reduce_progress(
-                        done,
-                        total,
-                        Some(&file_type),
-                        "Rejecting definition without patterns",
-                        &ParallelReduceCounters {
-                            signature_rejected: signature_rejected.load(Ordering::Relaxed),
-                            extension_rejected: extension_rejected.load(Ordering::Relaxed),
-                            mime_rejected: mime_rejected.load(Ordering::Relaxed),
-                            mime_corrected: mime_corrected.load(Ordering::Relaxed),
-                            accepted_count: accepted_count.load(Ordering::Relaxed),
-                        },
-                    );
                 }
-                ReduceOutcome::ExtensionRejected => {
+                ReduceTraceDetail::RejectedExtensionFloodgate => {
                     extension_rejected.fetch_add(1, Ordering::Relaxed);
-                    emit_parallel_reduce_progress(
-                        done,
-                        total,
-                        Some(&file_type),
-                        "Rejecting definition by extension floodgate",
-                        &ParallelReduceCounters {
-                            signature_rejected: signature_rejected.load(Ordering::Relaxed),
-                            extension_rejected: extension_rejected.load(Ordering::Relaxed),
-                            mime_rejected: mime_rejected.load(Ordering::Relaxed),
-                            mime_corrected: mime_corrected.load(Ordering::Relaxed),
-                            accepted_count: accepted_count.load(Ordering::Relaxed),
-                        },
-                    );
                 }
-                ReduceOutcome::MimeRejected => {
+                ReduceTraceDetail::RejectedInvalidMime { .. } => {
                     mime_rejected.fetch_add(1, Ordering::Relaxed);
-                    emit_parallel_reduce_progress(
-                        done,
-                        total,
-                        Some(&file_type),
-                        "Rejecting definition by MIME validation",
-                        &ParallelReduceCounters {
-                            signature_rejected: signature_rejected.load(Ordering::Relaxed),
-                            extension_rejected: extension_rejected.load(Ordering::Relaxed),
-                            mime_rejected: mime_rejected.load(Ordering::Relaxed),
-                            mime_corrected: mime_corrected.load(Ordering::Relaxed),
-                            accepted_count: accepted_count.load(Ordering::Relaxed),
-                        },
-                    );
                 }
-                ReduceOutcome::Accepted(_) => {
-                    if corrected {
-                        mime_corrected.fetch_add(1, Ordering::Relaxed);
-                    }
+                ReduceTraceDetail::Accepted => {
                     accepted_count.fetch_add(1, Ordering::Relaxed);
-                    emit_parallel_reduce_progress(
-                        done,
-                        total,
-                        Some(&file_type),
-                        "Accepting validated definition",
-                        &ParallelReduceCounters {
-                            signature_rejected: signature_rejected.load(Ordering::Relaxed),
-                            extension_rejected: extension_rejected.load(Ordering::Relaxed),
-                            mime_rejected: mime_rejected.load(Ordering::Relaxed),
-                            mime_corrected: mime_corrected.load(Ordering::Relaxed),
-                            accepted_count: accepted_count.load(Ordering::Relaxed),
-                        },
-                    );
+                }
+                ReduceTraceDetail::AcceptedMimeFix { .. } => {
+                    mime_corrected.fetch_add(1, Ordering::Relaxed);
+                    accepted_count.fetch_add(1, Ordering::Relaxed);
                 }
             }
 
-            (outcome, corrected)
+            emit_reduce_trace_progress(
+                done,
+                total,
+                &decision.file_type,
+                decision.trace.clone(),
+                &ParallelReduceCounters {
+                    signature_rejected: signature_rejected.load(Ordering::Relaxed),
+                    extension_rejected: extension_rejected.load(Ordering::Relaxed),
+                    mime_rejected: mime_rejected.load(Ordering::Relaxed),
+                    mime_corrected: mime_corrected.load(Ordering::Relaxed),
+                    accepted_count: accepted_count.load(Ordering::Relaxed),
+                },
+            );
+
+            decision
         })
         .collect();
 
@@ -502,10 +495,7 @@ fn reduce_definitions_parallel(
 
     outcomes
         .into_iter()
-        .filter_map(|(outcome, _)| match outcome {
-            ReduceOutcome::Accepted(candidate) => Some(candidate),
-            _ => None,
-        })
+        .filter_map(|decision| decision.survivor)
         .collect()
 }
 
@@ -517,19 +507,19 @@ struct ParallelReduceCounters {
     accepted_count: usize,
 }
 
-fn emit_parallel_reduce_progress(
+fn emit_reduce_trace_progress(
     current: usize,
     total: usize,
-    current_item: Option<&str>,
-    message: &str,
+    file_type: &str,
+    trace: ReduceTraceDetail,
     counters: &ParallelReduceCounters,
 ) {
     crate::logging::emit_trid_progress(TridBuildProgress {
         stage: TridBuildStage::ReduceDefinitions,
-        message: message.to_string(),
+        message: String::new(),
         current,
         total: Some(total),
-        current_item: current_item.map(str::to_owned),
+        current_item: Some(file_type.to_owned()),
         stats: TridBuildStats {
             parsed_count: total,
             accepted_count: counters.accepted_count,
@@ -539,67 +529,58 @@ fn emit_parallel_reduce_progress(
             signature_rejected: counters.signature_rejected,
             final_trimmed: 0,
         },
+        trace_detail: Some(trace),
     });
 }
 
-#[allow(clippy::too_many_arguments)]
-fn apply_reduce_outcome(
-    outcome: ReduceOutcome,
-    mime_corrected: bool,
+fn apply_reduce_decision(
+    decision: ReduceDecision,
     current: usize,
     total: usize,
     report: &mut TridTransformReport,
     survivors: &mut Vec<SluiceCandidate>,
     progress: &mut dyn FnMut(TridBuildProgress),
-    emit_item_progress: bool,
 ) {
-    let (message, current_item) = match outcome {
-        ReduceOutcome::SignatureRejected => {
+    match &decision.trace {
+        ReduceTraceDetail::RejectedNoPatterns => {
             report.signature_rejected += 1;
-            ("Rejecting definition without patterns".to_string(), None)
         }
-        ReduceOutcome::ExtensionRejected => {
+        ReduceTraceDetail::RejectedExtensionFloodgate => {
             report.extension_rejected += 1;
-            (
-                "Rejecting definition by extension floodgate".to_string(),
-                None,
-            )
         }
-        ReduceOutcome::MimeRejected => {
+        ReduceTraceDetail::RejectedInvalidMime { .. } => {
             report.mime_rejected += 1;
-            ("Rejecting definition by MIME validation".to_string(), None)
         }
-        ReduceOutcome::Accepted(candidate) => {
-            if mime_corrected {
-                report.mime_corrected += 1;
+        ReduceTraceDetail::Accepted => {
+            if let Some(candidate) = decision.survivor {
+                survivors.push(candidate);
             }
-            let current_item = candidate.definition.file_type.clone();
-            survivors.push(candidate);
-            (
-                "Accepting validated definition".to_string(),
-                Some(current_item),
-            )
         }
-    };
-
-    if emit_item_progress {
-        progress(TridBuildProgress {
-            stage: TridBuildStage::ReduceDefinitions,
-            message,
-            current,
-            total: Some(total),
-            current_item,
-            stats: TridBuildStats {
-                parsed_count: total,
-                accepted_count: survivors.len(),
-                mime_corrected: report.mime_corrected,
-                mime_rejected: report.mime_rejected,
-                extension_rejected: report.extension_rejected,
-                signature_rejected: report.signature_rejected,
-                final_trimmed: report.final_trimmed,
-            },
-        });
+        ReduceTraceDetail::AcceptedMimeFix { .. } => {
+            report.mime_corrected += 1;
+            if let Some(candidate) = decision.survivor {
+                survivors.push(candidate);
+            }
+        }
     }
+
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ReduceDefinitions,
+        message: String::new(),
+        current,
+        total: Some(total),
+        current_item: Some(decision.file_type),
+        stats: TridBuildStats {
+            parsed_count: total,
+            accepted_count: survivors.len(),
+            mime_corrected: report.mime_corrected,
+            mime_rejected: report.mime_rejected,
+            extension_rejected: report.extension_rejected,
+            signature_rejected: report.signature_rejected,
+            final_trimmed: report.final_trimmed,
+        },
+        trace_detail: Some(decision.trace),
+    });
 }
 
 fn candidate_to_record(candidate: SluiceCandidate) -> DefinitionRecord {

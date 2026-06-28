@@ -11,7 +11,7 @@ use tracing::debug;
 use crate::workspace::record_package_written;
 
 pub use crate::filedefs::trid::{
-    TridBuildProgress, TridBuildStage, TridBuildStats, TridTransformReport,
+    ReduceTraceDetail, TridBuildProgress, TridBuildStage, TridBuildStats, TridTransformReport,
     build_trid_xml_package_with_progress,
 };
 
