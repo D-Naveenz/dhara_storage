@@ -18,7 +18,7 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 
 ## Local Commands
 
-- Full local check (fmt, clippy, tests, dotnet): `cargo run -p dhara_tool -- verify ci`
+- Full local check (fmt, clippy, doc, tests, dotnet): `./tooling/scripts/verify-local.ps1` (or `.sh`)
 - Verify NuGet package shape: `cargo run -p dhara_tool -- verify package`
 - Sync shared config into manifests: `cargo run -p dhara_tool -- config sync`
 

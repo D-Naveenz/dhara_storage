@@ -105,7 +105,7 @@ fn render_dashboard(
     state: &AppState,
     registry: &CommandRegistry,
 ) {
-    let quick_actions = ["verify ci", "verify package", "config show", "version bump"]
+    let quick_actions = ["verify package", "config show", "version bump", "release run"]
         .iter()
         .enumerate()
         .map(|(index, label)| {
@@ -324,12 +324,12 @@ mod tests {
             summary: "Verification commands",
         });
         registry.add_command(CommandSpec {
-            id: "verify.ci",
-            path: &["verify", "ci"],
-            summary: "Verify CI",
+            id: "verify.package",
+            path: &["verify", "package"],
+            summary: "Verify package",
             args_summary: "",
             section: "verify",
-            ui: CommandUi::empty("Run CI"),
+            ui: CommandUi::empty("Verify package"),
             handler: Arc::new(noop),
         });
         registry
@@ -378,6 +378,6 @@ mod tests {
         let text = buffer_text(&terminal);
         assert!(text.contains("Dhara Tool"));
         assert!(text.contains("Command Form"));
-        assert!(text.contains("verify ci"));
+        assert!(text.contains("verify package"));
     }
 }

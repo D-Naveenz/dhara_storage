@@ -7,7 +7,6 @@ pub mod native_rids;
 pub mod nuget;
 pub mod output;
 pub mod paths;
-pub mod process;
 pub mod registry;
 pub mod release;
 pub mod repo_config;
@@ -32,8 +31,7 @@ pub use logging::{
     log_session_end, log_transform_statistics, summarize_command_result,
 };
 pub use nuget::{
-    PackageOptions, merge_native_stages, pack as pack_package, publish as publish_package,
-    stage_native_for_host,
+    PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host,
 };
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,

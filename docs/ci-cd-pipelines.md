@@ -1,6 +1,6 @@
 # CI/CD Pipeline Flow
 
-Human-readable map of [`.github/workflows/pipeline.yml`](../.github/workflows/pipeline.yml) and where `dhara_tool` is used.
+Human-readable map of [`.github/workflows/pipeline.yml`](../.github/workflows/pipeline.yml), [`tooling/scripts/`](../tooling/scripts/), and where `dhara_tool` is used.
 
 ## Triggers
 
@@ -38,12 +38,12 @@ flowchart TB
 |------|--------|
 | `cargo fmt`, `clippy`, `cargo doc` | Workflow (`quality` job) |
 | `cargo test`, `dotnet test` (Windows only) | Workflow (`platform-*` jobs) |
-| `package stage-native` | `dhara_tool` (`--profile ci`) |
+| `package stage-native` | `dhara_tool` via staging scripts (`--profile ci`) |
 | Merge native stages | `tooling/scripts/merge-native.ps1` / `.sh` |
-| `verify package` | `dhara_tool` |
-| `release run` | `dhara_tool` with `--prepacked-nuget` on CD |
+| `verify package` | `dhara_tool` via `verify-package.ps1` |
+| `release run` | `dhara_tool` via `release-run-windows.ps1` with `--prepacked-nuget` on CD |
 
-Local developers still use `cargo run -p dhara_tool -- verify ci` for an all-in-one check. GitHub Actions does **not** call `verify ci`.
+Local developers use [`verify-local.ps1`](../tooling/scripts/verify-local.ps1) / [`.sh`](../tooling/scripts/verify-local.sh) for CI parity. GitHub Actions does **not** invoke a combined verify command in the tool.
 
 ## PR jobs
 
@@ -56,14 +56,14 @@ Local developers still use `cargo run -p dhara_tool -- verify ci` for an all-in-
 
 - Rust tests: `dhara_storage` (all-features), `dhara_storage_dal`, `dharastorage`
 - `dotnet test` on **Windows only**
-- `cargo build -p dhara_tool --profile ci` then `package stage-native`
+- Stage natives via `stage-native-windows.ps1` or `stage-native-{linux,macos}.sh`
 - Upload `native-stage-{os}` artifact
 
 ### `publish-readiness` (windows)
 
 1. Download per-OS native artifacts
 2. `merge-native.ps1` → `tooling/artifacts/native-stage`
-3. `verify package --native-stage …`
+3. `verify-package.ps1` → `verify package --native-stage …`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention)
 
 ## CD job: `publish`
@@ -72,9 +72,8 @@ Runs on `workflow_dispatch` or `push` to `main` when non-doc paths changed.
 
 1. Download PR CI artifacts for `${{ github.sha }}` via `dawidd6/action-download-artifact`
 2. Fail if artifacts missing (squash merges need a follow-up policy)
-3. `cargo build -p dhara_tool --profile ci`
-4. `release run --native-stage … --prepacked-nuget …` (no rebuild, no re-verify)
-5. `cargo-release` + `nuget push` inside the tool
+3. `release-run-windows.ps1` with `--prepacked-nuget` (no rebuild, no re-verify)
+4. `cargo-release` + `nuget push` inside the tool
 
 **Dispatch inputs:** `dry_run`, `publish_cargo`, `publish_nuget`, `verify_package` (optional full verify on dry-run).
 
@@ -86,9 +85,12 @@ Root [`Cargo.toml`](../Cargo.toml) defines `[profile.ci]` (release without LTO) 
 
 | Script | Role |
 |--------|------|
-| [`tooling/scripts/merge-native.ps1`](../tooling/scripts/merge-native.ps1) | Merge `runtimes/**` trees (Windows CI) |
-| [`tooling/scripts/merge-native.sh`](../tooling/scripts/merge-native.sh) | Same for Linux/macOS locally |
-| [`tooling/scripts/stage-native-windows.ps1`](../tooling/scripts/stage-native-windows.ps1) | vcvars + `dhara_tool package stage-native` |
+| [`verify-local.ps1`](../tooling/scripts/verify-local.ps1) / [`.sh`](../tooling/scripts/verify-local.sh) | Local CI parity: fmt, clippy, doc, Rust tests, dotnet test |
+| [`merge-native.ps1`](../tooling/scripts/merge-native.ps1) / [`.sh`](../tooling/scripts/merge-native.sh) | Merge `runtimes/**` trees |
+| [`stage-native-windows.ps1`](../tooling/scripts/stage-native-windows.ps1) | vcvars + `package stage-native` |
+| [`stage-native-linux.sh`](../tooling/scripts/stage-native-linux.sh) / [`stage-native-macos.sh`](../tooling/scripts/stage-native-macos.sh) | Build ci-profile tool + `package stage-native` |
+| [`verify-package.ps1`](../tooling/scripts/verify-package.ps1) | Build ci-profile tool + `verify package` |
+| [`release-run-windows.ps1`](../tooling/scripts/release-run-windows.ps1) | vcvars + `release run` with dispatch flags |
 
 ## Related docs
 

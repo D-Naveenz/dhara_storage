@@ -212,7 +212,6 @@ pub fn is_long_running_module(command_id: &str) -> bool {
         "defs.build-trid-xml"
             | "defs.inspect-trid-xml"
             | "defs.sync-embedded"
-            | "verify.ci"
             | "verify.package"
             | "package.pack"
             | "package.publish"

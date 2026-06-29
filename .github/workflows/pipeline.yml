@@ -150,11 +150,8 @@ jobs:
           cargo test -p dhara_storage_dal
           cargo test -p dharastorage
 
-      - name: Build dhara_tool (ci profile)
-        run: cargo build -p dhara_tool --profile ci
-
       - name: Stage native assets
-        run: ./target/ci/dhara_tool package stage-native
+        run: ./tooling/scripts/stage-native-linux.sh
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -187,11 +184,8 @@ jobs:
           cargo test -p dhara_storage_dal
           cargo test -p dharastorage
 
-      - name: Build dhara_tool (ci profile)
-        run: cargo build -p dhara_tool --profile ci
-
       - name: Stage native assets
-        run: ./target/ci/dhara_tool package stage-native
+        run: ./tooling/scripts/stage-native-macos.sh
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -240,14 +234,9 @@ jobs:
           tooling/artifacts/native-inputs/native-stage-linux
           tooling/artifacts/native-inputs/native-stage-macos
 
-      - name: Build dhara_tool (ci profile)
-        run: cargo build -p dhara_tool --profile ci
-
       - name: Verify package
-        run: >
-          ./target/ci/dhara_tool.exe verify package
-          --configuration Release
-          --native-stage tooling/artifacts/native-stage
+        shell: pwsh
+        run: ./tooling/scripts/verify-package.ps1 -NativeStage tooling/artifacts/native-stage
 
       - name: Write release metadata
         shell: pwsh
@@ -377,36 +366,22 @@ jobs:
           }
           "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
 
-      - name: Build dhara_tool (ci profile)
-        run: cargo build -p dhara_tool --profile ci
-
       - name: Publish DAL, runtime, and NuGet
         shell: pwsh
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          $toolArgs = @(
-            "release", "run",
-            "--native-stage", "tooling/artifacts/native-stage",
-            "--prepacked-nuget", "${{ steps.nupkg.outputs.path }}"
+          $scriptArgs = @(
+            '-PrepackedNuget', '${{ steps.nupkg.outputs.path }}'
           )
-
           if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ inputs.dry_run }}" -eq "true") { $toolArgs += "--dry-run" }
-            if ("${{ inputs.publish_cargo }}" -ne "true") { $toolArgs += "--skip-cargo" }
-            if ("${{ inputs.publish_nuget }}" -ne "true") { $toolArgs += "--skip-nuget" }
-            if ("${{ inputs.verify_package }}" -eq "true") { $toolArgs += "--verify-package" }
+            if ("${{ inputs.dry_run }}" -eq "true") { $scriptArgs += '-DryRun' }
+            if ("${{ inputs.publish_cargo }}" -ne "true") { $scriptArgs += '-SkipCargo' }
+            if ("${{ inputs.publish_nuget }}" -ne "true") { $scriptArgs += '-SkipNuget' }
+            if ("${{ inputs.verify_package }}" -eq "true") { $scriptArgs += '-VerifyPackage' }
           }
-
-          $vsInstall = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
-          if ([string]::IsNullOrWhiteSpace($vsInstall)) {
-            throw "Visual Studio with x64 and ARM64 MSVC build tools was not found."
-          }
-          $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
-          $command = "call `"$vcvars`" x64_arm64 && target\ci\dhara_tool.exe " + ($toolArgs -join " ")
-          & cmd.exe /d /c $command
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ./tooling/scripts/release-run-windows.ps1 @scriptArgs
 
       - name: Upload NuGet artifacts
         if: always()

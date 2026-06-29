@@ -6,8 +6,7 @@ use clap::{ArgAction, Parser, ValueEnum};
 use crate::command::{CommandResult, ToolContext};
 use crate::filedefs::{DefsCommand, execute as execute_defs, print_defs_help};
 use crate::nuget::{
-    PackageOptions, merge_native_stages, pack as pack_package, publish as publish_package,
-    stage_native_for_host,
+    PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host,
 };
 use crate::release::run as run_release;
 use crate::repo_config::{
@@ -43,14 +42,6 @@ struct VersionSetArgs {
 struct VersionBumpArgs {
     #[arg(long)]
     part: PartArg,
-}
-
-#[derive(Debug, Parser)]
-struct MergeNativeArgs {
-    #[arg(long)]
-    output: PathBuf,
-    #[arg(long, required = true)]
-    input: Vec<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -343,31 +334,6 @@ pub(crate) fn defs_sync_embedded(context: &ToolContext, args: &[String]) -> Resu
     )
 }
 
-pub(crate) fn verify_release_config_command(
-    context: &ToolContext,
-    args: &[String],
-) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("verify release-config", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    super::verify::verify_release_config(&context.repo_root)
-}
-
-pub(crate) fn verify_ci_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("verify ci", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    let config = current_config(context)?;
-    super::verify::verify_ci(&context.repo_root, &config)
-}
-
-pub(crate) fn verify_docs_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("verify docs", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    super::verify::verify_docs(&context.repo_root)
-}
-
 pub(crate) fn verify_package_command(
     context: &ToolContext,
     args: &[String],
@@ -414,36 +380,11 @@ pub(crate) fn package_stage_native_command(
     )
 }
 
-pub(crate) fn package_merge_native_command(
-    _context: &ToolContext,
-    args: &[String],
-) -> Result<CommandResult> {
-    let Some(args) = parse_args::<MergeNativeArgs>("package merge-native", args)? else {
-        return Ok(CommandResult::success());
-    };
-    merge_native_stages(&args.output, &args.input)
-}
-
 pub(crate) fn package_publish_command(
     context: &ToolContext,
     args: &[String],
 ) -> Result<CommandResult> {
     let Some(args) = parse_args::<PublishArgs>("package publish", args)? else {
-        return Ok(CommandResult::success());
-    };
-    let config = current_config(context)?;
-    publish_package(
-        &context.repo_root,
-        &config,
-        &publish_options(args, context)?,
-    )
-}
-
-pub(crate) fn release_publish_command(
-    context: &ToolContext,
-    args: &[String],
-) -> Result<CommandResult> {
-    let Some(args) = parse_args::<PublishArgs>("release publish", args)? else {
         return Ok(CommandResult::success());
     };
     let config = current_config(context)?;

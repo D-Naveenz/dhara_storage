@@ -354,57 +354,6 @@ pub fn stage_native_for_host(
     )))
 }
 
-/// Merges `runtimes/**` trees from multiple native-stage directories into `output`.
-pub fn merge_native_stages(output: &Path, inputs: &[PathBuf]) -> Result<CommandResult> {
-    reset_directory(output)?;
-    for input in inputs {
-        let runtimes = input.join("runtimes");
-        if !runtimes.exists() {
-            bail!(
-                "native stage input '{}' is missing a runtimes directory",
-                input.display()
-            );
-        }
-        copy_runtimes_tree(&runtimes, &output.join("runtimes"))?;
-    }
-    Ok(CommandResult::with_message(format!(
-        "Merged native stages into {}",
-        output.display()
-    )))
-}
-
-fn copy_runtimes_tree(source: &Path, destination: &Path) -> Result<()> {
-    if !source.exists() {
-        return Ok(());
-    }
-    for entry in
-        fs::read_dir(source).with_context(|| format!("failed to read {}", source.display()))?
-    {
-        let entry =
-            entry.with_context(|| format!("failed to read entry under {}", source.display()))?;
-        let file_type = entry
-            .file_type()
-            .with_context(|| format!("failed to read file type for {}", entry.path().display()))?;
-        let target = destination.join(entry.file_name());
-        if file_type.is_dir() {
-            copy_runtimes_tree(&entry.path(), &target)?;
-        } else if file_type.is_file() {
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent)
-                    .with_context(|| format!("failed to create {}", parent.display()))?;
-            }
-            fs::copy(entry.path(), &target).with_context(|| {
-                format!(
-                    "failed to copy '{}' to '{}'",
-                    entry.path().display(),
-                    target.display()
-                )
-            })?;
-        }
-    }
-    Ok(())
-}
-
 fn inspect_package_contents(package_path: &Path, config: &DharaRepoConfig) -> Result<()> {
     let entries = inspect_package_entries(package_path)?;
     debug!(

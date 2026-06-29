@@ -69,7 +69,7 @@ var bytes = await file.ReadBytesAsync();
 Tooling:
 
 ```powershell
-cargo run -p dhara_tool -- verify ci
+./tooling/scripts/verify-local.ps1
 cargo run -p dhara_tool -- verify package
 cargo run -p dhara_tool -- release run --dry-run
 ```
