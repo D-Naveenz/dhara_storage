@@ -390,7 +390,7 @@ fn ui_for_command(
             supports_cancel: false,
         },
         "defs.sync-embedded" => CommandUi {
-            description: "Refresh the runtime filedefs.dat package at tooling/output from the builder source.",
+            description: "Refresh the runtime filedefs.dat package in dhara_storage_dal/resources from the builder source.",
             fields: vec![
                 optional_path(
                     "input",

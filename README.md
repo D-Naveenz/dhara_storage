@@ -10,13 +10,13 @@ debounced watching, a FlatBuffers-backed definitions data layer, and a managed .
 the native core.
 
 Rust crates and the `Dhara.Storage` NuGet package are versioned together from
-shared release metadata. The current publish target is `0.7.0`.
+shared release metadata. The current publish target is `0.7.1`.
 
 ## Workspace
 
 | Project                            | Purpose                                                                                               |
 | ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `src/core/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `tooling/output/filedefs.dat` |
+| `src/core/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `src/core/dhara_storage_dal/resources/filedefs.dat` |
 | `src/core/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
 | `src/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
 | `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |
@@ -37,7 +37,7 @@ Rust runtime:
 
 ```toml
 [dependencies]
-dhara_storage = "0.7.0"
+dhara_storage = "0.7.1"
 ```
 
 ```rust
@@ -51,7 +51,7 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 .NET wrapper:
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.7.0
+dotnet add package Dhara.Storage --version 0.7.1
 ```
 
 ```csharp

@@ -29,7 +29,7 @@ Session INFO includes `workers={effective}`.
 
 ## Log files
 
-- Directory: `tooling/output/logs/`
+- Directory: `tooling/logs/`
 - Naming: `{date}_dhara_tool.log` (session 0), `{date}_dhara_tool_{n}.log` (session n > 0)
 - Each process invocation allocates the next session file for that day.
 
@@ -73,7 +73,7 @@ flowchart TD
 One line with what matters to orient a reader:
 
 ```
-dhara_tool 0.7.0 started — mode=direct, workers=4
+dhara_tool 0.7.1 started — mode=direct, workers=4
 ```
 
 Do **not** include the log file path on INFO (no self-reference).
@@ -121,7 +121,7 @@ Full begin / phase timings / end with stats and duration:
 Example (default mode):
 
 ```
-INFO  dhara_tool 0.7.0 started — mode=direct, workers=4
+INFO  dhara_tool 0.7.1 started — mode=direct, workers=4
 INFO  defs.build-trid-xml started — defaults
 INFO  phase extract finished in 15.4s — extracted archive
 INFO  phase parse finished in 21.7s — parsed 21692 definitions
@@ -223,7 +223,7 @@ Language-agnostic equivalent: `{timestamp} {LEVEL} {scope}: {single human-readab
 
 When diagnosing a run from logs alone:
 
-1. Open the latest `tooling/output/logs/{date}_dhara_tool*.log` for today.
+1. Open the latest `tooling/logs/{date}_dhara_tool*.log` for today.
 2. Find `dhara_tool ... started` — note mode and workers.
 3. Find `{module} started` or `{module} finished` / `failed`.
 4. For TrID work, grep `phase ` for timings and `TrID transform —` for final stats.

@@ -93,7 +93,8 @@ impl AppState {
         Self::with_workspace(
             label,
             WorkspaceSnapshot {
-                defs_path: Path::new("tooling/output/filedefs.dat").to_path_buf(),
+                defs_path: Path::new("src/core/dhara_storage_dal/resources/filedefs.dat")
+                    .to_path_buf(),
                 defs_status: crate::workspace::DefsPackageStatus::Missing,
                 package_revision: None,
                 definitions_release: None,

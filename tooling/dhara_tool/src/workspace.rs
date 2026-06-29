@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 use crate::command::ToolContext;
-use crate::paths::resolve_output_dir;
+use crate::paths::resolve_defs_output_dir;
 
 use dhara_storage_dal::DefinitionPackage;
 
@@ -65,7 +65,7 @@ struct WorkspaceState {
 static WORKSPACE: OnceLock<Mutex<WorkspaceState>> = OnceLock::new();
 
 fn defs_path_for_context(context: &ToolContext) -> PathBuf {
-    resolve_output_dir(&context.repo_root, context.output_dir.as_deref()).join("filedefs.dat")
+    resolve_defs_output_dir(&context.repo_root, context.output_dir.as_deref()).join("filedefs.dat")
 }
 
 fn analyze_defs_package(defs_path: &Path) -> WorkspaceSnapshot {

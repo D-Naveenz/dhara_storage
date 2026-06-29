@@ -25,7 +25,7 @@ Dhara TUI (**interactive** mode). Explicit subcommands use **direct** mode (no T
 ## Logging
 
 Audit logs follow [docs/logging.md](../docs/logging.md). Each run writes to
-`tooling/output/logs/{date}_dhara_tool[_N].log` with session-scoped files.
+`tooling/logs/{date}_dhara_tool[_N].log` with session-scoped files.
 
 `dhara_tool` emits human-readable audit lines for:
 
@@ -42,7 +42,9 @@ Source is organized by purpose under `tooling/dhara_tool/src/` (`filedefs/`, `lo
 
 ## Output layout
 
-- `tooling/output/` — generated artifacts (`filedefs.dat`, NuGet packages, logs)
+- `src/core/dhara_storage_dal/resources/` — embedded `filedefs.dat` built by defs commands
+- `tooling/output/` — NuGet packages and other operator artifacts
+- `tooling/logs/` — operator audit logs
 - `tooling/artifacts/` — gitignored staging for native staging, smoke builds, and local NuGet config during verification
 
-The canonical runtime `filedefs.dat` lives at `tooling/output/filedefs.dat` and is embedded into `dhara_storage_dal` at compile time. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`. See [docs/filedefs-dat.md](../docs/filedefs-dat.md) for the DSFD on-disk format.
+The embedded runtime `filedefs.dat` is compiled into `dhara_storage_dal` via `include_bytes!`. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`. See [docs/filedefs-dat.md](../docs/filedefs-dat.md) for the DSFD on-disk format.

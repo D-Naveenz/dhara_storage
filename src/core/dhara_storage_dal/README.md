@@ -10,8 +10,8 @@ types, and the serializer/deserializer shared by `dhara_storage` and
 For the full on-disk format specification, see
 [`docs/filedefs-dat.md`](../../../docs/filedefs-dat.md).
 
-The runtime `filedefs.dat` package lives at `tooling/output/filedefs.dat` and is
-embedded into this crate at compile time. Refresh it with:
+The runtime `filedefs.dat` package lives at `resources/filedefs.dat` in this crate and is
+embedded at compile time via `include_bytes!`. Refresh it with:
 
 ```powershell
 cargo run -p dhara_tool -- defs sync-embedded
