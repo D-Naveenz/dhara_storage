@@ -24,6 +24,8 @@ pub struct ReleaseOptions {
     pub publish_cargo: bool,
     pub publish_nuget: bool,
     pub native_stage_override: Option<PathBuf>,
+    pub prepacked_nuget: Option<PathBuf>,
+    pub verify_package_on_dry_run: bool,
 }
 
 pub fn run(
@@ -66,7 +68,28 @@ pub fn run(
         output_dir: options.output_dir.clone(),
         execute_publish: false,
         native_stage_override: options.native_stage_override.clone(),
+        prepacked_nuget_override: options.prepacked_nuget.clone(),
     };
+
+    if let Some(_prepacked) = options.prepacked_nuget.clone() {
+        if options.dry_run {
+            if options.verify_package_on_dry_run {
+                nuget::verify(repo_root, config, &package_options)?;
+            }
+            return Ok(CommandResult::with_message(if options.publish_cargo {
+                "Cargo and NuGet release dry run completed using pre-packed NuGet artifact."
+            } else {
+                "NuGet release dry run completed using pre-packed NuGet artifact."
+            }));
+        }
+
+        nuget::publish_packed(repo_root, config, &package_options)?;
+        return Ok(CommandResult::with_message(if options.publish_cargo {
+            "Cargo and NuGet release completed successfully."
+        } else {
+            "NuGet release completed successfully. Cargo release was skipped."
+        }));
+    }
 
     if options.dry_run {
         nuget::publish(repo_root, config, &package_options)?;

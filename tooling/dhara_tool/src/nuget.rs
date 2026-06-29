@@ -25,6 +25,7 @@ pub struct PackageOptions {
     pub output_dir: Option<PathBuf>,
     pub execute_publish: bool,
     pub native_stage_override: Option<PathBuf>,
+    pub prepacked_nuget_override: Option<PathBuf>,
 }
 
 pub fn pack(
@@ -228,9 +229,13 @@ pub fn publish_packed(
     let api_key = secret_from_env(repo_root, &api_key_env)?;
 
     let output_root = output_root(repo_root, options.output_dir.as_ref())?;
-    let package_path = output_root
-        .join("nuget")
-        .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
+    let package_path = if let Some(path) = options.prepacked_nuget_override.as_ref() {
+        path.clone()
+    } else {
+        output_root
+            .join("nuget")
+            .join(format!("{}.{}.nupkg", config.nuget.package_id, version))
+    };
     if !package_path.exists() {
         bail!("NuGet package does not exist: {}", package_path.display());
     }

@@ -82,7 +82,7 @@ Each `DefinitionRecord` contains:
 
 | Field | XML element | Meaning |
 |-------|-------------|---------|
-| `package_version` | `packageVersion` | `dhara_tool` semver used to build the file |
+| `package_version` | `packageVersion` | `dhara_storage_dal` semver (DSFD packaging authority) |
 | `definitions_release` | `definitionsRelease` | ISO `YYYY-MM-DD` date of the upstream dataset |
 
 The payload section does not use a FlatBuffers `file_identifier`. Section boundaries
@@ -128,21 +128,25 @@ payload:
 
 ## `packageRevision` semantics
 
-`packageRevision` is a **per-tool-version build counter**, not a global lifetime
+`packageRevision` is a **per-packaging-version build counter**, not a global lifetime
 counter. `dhara_tool` assigns it when building from TrID sources.
 
-| Existing `filedefs.dat` | `packageVersion` vs current tool | Next revision |
+| Existing `filedefs.dat` | `packageVersion` vs current DAL | Next revision |
 |-------------------------|----------------------------------|---------------|
 | Missing or invalid | — | `1` |
-| Present | matches current tool version | `existing + 1` |
-| Present | differs from current tool version | `1` |
+| Present | matches current DAL version | `existing + 1` |
+| Present | differs from current DAL version | `1` |
 
-Example: three rebuilds at tool `0.6.0` produce revisions `1`, `2`, `3`. After a
+`packageVersion` is provenance metadata only. A differing label alone does not mean the
+embedded payload is stale — `defs sync-embedded` compares definition content and
+`definitionsRelease`, not version strings.
+
+Example: three rebuilds at DAL `0.6.0` produce revisions `1`, `2`, `3`. After a DAL
 version bump to `0.7.1`, the next build starts again at `1`.
 
 At startup, `dhara_tool` reads the canonical output path, caches revision and version
 for logging and the TUI dashboard, and updates the cache after each successful write.
-See [`tooling/dhara_tool/src/ops/workspace.rs`](../tooling/dhara_tool/src/ops/workspace.rs).
+See [`tooling/dhara_tool/src/workspace.rs`](../tooling/dhara_tool/src/workspace.rs).
 
 ## `tags` field
 

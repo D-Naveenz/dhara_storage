@@ -60,3 +60,8 @@ pub use workspace::{
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
+
+/// Semver stamped into DSFD `packageVersion` metadata (DAL packaging authority).
+pub fn defs_package_version() -> &'static str {
+    dhara_storage_dal::PACKAGE_VERSION
+}

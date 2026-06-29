@@ -101,6 +101,10 @@ pub(crate) struct ReleaseRunArgs {
     skip_nuget: bool,
     #[arg(long)]
     native_stage: Option<PathBuf>,
+    #[arg(long)]
+    prepacked_nuget: Option<PathBuf>,
+    #[arg(long, action = ArgAction::SetTrue)]
+    verify_package: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -167,6 +171,7 @@ fn package_options(args: PackageArgs, context: &ToolContext) -> PackageOptions {
         output_dir: context.output_dir.clone(),
         execute_publish: false,
         native_stage_override: args.native_stage,
+        prepacked_nuget_override: None,
     }
 }
 
@@ -183,6 +188,7 @@ fn publish_options(args: PublishArgs, context: &ToolContext) -> Result<PackageOp
         output_dir: context.output_dir.clone(),
         execute_publish: args.execute && !args.dry_run,
         native_stage_override: None,
+        prepacked_nuget_override: None,
     })
 }
 
@@ -199,6 +205,8 @@ pub(crate) fn release_options(
         publish_cargo: !args.skip_cargo,
         publish_nuget: !args.skip_nuget,
         native_stage_override: args.native_stage,
+        prepacked_nuget: args.prepacked_nuget,
+        verify_package_on_dry_run: args.verify_package,
     }
 }
 
@@ -401,6 +409,7 @@ pub(crate) fn package_stage_native_command(
             output_dir: context.output_dir.clone(),
             execute_publish: false,
             native_stage_override: None,
+            prepacked_nuget_override: None,
         },
     )
 }

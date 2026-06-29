@@ -17,7 +17,12 @@ cargo run -p dhara_tool -- verify ci
 cargo run -p dhara_tool -- verify package
 cargo run -p dhara_tool -- release run --dry-run
 cargo run -p dhara_tool -- release run --skip-cargo
+cargo run -p dhara_tool -- release run --prepacked-nuget tooling/output/nuget/Dhara.Storage.0.7.1.nupkg
 ```
+
+## CI vs local
+
+GitHub Actions ([`.github/workflows/pipeline.yml`](../../.github/workflows/pipeline.yml)) runs `cargo`/`dotnet` directly for formatting, lint, docs, and tests. The tool is built with `--profile ci` only for `package stage-native`, `verify package`, and `release run`. See [docs/ci-cd-pipelines.md](../../docs/ci-cd-pipelines.md).
 
 Launching `dhara_tool` without a subcommand in an interactive terminal opens the
 Dhara TUI (**interactive** mode). Explicit subcommands use **direct** mode (no TUI).

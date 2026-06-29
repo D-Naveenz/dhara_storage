@@ -119,9 +119,10 @@ fn render_dashboard(
         .collect::<Vec<_>>()
         .join("\n");
     let tool_version = crate::version();
+    let packaging_version = crate::defs_package_version();
     let next_revision = state
         .workspace
-        .next_package_revision(tool_version)
+        .next_package_revision(packaging_version)
         .map(|value| value.to_string())
         .unwrap_or_else(|_| "?".to_owned());
     let package_version = state.workspace.package_version.as_deref().unwrap_or("—");
@@ -145,7 +146,7 @@ fn render_dashboard(
          Definitions package\n\
          Path: {}\n\
          Status: {}\n\
-         Package version: {package_version} (tool: {tool_version}, {})\n\
+         Package version: {package_version} (DAL: {packaging_version}, tool: {tool_version}, {})\n\
          Revision: {revision} (next build: {next_revision})\n\
          Release: {release}\n\
          Definitions: {definitions}\n\n\
@@ -157,7 +158,7 @@ fn render_dashboard(
          Recent history: {}",
         state.workspace.defs_path.display(),
         state.workspace.status_label(),
-        state.workspace.version_match_label(tool_version),
+        state.workspace.packaging_lineage_label(packaging_version),
         state.current_section(registry).unwrap_or("none"),
         state.commands_for_current_section(registry).len(),
         std::env::current_dir()

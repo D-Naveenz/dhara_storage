@@ -12,7 +12,7 @@ pub struct DsfdMetadataXml {
     pub xmlns: String,
     /// Human-readable package signature.
     pub signature: String,
-    /// `dhara_tool` version used to build the package.
+    /// Semver of the DSFD packaging authority (`dhara_storage_dal`) that produced the file.
     #[serde(rename = "packageVersion")]
     pub package_version: String,
     /// ISO release date of the upstream definitions dataset.
