@@ -12,13 +12,17 @@
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
     <IsAotCompatible>true</IsAotCompatible>
     <!-- Instruct NuGet to pack the native assets from the runtimes folder -->
-    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;osx-x64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
     <StagedNativeRoot Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" />
     <NativeConfiguration Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">release</NativeConfiguration>
     <NativeConfiguration Condition="&apos;$(NativeConfiguration)&apos; == &apos;&apos;">debug</NativeConfiguration>
     <NativeCargoArgs Condition="&apos;$(Configuration)&apos; == &apos;Release&apos;">--release</NativeCargoArgs>
-    <NativeDllPath>$(RepoRoot)target\$(NativeConfiguration)\dharastorage.dll</NativeDllPath>
+    <NativeLibFileName Condition="$([MSBuild]::IsOSPlatform(&apos;Windows&apos;))">dharastorage.dll</NativeLibFileName>
+    <NativeLibFileName Condition="$([MSBuild]::IsOSPlatform(&apos;OSX&apos;))">libdharastorage.dylib</NativeLibFileName>
+    <NativeLibFileName Condition="&apos;$(NativeLibFileName)&apos; == &apos;&apos;">libdharastorage.so</NativeLibFileName>
+    <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
+    <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
     <PackageId>Dhara.Storage</PackageId>
     <Version>0.7.1</Version>
     <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
@@ -40,6 +44,8 @@
   <!-- Dependencies -->
   <ItemGroup Condition="&apos;$(StagedNativeRoot)&apos; != &apos;&apos;">
     <None PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Pack="true" Include="$(StagedNativeRoot)\runtimes\**\native\*.dll" Visible="false" />
+    <None PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Pack="true" Include="$(StagedNativeRoot)\runtimes\**\native\*.so" Visible="false" />
+    <None PackagePath="runtimes\%(RecursiveDir)%(Filename)%(Extension)" Pack="true" Include="$(StagedNativeRoot)\runtimes\**\native\*.dylib" Visible="false" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.9" />
@@ -54,13 +60,13 @@
   </Target>
   <!-- Include native assets for supported runtimes -->
   <Target BeforeTargets="BeforeBuild" Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" Name="BuildNativeLibrary">
-    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dharastorage $(NativeCargoArgs)" />
+    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dharastorage $(NativeCargoArgs)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
   </Target>
   <Target Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" Name="ValidatePackNativeAssets" BeforeTargets="Pack">
-    <Error Text="Packing Dhara.Storage requires staged native assets for all supported runtimes. Use the repo packaging flow so both win-x64 and win-arm64 assets are included." />
+    <Error Text="Packing Dhara.Storage requires staged native assets for all supported 64-bit runtimes. Use the repo packaging flow." />
   </Target>
   <Target Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" Name="CopyNativeLibraryToOutput" AfterTargets="Build">
-    <Copy SkipUnchangedFiles="true" DestinationFolder="$(OutDir)" SourceFiles="$(NativeDllPath)" />
+    <Copy SkipUnchangedFiles="true" DestinationFolder="$(OutDir)" SourceFiles="$(NativeLibPath)" />
   </Target>
   <ItemGroup>
     <None Pack="true" Include="README.md" PackagePath="\" />

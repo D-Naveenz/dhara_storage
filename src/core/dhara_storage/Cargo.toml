@@ -5,11 +5,11 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Rust-first file analysis, metadata, and storage operations for Windows-focused applications."
+description = "Rust-first file analysis, metadata, and storage operations with a Windows-first shell integration layer."
 readme = "README.md"
 documentation = "https://docs.rs/dhara_storage"
-keywords = ["storage", "filesystem", "analysis", "mime", "windows"]
-categories = ["filesystem", "os::windows-apis", "encoding"]
+keywords = ["storage", "filesystem", "analysis", "mime", "cross-platform"]
+categories = ["filesystem", "encoding"]
 
 [lib]
 crate-type = ["rlib"]
@@ -22,6 +22,7 @@ async-tokio = ["dep:tokio"]
 globset = "0.4"
 notify = "8.2"
 once_cell = "1.21"
+file_icon_provider = "1.0"
 dhara_storage_dal.workspace = true
 thiserror = "2.0"
 tokio = { version = "1.52", features = ["rt"], optional = true }
@@ -34,7 +35,6 @@ tokio = { version = "1.52", features = ["macros", "rt-multi-thread"] }
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
     "Win32_Foundation",
-    "Win32_Graphics_Gdi",
     "Win32_Storage_FileSystem",
     "Win32_UI_Shell",
     "Win32_UI_WindowsAndMessaging",

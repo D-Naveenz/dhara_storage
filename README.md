@@ -76,15 +76,26 @@ cargo run -p dhara_tool -- release run --dry-run
 
 ## Support Matrix
 
-| Surface                       | Status                                                                          |
-| ----------------------------- | ------------------------------------------------------------------------------- |
-| `dhara_storage_dal`           | Shared FlatBuffers definitions DAL                                              |
-| `dhara_storage`               | Windows-first runtime; portable where the underlying functionality naturally is |
-| `dharastorage`                 | Windows-first native ABI                                                        |
-| `Dhara.Storage` NuGet package | Windows `win-x64` and `win-arm64` only                                          |
+| Surface                       | Status                                                                                      |
+| ----------------------------- | ------------------------------------------------------------------------------------------- |
+| `dhara_storage_dal`           | Shared FlatBuffers definitions DAL                                                          |
+| `dhara_storage`               | Cross-platform core with Windows-first shell metadata; OS shell icons via `file_icon_provider` |
+| `dharastorage`                | Cross-platform native ABI (`dll` / `so` / `dylib`)                                            |
+| `Dhara.Storage` NuGet package | `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`                             |
 
-The NuGet package now fails clearly during package consumption for unsupported RIDs such as `win-x86`,
-and the managed wrapper also throws a `PlatformNotSupportedException` when loaded outside Windows `x64` or `arm64`.
+The NuGet package rejects unsupported 32-bit RIDs and platforms. Shell icons are returned as raw RGBA bytes (`ShellIcon`) when `includeIcon: true`; this is not PNG.
+
+### Local Windows native builds (x64 + ARM64)
+
+```powershell
+rustup target add aarch64-pc-windows-msvc
+# Visual Studio: Desktop development with C++ + MSVC x64/ARM64 build tools
+$vcvars = "<VS>\VC\Auxiliary\Build\vcvarsall.bat"
+cmd /c "call `"$vcvars`" x64_arm64 && cargo build -p dharastorage --release --target x86_64-pc-windows-msvc"
+cmd /c "call `"$vcvars`" x64_arm64 && cargo build -p dharastorage --release --target aarch64-pc-windows-msvc"
+```
+
+Full five-RID package verification runs in CI after merging per-OS native stage artifacts. On Windows alone, `cargo run -p dhara_tool -- package stage-native` stages only `win-x64` and `win-arm64`.
 
 ## Logging
 
@@ -101,7 +112,7 @@ and the managed wrapper also throws a `PlatformNotSupportedException` when loade
 - `cargo run -p dhara_tool -- release run --dry-run` validates the Cargo-first release flow without publishing.
 - `cargo run -p dhara_tool -- release run` publishes `dhara_storage_dal` and `dhara_storage` first, then publishes the `Dhara.Storage` NuGet package.
 - `cargo run -p dhara_tool -- release run --skip-cargo` publishes only the NuGet package when the Rust crates for the current version already exist.
-- NuGet verification checks that both `runtimes/win-x64/native/dharastorage.dll` and `runtimes/win-arm64/native/dharastorage.dll` are present in the package.
+- NuGet verification checks that all configured `runtimes/{rid}/native/*` entries are present in the package.
 
 ## Docs
 

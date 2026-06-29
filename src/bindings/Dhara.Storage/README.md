@@ -11,17 +11,25 @@ The current NuGet publish target is `Dhara.Storage` `0.7.1`.
 ## Supported Platforms
 
 `Dhara.Storage` uses a native Rust backend. The managed assembly is platform
-neutral in principle, but a matching native asset must exist for the runtime.
+neutral, but a matching native asset must exist for the runtime.
 
-The current NuGet package ships native assets for:
+The NuGet package ships native assets for:
 
-- Windows `win-x64`
-- Windows `win-arm64`
+- Windows `win-x64`, `win-arm64`
+- Linux `linux-x64`, `linux-arm64`
+- macOS `osx-arm64`
 
-Unsupported platforms are rejected in two places:
+Unsupported 32-bit RIDs and platforms are rejected at build time (`.targets`) and
+runtime (`PlatformNotSupportedException` on unsupported OS/arch combinations).
 
-- at package-consumption time through a transitive `.targets` file for 32-bit runtime identifiers, 32-bit build platforms, and `Prefer32Bit=true`
-- at runtime through a managed `PlatformNotSupportedException` guard
+## Shell icons (RGBA, not PNG)
+
+When `includeIcon: true` is passed to `GetFileInformation` / `GetDirectoryInformation`,
+the returned `ShellIcon` carries uncompressed row-major RGBA pixels (`Width`, `Height`,
+`RgbaPixels`). This is suitable for direct texture upload in Skia, ImageSharp, or
+similar renderers. Encode to PNG in managed code if you need a file stream.
+
+Shell display name / type metadata (`ShellDetails`) is Windows-only today.
 
 ## Install
 

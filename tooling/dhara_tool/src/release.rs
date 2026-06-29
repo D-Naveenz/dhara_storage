@@ -23,6 +23,7 @@ pub struct ReleaseOptions {
     pub dry_run: bool,
     pub publish_cargo: bool,
     pub publish_nuget: bool,
+    pub native_stage_override: Option<PathBuf>,
 }
 
 pub fn run(
@@ -64,6 +65,7 @@ pub fn run(
         api_key_env_override: options.api_key_env_override.clone(),
         output_dir: options.output_dir.clone(),
         execute_publish: false,
+        native_stage_override: options.native_stage_override.clone(),
     };
 
     if options.dry_run {

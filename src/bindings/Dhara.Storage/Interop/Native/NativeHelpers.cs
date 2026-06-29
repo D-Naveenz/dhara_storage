@@ -14,15 +14,21 @@ internal static class NativeHelpers
 
     internal static void EnsureSupportedPlatform()
     {
-        if (OperatingSystem.IsWindows() &&
-            (RuntimeInformation.ProcessArchitecture == Architecture.X64 ||
-             RuntimeInformation.ProcessArchitecture == Architecture.Arm64))
+        var arch = RuntimeInformation.ProcessArchitecture;
+        var is64Bit = arch is Architecture.X64 or Architecture.Arm64;
+        if (!is64Bit)
+        {
+            throw new PlatformNotSupportedException(
+                $"Dhara.Storage requires a 64-bit process (x64 or arm64). Current architecture: {arch}.");
+        }
+
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
             return;
         }
 
         throw new PlatformNotSupportedException(
-            $"Dhara.Storage supports Windows x64 and Windows arm64 only. Current platform: {RuntimeInformation.OSDescription}, architecture: {RuntimeInformation.ProcessArchitecture}.");
+            $"Dhara.Storage is not supported on this operating system. Current platform: {RuntimeInformation.OSDescription}, architecture: {arch}.");
     }
 
     internal static void ThrowIfFailed(NativeStatus status, nint errorPtr, nuint errorLen)
@@ -91,7 +97,9 @@ internal static class NativeHelpers
             dto.Size,
             dto.FormattedSize,
             dto.FilenameExtension,
-            dto.Analysis?.ToModel());
+            dto.Analysis?.ToModel(),
+            null,
+            null);
     }
 
     internal static DirectoryInformation ToModel(this NativeDirectoryInformationDto dto)
@@ -112,7 +120,9 @@ internal static class NativeHelpers
             dto.DisplayName,
             dto.Summary is null
                 ? null
-                : new DirectorySummary(dto.Summary.TotalSize, dto.Summary.FileCount, dto.Summary.DirectoryCount, dto.Summary.FormattedSize));
+                : new DirectorySummary(dto.Summary.TotalSize, dto.Summary.FileCount, dto.Summary.DirectoryCount, dto.Summary.FormattedSize),
+            null,
+            null);
     }
 
     internal static StorageEntry ToModel(this NativeStorageEntryDto dto) => new(dto.Kind, dto.Path, dto.Name);

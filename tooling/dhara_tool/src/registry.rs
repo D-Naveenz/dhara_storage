@@ -9,9 +9,10 @@ use crate::command::{
 use crate::commands::{
     config_env_init, config_show, config_sync, defs_build_trid_xml, defs_inspect,
     defs_inspect_trid_xml, defs_normalize, defs_pack, defs_sync_embedded, defs_verify,
-    package_pack_command, package_publish_command, release_publish_command, release_run_command,
-    verify_ci_command, verify_docs_command, verify_package_command, verify_release_config_command,
-    version_bump, version_set,
+    package_merge_native_command, package_pack_command, package_publish_command,
+    package_stage_native_command, release_publish_command, release_run_command, verify_ci_command,
+    verify_docs_command, verify_package_command, verify_release_config_command, version_bump,
+    version_set,
 };
 const VERSION_PARTS: &[&str] = &["major", "minor", "patch"];
 const CONFIGURATIONS: &[&str] = &["Release"];
@@ -222,6 +223,22 @@ impl DharaStorageCapability {
                 "[--configuration <name>] [--version <semver>]",
                 "package",
                 package_pack_command,
+            ),
+            command(
+                "package.stage-native",
+                &["package", "stage-native"],
+                "Stage host-buildable native libraries",
+                "[--configuration <name>]",
+                "package",
+                package_stage_native_command,
+            ),
+            command(
+                "package.merge-native",
+                &["package", "merge-native"],
+                "Merge native stage artifacts",
+                "--output <path> --input <path> [--input <path>...]",
+                "package",
+                package_merge_native_command,
             ),
             command(
                 "package.publish",

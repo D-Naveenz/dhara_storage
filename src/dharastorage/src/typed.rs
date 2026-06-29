@@ -116,6 +116,32 @@ pub struct NativeAnalysisReport {
     pub source_extension: NativeOptionalUtf8,
 }
 
+/// Shell icon RGBA pixels returned through the typed native ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeShellIcon {
+    /// Icon width in pixels.
+    pub width: u32,
+    /// Icon height in pixels.
+    pub height: u32,
+    /// Pointer to row-major RGBA bytes when `pixels_len` is non-zero.
+    pub pixels_ptr: *const u8,
+    /// Number of RGBA bytes (`width * height * 4` when populated).
+    pub pixels_len: usize,
+}
+
+/// Windows shell display metadata returned through the typed native ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeShellDetails {
+    /// Non-zero when shell metadata is available.
+    pub has_value: u8,
+    /// Human-friendly shell display name when available.
+    pub display_name: NativeOptionalUtf8,
+    /// Shell type label when available.
+    pub type_name: NativeOptionalUtf8,
+}
+
 /// File information returned through the typed native ABI.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -132,6 +158,12 @@ pub struct NativeFileInformation {
     pub filename_extension: NativeOptionalUtf8,
     /// Analysis report pointer when analysis was requested and available.
     pub analysis: *const NativeAnalysisReport,
+    /// Non-zero when `icon` contains RGBA pixel data.
+    pub has_icon: u8,
+    /// Shell icon when `has_icon` is non-zero.
+    pub icon: NativeShellIcon,
+    /// Optional Windows shell display metadata.
+    pub shell_details: NativeShellDetails,
 }
 
 /// Directory information returned through the typed native ABI.
@@ -146,6 +178,12 @@ pub struct NativeDirectoryInformation {
     pub has_summary: u8,
     /// Directory summary when `has_summary` is non-zero.
     pub summary: NativeDirectorySummary,
+    /// Non-zero when `icon` contains RGBA pixel data.
+    pub has_icon: u8,
+    /// Shell icon when `has_icon` is non-zero.
+    pub icon: NativeShellIcon,
+    /// Optional Windows shell display metadata.
+    pub shell_details: NativeShellDetails,
 }
 
 /// One listed storage entry returned through the typed native ABI.
@@ -237,12 +275,14 @@ struct AnalysisReportOwner {
 struct FileInformationOwner {
     abi: NativeFileInformation,
     analysis: Option<Box<AnalysisReportOwner>>,
+    icon_pixels: Option<Vec<u8>>,
     strings: StringStore,
 }
 
 #[repr(C)]
 struct DirectoryInformationOwner {
     abi: NativeDirectoryInformation,
+    icon_pixels: Option<Vec<u8>>,
     strings: StringStore,
 }
 
@@ -301,7 +341,12 @@ impl AnalysisReportOwner {
 }
 
 impl FileInformationOwner {
-    fn from_info(info: FileInfo, include_analysis: bool) -> Result<Box<Self>, FfiFailure> {
+    fn from_info(
+        info: FileInfo,
+        include_analysis: bool,
+        include_icon: bool,
+        icon_size: u32,
+    ) -> Result<Box<Self>, FfiFailure> {
         let mut strings = StringStore::default();
         let analysis = if include_analysis {
             Some(AnalysisReportOwner::from_report(
@@ -315,7 +360,26 @@ impl FileInformationOwner {
             .map(|value| value.as_abi_ptr())
             .unwrap_or_else(ptr::null);
 
-        Ok(Box::new(Self {
+        let (has_icon, icon_pixels, icon_abi) = if include_icon {
+            if let Some(shell_icon) = info.load_icon_at(icon_size) {
+                let pixels_len = shell_icon.rgba.len();
+                let abi = NativeShellIcon {
+                    width: shell_icon.width,
+                    height: shell_icon.height,
+                    pixels_ptr: shell_icon.rgba.as_ptr(),
+                    pixels_len,
+                };
+                (1, Some(shell_icon.rgba), abi)
+            } else {
+                (0, None, empty_shell_icon_abi())
+            }
+        } else {
+            (0, None, empty_shell_icon_abi())
+        };
+
+        let shell_details_abi = native_shell_details(info.shell_details(), &mut strings);
+
+        let mut owner = Box::new(Self {
             abi: NativeFileInformation {
                 metadata: native_metadata(info.metadata(), &mut strings),
                 display_name: strings.push(info.display_name()),
@@ -323,10 +387,21 @@ impl FileInformationOwner {
                 formatted_size: strings.push(info.formatted_size()),
                 filename_extension: strings.push_optional(info.filename_extension()),
                 analysis: analysis_ptr,
+                has_icon,
+                icon: icon_abi,
+                shell_details: shell_details_abi,
             },
             analysis,
+            icon_pixels: None,
             strings,
-        }))
+        });
+
+        if let Some(pixels) = icon_pixels {
+            owner.icon_pixels = Some(pixels);
+            owner.abi.icon.pixels_ptr = owner.icon_pixels.as_ref().unwrap().as_ptr();
+        }
+
+        Ok(owner)
     }
 
     fn into_raw_abi(mut owner: Box<Self>) -> *mut NativeFileInformation {
@@ -337,7 +412,12 @@ impl FileInformationOwner {
 }
 
 impl DirectoryInformationOwner {
-    fn from_info(info: DirectoryInfo, include_summary: bool) -> Result<Box<Self>, FfiFailure> {
+    fn from_info(
+        info: DirectoryInfo,
+        include_summary: bool,
+        include_icon: bool,
+        icon_size: u32,
+    ) -> Result<Box<Self>, FfiFailure> {
         let mut strings = StringStore::default();
         let (has_summary, summary) = if include_summary {
             let summary = *info.summary().map_err(FfiFailure::from)?;
@@ -362,15 +442,45 @@ impl DirectoryInformationOwner {
             )
         };
 
-        Ok(Box::new(Self {
+        let (has_icon, icon_pixels, icon_abi) = if include_icon {
+            if let Some(shell_icon) = info.load_icon_at(icon_size) {
+                let pixels_len = shell_icon.rgba.len();
+                let abi = NativeShellIcon {
+                    width: shell_icon.width,
+                    height: shell_icon.height,
+                    pixels_ptr: shell_icon.rgba.as_ptr(),
+                    pixels_len,
+                };
+                (1, Some(shell_icon.rgba), abi)
+            } else {
+                (0, None, empty_shell_icon_abi())
+            }
+        } else {
+            (0, None, empty_shell_icon_abi())
+        };
+
+        let shell_details_abi = native_shell_details(info.shell_details(), &mut strings);
+
+        let mut owner = Box::new(Self {
             abi: NativeDirectoryInformation {
                 metadata: native_metadata(info.metadata(), &mut strings),
                 display_name: strings.push(info.display_name()),
                 has_summary,
                 summary,
+                has_icon,
+                icon: icon_abi,
+                shell_details: shell_details_abi,
             },
+            icon_pixels: None,
             strings,
-        }))
+        });
+
+        if let Some(pixels) = icon_pixels {
+            owner.icon_pixels = Some(pixels);
+            owner.abi.icon.pixels_ptr = owner.icon_pixels.as_ref().unwrap().as_ptr();
+        }
+
+        Ok(owner)
     }
 
     fn into_raw_abi(mut owner: Box<Self>) -> *mut NativeDirectoryInformation {
@@ -447,15 +557,20 @@ pub(crate) fn analysis_report_to_native(report: AnalysisReport) -> *mut NativeAn
 pub(crate) fn file_info_to_native(
     info: FileInfo,
     include_analysis: bool,
+    include_icon: bool,
+    icon_size: u32,
 ) -> Result<*mut NativeFileInformation, FfiFailure> {
-    FileInformationOwner::from_info(info, include_analysis).map(FileInformationOwner::into_raw_abi)
+    FileInformationOwner::from_info(info, include_analysis, include_icon, icon_size)
+        .map(FileInformationOwner::into_raw_abi)
 }
 
 pub(crate) fn directory_info_to_native(
     info: DirectoryInfo,
     include_summary: bool,
+    include_icon: bool,
+    icon_size: u32,
 ) -> Result<*mut NativeDirectoryInformation, FfiFailure> {
-    DirectoryInformationOwner::from_info(info, include_summary)
+    DirectoryInformationOwner::from_info(info, include_summary, include_icon, icon_size)
         .map(DirectoryInformationOwner::into_raw_abi)
 }
 
@@ -524,6 +639,44 @@ fn native_content_kind(value: ContentKind) -> u32 {
         ContentKind::Text => 0,
         ContentKind::Binary => 1,
         ContentKind::Unknown => 2,
+    }
+}
+
+fn empty_shell_icon_abi() -> NativeShellIcon {
+    NativeShellIcon {
+        width: 0,
+        height: 0,
+        pixels_ptr: ptr::null(),
+        pixels_len: 0,
+    }
+}
+
+fn empty_optional_utf8() -> NativeOptionalUtf8 {
+    NativeOptionalUtf8 {
+        has_value: 0,
+        value: NativeUtf8 {
+            ptr: ptr::null(),
+            len: 0,
+        },
+    }
+}
+
+fn native_shell_details(
+    details: Option<&dhara_storage::ShellDetails>,
+    strings: &mut StringStore,
+) -> NativeShellDetails {
+    let Some(details) = details else {
+        return NativeShellDetails {
+            has_value: 0,
+            display_name: empty_optional_utf8(),
+            type_name: empty_optional_utf8(),
+        };
+    };
+
+    NativeShellDetails {
+        has_value: 1,
+        display_name: strings.push_optional(details.display_name.as_deref()),
+        type_name: strings.push_optional(details.type_name.as_deref()),
     }
 }
 

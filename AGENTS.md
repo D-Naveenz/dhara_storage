@@ -25,6 +25,6 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 ## Local Guardrails
 
 - Keep `dhara_storage` Rust-native; solve .NET interop constraints in `dharastorage` and `src/bindings/Dhara.Storage`.
-- Treat Windows as the primary runtime and CI target unless a concrete portability goal says otherwise.
+- Treat Windows as the primary developer workstation; ship all five 64-bit RIDs via CI merge (`package stage-native` per OS + `package merge-native`).
 - Repo code, manifests, tests, and workflow files win if a vault note drifts.
 - Do not add local private paths or personal vault locations to this file.

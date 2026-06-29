@@ -75,6 +75,16 @@ Applications can install any standard `tracing` subscriber before calling into t
 
 - `async-tokio`: enables Tokio-backed async wrappers over the sync operations core
 
+## Platform support
+
+| Capability | Windows | Linux | macOS |
+| --- | --- | --- | --- |
+| File analysis, I/O, watching | yes | yes | yes |
+| Shell icon (`ShellIcon`, RGBA) | yes | yes (GTK; may need main thread) | yes |
+| Shell display name / type (`ShellDetails`) | yes | no | no |
+
+`ShellIcon` returns uncompressed row-major RGBA pixels via `file_icon_provider`. Encode to PNG in your app if you need a file format.
+
 ## Related Docs
 
 - Workspace overview: <https://github.com/D-Naveenz/dhara_storage>

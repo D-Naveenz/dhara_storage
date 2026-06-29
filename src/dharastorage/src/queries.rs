@@ -122,6 +122,8 @@ pub unsafe extern "C" fn dhara_get_file_info_json_old(
 pub unsafe extern "C" fn dhara_get_file_info(
     path: *const c_char,
     include_analysis: u8,
+    include_icon: u8,
+    icon_size: u32,
     out_info: *mut *mut NativeFileInformation,
     out_error_ptr: *mut *mut u8,
     out_error_len: *mut usize,
@@ -139,7 +141,13 @@ pub unsafe extern "C" fn dhara_get_file_info(
             }
             .map_err(FfiFailure::from)?;
 
-            file_info_to_native(info, include_analysis != 0)
+            let icon_size = if icon_size == 0 {
+                dhara_storage::DEFAULT_SHELL_ICON_SIZE
+            } else {
+                icon_size
+            };
+
+            file_info_to_native(info, include_analysis != 0, include_icon != 0, icon_size)
         }
     ))
 }
@@ -190,6 +198,8 @@ pub unsafe extern "C" fn dhara_get_directory_info_json_old(
 pub unsafe extern "C" fn dhara_get_directory_info(
     path: *const c_char,
     include_summary: u8,
+    include_icon: u8,
+    icon_size: u32,
     out_info: *mut *mut NativeDirectoryInformation,
     out_error_ptr: *mut *mut u8,
     out_error_len: *mut usize,
@@ -207,7 +217,13 @@ pub unsafe extern "C" fn dhara_get_directory_info(
             }
             .map_err(FfiFailure::from)?;
 
-            directory_info_to_native(info, include_summary != 0)
+            let icon_size = if icon_size == 0 {
+                dhara_storage::DEFAULT_SHELL_ICON_SIZE
+            } else {
+                icon_size
+            };
+
+            directory_info_to_native(info, include_summary != 0, include_icon != 0, icon_size)
         }
     ))
 }

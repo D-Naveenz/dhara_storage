@@ -21,5 +21,7 @@ public sealed record FileInformation(
     ulong Size,
     string FormattedSize,
     string? FilenameExtension,
-    AnalysisReport? Analysis)
+    AnalysisReport? Analysis,
+    ShellIcon? Icon,
+    ShellDetails? ShellDetails)
     : StorageInformation(Path, Name, IsReadOnly, IsHidden, IsSystem, IsTemporary, IsSymbolicLink, LinkTarget, CreatedAtUtc, ModifiedAtUtc, AccessedAtUtc);

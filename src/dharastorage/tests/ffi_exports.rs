@@ -94,8 +94,17 @@ fn file_info_returns_optional_analysis_pointer() {
     let mut err_ptr: *mut u8 = ptr::null_mut();
     let mut err_len = 0;
 
-    let status =
-        unsafe { dhara_get_file_info(fixture.as_ptr(), 1, &mut info, &mut err_ptr, &mut err_len) };
+    let status = unsafe {
+        dhara_get_file_info(
+            fixture.as_ptr(),
+            1,
+            0,
+            0,
+            &mut info,
+            &mut err_ptr,
+            &mut err_len,
+        )
+    };
 
     assert_eq!(status, DharaStatus::Ok);
     assert!(err_ptr.is_null());

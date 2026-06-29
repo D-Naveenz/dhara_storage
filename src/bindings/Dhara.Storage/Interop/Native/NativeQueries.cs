@@ -12,10 +12,10 @@ internal static partial class NativeQueries
     internal static partial NativeStatus dhara_analyze_path(string path, out nint report, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_get_file_info(string path, byte includeAnalysis, out nint info, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_get_file_info(string path, byte includeAnalysis, byte includeIcon, uint iconSize, out nint info, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_get_directory_info(string path, byte includeSummary, out nint info, out nint errorPtr, out nuint errorLen);
+    internal static partial NativeStatus dhara_get_directory_info(string path, byte includeSummary, byte includeIcon, uint iconSize, out nint info, out nint errorPtr, out nuint errorLen);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_list_files(string path, byte recursive, out nint entries, out nint errorPtr, out nuint errorLen);
@@ -122,10 +122,21 @@ internal static class NativeQueryInvoker
         }
     }
 
-    internal static FileInformation GetFileInformation(string path, bool includeAnalysis)
+    internal static FileInformation GetFileInformation(
+        string path,
+        bool includeAnalysis,
+        bool includeIcon = false,
+        int iconSize = 32)
     {
         NativeHelpers.EnsureSupportedPlatform();
-        var status = NativeQueries.dhara_get_file_info(path, NativeHelpers.ToNativeBool(includeAnalysis), out var info, out var errorPtr, out var errorLen);
+        var status = NativeQueries.dhara_get_file_info(
+            path,
+            NativeHelpers.ToNativeBool(includeAnalysis),
+            NativeHelpers.ToNativeBool(includeIcon),
+            checked((uint)iconSize),
+            out var info,
+            out var errorPtr,
+            out var errorLen);
         NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
         try
         {
@@ -137,10 +148,21 @@ internal static class NativeQueryInvoker
         }
     }
 
-    internal static DirectoryInformation GetDirectoryInformation(string path, bool includeSummary)
+    internal static DirectoryInformation GetDirectoryInformation(
+        string path,
+        bool includeSummary,
+        bool includeIcon = false,
+        int iconSize = 32)
     {
         NativeHelpers.EnsureSupportedPlatform();
-        var status = NativeQueries.dhara_get_directory_info(path, NativeHelpers.ToNativeBool(includeSummary), out var info, out var errorPtr, out var errorLen);
+        var status = NativeQueries.dhara_get_directory_info(
+            path,
+            NativeHelpers.ToNativeBool(includeSummary),
+            NativeHelpers.ToNativeBool(includeIcon),
+            checked((uint)iconSize),
+            out var info,
+            out var errorPtr,
+            out var errorLen);
         NativeHelpers.ThrowIfFailed(status, errorPtr, errorLen);
         try
         {

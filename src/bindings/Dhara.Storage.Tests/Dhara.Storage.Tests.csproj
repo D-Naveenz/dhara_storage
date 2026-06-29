@@ -6,7 +6,11 @@
     <IsPackable>false</IsPackable>
     <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
     <NativeConfiguration>debug</NativeConfiguration>
-    <NativeDllPath>$(RepoRoot)target\$(NativeConfiguration)\dharastorage.dll</NativeDllPath>
+    <NativeLibFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">dharastorage.dll</NativeLibFileName>
+    <NativeLibFileName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libdharastorage.dylib</NativeLibFileName>
+    <NativeLibFileName Condition="'$(NativeLibFileName)' == ''">libdharastorage.so</NativeLibFileName>
+    <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
+    <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,10 +35,10 @@
   </ItemGroup>
 
   <Target Name="BuildNativeLibrary" BeforeTargets="BeforeBuild">
-    <Exec Command="cargo build -p dharastorage" WorkingDirectory="$(RepoRoot)" />
+    <Exec Command="cargo build -p dharastorage" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
   </Target>
 
   <Target Name="CopyNativeLibraryToOutput" AfterTargets="Build">
-    <Copy SourceFiles="$(NativeDllPath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(NativeLibPath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
   </Target>
 </Project>

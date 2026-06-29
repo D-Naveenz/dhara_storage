@@ -73,6 +73,23 @@ internal readonly struct NativeAnalysisReportV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeShellIconV2
+{
+    internal readonly uint Width;
+    internal readonly uint Height;
+    internal readonly nint PixelsPtr;
+    internal readonly nuint PixelsLen;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeShellDetailsV2
+{
+    internal readonly byte HasValue;
+    internal readonly NativeOptionalUtf8 DisplayName;
+    internal readonly NativeOptionalUtf8 TypeName;
+}
+
+[StructLayout(LayoutKind.Sequential)]
 internal readonly struct NativeFileInformationV2
 {
     internal readonly NativeStorageMetadataV2 Metadata;
@@ -81,6 +98,9 @@ internal readonly struct NativeFileInformationV2
     internal readonly NativeUtf8 FormattedSize;
     internal readonly NativeOptionalUtf8 FilenameExtension;
     internal readonly nint Analysis;
+    internal readonly byte HasIcon;
+    internal readonly NativeShellIconV2 Icon;
+    internal readonly NativeShellDetailsV2 ShellDetails;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -90,6 +110,9 @@ internal readonly struct NativeDirectoryInformationV2
     internal readonly NativeUtf8 DisplayName;
     internal readonly byte HasSummary;
     internal readonly NativeDirectorySummaryV2 Summary;
+    internal readonly byte HasIcon;
+    internal readonly NativeShellIconV2 Icon;
+    internal readonly NativeShellDetailsV2 ShellDetails;
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -158,7 +181,9 @@ internal static unsafe class NativeTyped
             info.Size,
             ToString(info.FormattedSize),
             ToNullableString(info.FilenameExtension),
-            info.Analysis == 0 ? null : ToAnalysisReport(info.Analysis));
+            info.Analysis == 0 ? null : ToAnalysisReport(info.Analysis),
+            ToShellIcon(info.HasIcon, info.Icon),
+            ToShellDetails(info.ShellDetails));
     }
 
     internal static DirectoryInformation ToDirectoryInformation(nint infoPtr)
@@ -184,7 +209,9 @@ internal static unsafe class NativeTyped
                     info.Summary.TotalSize,
                     info.Summary.FileCount,
                     info.Summary.DirectoryCount,
-                    ToString(info.Summary.FormattedSize)));
+                    ToString(info.Summary.FormattedSize)),
+            ToShellIcon(info.HasIcon, info.Icon),
+            ToShellDetails(info.ShellDetails));
     }
 
     internal static IReadOnlyList<StorageEntry> ToStorageEntries(nint entriesPtr)
@@ -209,6 +236,46 @@ internal static unsafe class NativeTyped
             ToNullableString(nativeEvent.PreviousPath),
             ToStorageChangeType(nativeEvent.ChangeType),
             DateTimeOffset.FromUnixTimeMilliseconds(checked((long)nativeEvent.ObservedAtUtcMs)));
+    }
+
+    private static ShellIcon? ToShellIcon(byte hasIcon, NativeShellIconV2 icon)
+    {
+        if (hasIcon == 0 || icon.PixelsPtr == 0 || icon.PixelsLen == 0)
+        {
+            return null;
+        }
+
+        var pixels = ReadBytes(icon.PixelsPtr, icon.PixelsLen);
+        return new ShellIcon(checked((int)icon.Width), checked((int)icon.Height), pixels);
+    }
+
+    private static ShellDetails? ToShellDetails(NativeShellDetailsV2 details)
+    {
+        if (details.HasValue == 0)
+        {
+            return null;
+        }
+
+        return new ShellDetails(
+            ToNullableString(details.DisplayName),
+            ToNullableString(details.TypeName));
+    }
+
+    private static byte[] ReadBytes(nint ptr, nuint len)
+    {
+        if (len == 0)
+        {
+            return [];
+        }
+
+        if (ptr == 0)
+        {
+            throw new InvalidOperationException("Native typed payload byte pointer was null.");
+        }
+
+        var bytes = new byte[checked((int)len)];
+        Marshal.Copy(ptr, bytes, 0, bytes.Length);
+        return bytes;
     }
 
     private static DetectedDefinition ToDetectedDefinition(NativeDetectedDefinitionV2 definition)

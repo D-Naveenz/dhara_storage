@@ -5,6 +5,9 @@ use anyhow::{Context, Result, bail};
 use tracing::debug;
 
 use crate::command::CommandResult;
+use crate::native_rids::{
+    buildable_runtimes_on_host, native_lib_filename, package_native_path, platform, platform_target,
+};
 use crate::paths::{default_artifacts_dir, resolve_output_dir};
 
 use super::{
@@ -21,6 +24,7 @@ pub struct PackageOptions {
     pub api_key_env_override: Option<String>,
     pub output_dir: Option<PathBuf>,
     pub execute_publish: bool,
+    pub native_stage_override: Option<PathBuf>,
 }
 
 pub fn pack(
@@ -39,12 +43,20 @@ pub fn pack(
     let version = effective_version(config, &options.version_override);
     let artifacts_root = artifacts_root(repo_root)?;
     let output_root = output_root(repo_root, options.output_dir.as_ref())?;
-    let native_stage_root = artifacts_root.join("native-stage");
+    let native_stage_root = if let Some(stage) = options
+        .native_stage_override
+        .clone()
+        .or_else(native_stage_from_env)
+    {
+        stage
+    } else {
+        let stage = artifacts_root.join("native-stage");
+        reset_directory(&stage)?;
+        stage_native_assets(repo_root, config, options, &stage)?;
+        stage
+    };
     let nuget_output = output_root.join("nuget");
-    reset_directory(&native_stage_root)?;
     reset_directory(&nuget_output)?;
-
-    stage_native_assets(repo_root, config, options, &native_stage_root)?;
 
     run_command(
         "dotnet",
@@ -263,12 +275,18 @@ fn stage_native_assets(
         bail!("only Release packaging is currently supported");
     };
 
-    for rid in &config.ci.native_runtimes {
+    let runtimes = buildable_runtimes_on_host(&config.ci.native_runtimes);
+    if runtimes.is_empty() {
+        bail!("no native runtimes are buildable on the current host");
+    }
+
+    for rid in runtimes {
         let target = config
             .targets
             .rust_targets
-            .get(rid)
+            .get(&rid)
             .with_context(|| format!("missing rust target mapping for runtime '{rid}'"))?;
+        let lib_name = native_lib_filename(&rid)?;
         debug!(
             target: "dhara_tool::package_flow",
             runtime = %rid,
@@ -293,12 +311,12 @@ fn stage_native_assets(
             .join("target")
             .join(target)
             .join("release")
-            .join("dharastorage.dll");
+            .join(lib_name);
         let destination_path = stage_root
             .join("runtimes")
-            .join(rid)
+            .join(&rid)
             .join("native")
-            .join("dharastorage.dll");
+            .join(lib_name);
         if let Some(parent) = destination_path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("failed to create {}", parent.display()))?;
@@ -312,6 +330,73 @@ fn stage_native_assets(
         })?;
     }
 
+    Ok(())
+}
+
+/// Stages native libraries buildable on the current host into `tooling/artifacts/native-stage`.
+pub fn stage_native_for_host(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    let artifacts_root = artifacts_root(repo_root)?;
+    let stage_root = artifacts_root.join("native-stage");
+    reset_directory(&stage_root)?;
+    stage_native_assets(repo_root, config, options, &stage_root)?;
+    Ok(CommandResult::with_message(format!(
+        "Staged host native assets at {}",
+        stage_root.display()
+    )))
+}
+
+/// Merges `runtimes/**` trees from multiple native-stage directories into `output`.
+pub fn merge_native_stages(output: &Path, inputs: &[PathBuf]) -> Result<CommandResult> {
+    reset_directory(output)?;
+    for input in inputs {
+        let runtimes = input.join("runtimes");
+        if !runtimes.exists() {
+            bail!(
+                "native stage input '{}' is missing a runtimes directory",
+                input.display()
+            );
+        }
+        copy_runtimes_tree(&runtimes, &output.join("runtimes"))?;
+    }
+    Ok(CommandResult::with_message(format!(
+        "Merged native stages into {}",
+        output.display()
+    )))
+}
+
+fn copy_runtimes_tree(source: &Path, destination: &Path) -> Result<()> {
+    if !source.exists() {
+        return Ok(());
+    }
+    for entry in
+        fs::read_dir(source).with_context(|| format!("failed to read {}", source.display()))?
+    {
+        let entry =
+            entry.with_context(|| format!("failed to read entry under {}", source.display()))?;
+        let file_type = entry
+            .file_type()
+            .with_context(|| format!("failed to read file type for {}", entry.path().display()))?;
+        let target = destination.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_runtimes_tree(&entry.path(), &target)?;
+        } else if file_type.is_file() {
+            if let Some(parent) = target.parent() {
+                fs::create_dir_all(parent)
+                    .with_context(|| format!("failed to create {}", parent.display()))?;
+            }
+            fs::copy(entry.path(), &target).with_context(|| {
+                format!(
+                    "failed to copy '{}' to '{}'",
+                    entry.path().display(),
+                    target.display()
+                )
+            })?;
+        }
+    }
     Ok(())
 }
 
@@ -331,7 +416,7 @@ fn inspect_package_contents(package_path: &Path, config: &DharaRepoConfig) -> Re
     }
 
     for rid in &config.ci.native_runtimes {
-        let expected = format!("runtimes/{rid}/native/dharastorage.dll");
+        let expected = package_native_path(rid)?;
         if !entries.iter().any(|entry| entry == &expected) {
             bail!("native asset missing from package: {expected}");
         }
@@ -382,8 +467,7 @@ fn restore_smoke_consumer(
     if let Some(runtime) = runtime {
         args.push("--runtime".to_owned());
         args.push(runtime.to_owned());
-        args.push(format!("-p:Platform={}", platform(runtime)?));
-        args.push(format!("-p:PlatformTarget={}", platform_target(runtime)?));
+        push_dotnet_platform_args(&mut args, runtime)?;
     }
     if publish_aot {
         args.push("-p:PublishAot=true".to_owned());
@@ -396,26 +480,19 @@ fn run_smoke_consumer(repo_root: &Path, config: &DharaRepoConfig, version: &str)
         "running smoke consumer {} (version={version})",
         config.ci.smoke_project
     ));
-    run_command(
-        "dotnet",
-        &[
-            "run".to_owned(),
-            "--project".to_owned(),
-            config.ci.smoke_project.clone(),
-            "--configuration".to_owned(),
-            "Release".to_owned(),
-            "--runtime".to_owned(),
-            config.ci.host_runtime_smoke.clone(),
-            format!("-p:Platform={}", platform(&config.ci.host_runtime_smoke)?),
-            format!(
-                "-p:PlatformTarget={}",
-                platform_target(&config.ci.host_runtime_smoke)?
-            ),
-            "--no-restore".to_owned(),
-            format!("-p:DharaStoragePackageVersion={version}"),
-        ],
-        repo_root,
-    )
+    let mut run_args = vec![
+        "run".to_owned(),
+        "--project".to_owned(),
+        config.ci.smoke_project.clone(),
+        "--configuration".to_owned(),
+        "Release".to_owned(),
+        "--runtime".to_owned(),
+        config.ci.host_runtime_smoke.clone(),
+        "--no-restore".to_owned(),
+        format!("-p:DharaStoragePackageVersion={version}"),
+    ];
+    push_dotnet_platform_args(&mut run_args, &config.ci.host_runtime_smoke)?;
+    run_command("dotnet", &run_args, repo_root)
 }
 
 fn verify_unsupported_runtime_rejected(
@@ -461,29 +538,25 @@ fn publish_aot_smoke_consumer(
         output_dir.display()
     ));
     reset_directory(output_dir)?;
-    run_command(
-        "dotnet",
-        &[
-            "publish".to_owned(),
-            config.ci.smoke_project.clone(),
-            "--configuration".to_owned(),
-            "Release".to_owned(),
-            "--runtime".to_owned(),
-            runtime.to_owned(),
-            format!("-p:Platform={}", platform(runtime)?),
-            format!("-p:PlatformTarget={}", platform_target(runtime)?),
-            "--self-contained".to_owned(),
-            "true".to_owned(),
-            "--no-restore".to_owned(),
-            "-p:PublishAot=true".to_owned(),
-            format!("-p:DharaStoragePackageVersion={version}"),
-            "--output".to_owned(),
-            output_dir.display().to_string(),
-        ],
-        repo_root,
-    )?;
+    let mut publish_args = vec![
+        "publish".to_owned(),
+        config.ci.smoke_project.clone(),
+        "--configuration".to_owned(),
+        "Release".to_owned(),
+        "--runtime".to_owned(),
+        runtime.to_owned(),
+        "--self-contained".to_owned(),
+        "true".to_owned(),
+        "--no-restore".to_owned(),
+        "-p:PublishAot=true".to_owned(),
+        format!("-p:DharaStoragePackageVersion={version}"),
+        "--output".to_owned(),
+        output_dir.display().to_string(),
+    ];
+    push_dotnet_platform_args(&mut publish_args, runtime)?;
+    run_command("dotnet", &publish_args, repo_root)?;
 
-    let executable = output_dir.join("Dhara.Storage.ConsumerSmoke.exe");
+    let executable = smoke_consumer_executable(output_dir);
     run_command(
         executable
             .to_str()
@@ -543,21 +616,21 @@ fn reset_smoke_consumer_outputs(repo_root: &Path, config: &DharaRepoConfig) -> R
     Ok(())
 }
 
-fn platform(runtime: &str) -> Result<&'static str> {
-    match runtime {
-        "win-x64" => Ok("x64"),
-        "win-arm64" => Ok("ARM64"),
-        "win-x86" => Ok("x86"),
-        _ => bail!("unsupported runtime for Platform inference: {runtime}"),
+fn push_dotnet_platform_args(args: &mut Vec<String>, runtime: &str) -> Result<()> {
+    if let Some(value) = platform(runtime)? {
+        args.push(format!("-p:Platform={value}"));
     }
+    if let Some(value) = platform_target(runtime)? {
+        args.push(format!("-p:PlatformTarget={value}"));
+    }
+    Ok(())
 }
 
-fn platform_target(runtime: &str) -> Result<&'static str> {
-    match runtime {
-        "win-x64" => Ok("x64"),
-        "win-arm64" => Ok("arm64"),
-        "win-x86" => Ok("x86"),
-        _ => bail!("unsupported runtime for PlatformTarget inference: {runtime}"),
+fn smoke_consumer_executable(output_dir: &Path) -> PathBuf {
+    if cfg!(windows) {
+        output_dir.join("Dhara.Storage.ConsumerSmoke.exe")
+    } else {
+        output_dir.join("Dhara.Storage.ConsumerSmoke")
     }
 }
 
@@ -631,4 +704,8 @@ fn reset_directory(path: &Path) -> Result<()> {
     }
     fs::create_dir_all(path).with_context(|| format!("failed to create {}", path.display()))?;
     Ok(())
+}
+
+fn native_stage_from_env() -> Option<PathBuf> {
+    std::env::var_os("DHARA_NATIVE_STAGE_OVERRIDE").map(PathBuf::from)
 }

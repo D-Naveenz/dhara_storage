@@ -590,6 +590,15 @@ mod tests {
         let mut targets = BTreeMap::new();
         targets.insert("win-x64".to_owned(), "x86_64-pc-windows-msvc".to_owned());
         targets.insert("win-arm64".to_owned(), "aarch64-pc-windows-msvc".to_owned());
+        targets.insert(
+            "linux-x64".to_owned(),
+            "x86_64-unknown-linux-gnu".to_owned(),
+        );
+        targets.insert(
+            "linux-arm64".to_owned(),
+            "aarch64-unknown-linux-gnu".to_owned(),
+        );
+        targets.insert("osx-arm64".to_owned(), "aarch64-apple-darwin".to_owned());
 
         DharaRepoConfig {
             versions: VersionConfig {
@@ -614,7 +623,13 @@ mod tests {
                 package_project: "src/bindings/Dhara.Storage/Dhara.Storage.csproj".to_owned(),
                 tests_project: "src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
                     .to_owned(),
-                native_runtimes: vec!["win-x64".to_owned(), "win-arm64".to_owned()],
+                native_runtimes: vec![
+                    "win-x64".to_owned(),
+                    "win-arm64".to_owned(),
+                    "linux-x64".to_owned(),
+                    "linux-arm64".to_owned(),
+                    "osx-arm64".to_owned(),
+                ],
                 host_runtime_smoke: "win-x64".to_owned(),
                 aot_runtime_smoke: "win-x64".to_owned(),
             },
