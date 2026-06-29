@@ -20,7 +20,7 @@ should stay thin and delegate behavior back to this crate.
 
 ```toml
 [dependencies]
-dhara_storage = "0.7.0"
+dhara_storage = "0.7.1"
 ```
 
 ## Quick Start

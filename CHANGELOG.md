@@ -4,6 +4,21 @@ All notable changes to Dhara Storage are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] — 2026-06-29
+
+Compared to [v0.7.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.7.0).
+
+### Fixed
+
+- **Crates.io release verification** — embed `filedefs.dat` from `src/core/dhara_storage_dal/resources/` so `cargo release` package verification succeeds outside the monorepo layout.
+- **CI formatting** — rustfmt wrap fix in `dhara_tool` audit test imports.
+
+### Changed
+
+- **Default defs output** — `defs pack`, `build-trid-xml`, `sync-embedded`, and related commands now default to `src/core/dhara_storage_dal/resources/filedefs.dat`.
+- **Default operator logs** — audit logs write to `tooling/logs/` instead of `tooling/output/logs/`; logs no longer follow `--output-dir`.
+- **Version bump** — workspace, crates, NuGet package, and shared config synchronized to `0.7.1`.
+
 ## [0.7.0] — 2026-06-28
 
 Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0) (2026-06-22).
@@ -50,5 +65,6 @@ Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.
 
 Initial tagged release in this changelog series. See git history before `v0.6.0` for earlier changes.
 
-[0.7.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.6.0...HEAD
+[0.7.1]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0

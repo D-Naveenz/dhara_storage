@@ -100,7 +100,7 @@ The footer is a single-line XML document prefixed by a standard XML declaration.
 Example shape:
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.7.0</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
+<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.7.1</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
 ```
 
 ### Schema (XSD)
@@ -138,7 +138,7 @@ counter. `dhara_tool` assigns it when building from TrID sources.
 | Present | differs from current tool version | `1` |
 
 Example: three rebuilds at tool `0.6.0` produce revisions `1`, `2`, `3`. After a
-version bump to `0.7.0`, the next build starts again at `1`.
+version bump to `0.7.1`, the next build starts again at `1`.
 
 At startup, `dhara_tool` reads the canonical output path, caches revision and version
 for logging and the TUI dashboard, and updates the cache after each successful write.
