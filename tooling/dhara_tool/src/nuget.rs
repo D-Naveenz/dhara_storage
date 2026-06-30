@@ -49,7 +49,7 @@ pub fn pack(
         .clone()
         .or_else(native_stage_from_env)
     {
-        stage
+        absolute_native_stage_root(repo_root, &stage)
     } else {
         let stage = artifacts_root.join("native-stage");
         reset_directory(&stage)?;
@@ -637,6 +637,14 @@ fn non_empty_option(value: String) -> Option<String> {
         None
     } else {
         Some(trimmed.to_owned())
+    }
+}
+
+fn absolute_native_stage_root(repo_root: &Path, stage: &Path) -> PathBuf {
+    if stage.is_absolute() {
+        stage.to_path_buf()
+    } else {
+        repo_root.join(stage)
     }
 }
 
