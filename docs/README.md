@@ -13,6 +13,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [filedefs.dat / DSFD format][filedefs-dat] | Implementers | Binary layout, metadata footer, defs build pipeline |
 | [Typed C-compatible ABI][typed-abi] | FFI authors | `#[repr(C)]` rules, ownership, Rust ↔ C# marshalling |
 | [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `dhara_tool` touchpoints |
+| [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
 ## Package READMEs (publish surfaces)
 
@@ -47,6 +48,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [filedefs-dat]: filedefs-dat.md
 [typed-abi]: typed-c-compatible-abi.md
 [ci-cd]: ci-cd-pipelines.md
+[native-packaging]: native-packaging.md
 [agents]: ../AGENTS.md
 [dhara-config]: ../dhara.config.toml
 [pipeline-yml]: ../.github/workflows/pipeline.yml
