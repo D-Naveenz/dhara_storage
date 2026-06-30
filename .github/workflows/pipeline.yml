@@ -264,14 +264,15 @@ jobs:
 
       - name: Merge native stages
         shell: pwsh
-        run: >
-          ./tooling/scripts/merge-native.ps1
-          -Output tooling/artifacts/native-stage
-          -Input
-          tooling/artifacts/native-inputs/native-stage-windows
-          tooling/artifacts/native-inputs/native-stage-linux
-          tooling/artifacts/native-inputs/native-stage-linux-arm64
-          tooling/artifacts/native-inputs/native-stage-macos
+        run: |
+          ./tooling/scripts/merge-native.ps1 `
+            -Output tooling/artifacts/native-stage `
+            -Input @(
+              'tooling/artifacts/native-inputs/native-stage-windows',
+              'tooling/artifacts/native-inputs/native-stage-linux',
+              'tooling/artifacts/native-inputs/native-stage-linux-arm64',
+              'tooling/artifacts/native-inputs/native-stage-macos'
+            )
 
       - name: Verify package
         shell: pwsh
