@@ -267,7 +267,7 @@ jobs:
         run: |
           ./tooling/scripts/merge-native.ps1 `
             -Output tooling/artifacts/native-stage `
-            -Input @(
+            -StagePaths @(
               'tooling/artifacts/native-inputs/native-stage-windows',
               'tooling/artifacts/native-inputs/native-stage-linux',
               'tooling/artifacts/native-inputs/native-stage-linux-arm64',

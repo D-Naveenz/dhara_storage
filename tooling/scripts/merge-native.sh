@@ -31,25 +31,6 @@ if [[ ${#inputs[@]} -eq 0 ]]; then
   exit 1
 fi
 
-copy_tree() {
-  local source="$1"
-  local destination="$2"
-  if [[ ! -d "$source" ]]; then
-    return 0
-  fi
-  mkdir -p "$destination"
-  shopt -s nullglob dotglob
-  for entry in "$source"/*; do
-    local name
-    name="$(basename "$entry")"
-    if [[ -d "$entry" ]]; then
-      copy_tree "$entry" "$destination/$name"
-    elif [[ -f "$entry" ]]; then
-      cp "$entry" "$destination/$name"
-    fi
-  done
-}
-
 rm -rf "$output"
 mkdir -p "$output"
 
@@ -59,7 +40,14 @@ for input in "${inputs[@]}"; do
     echo "native stage input '$input' is missing a runtimes directory" >&2
     exit 1
   fi
-  copy_tree "$runtimes" "$output/runtimes"
+  shopt -s nullglob dotglob
+  for rid_dir in "$runtimes"/*; do
+    if [[ -d "$rid_dir" ]]; then
+      name="$(basename "$rid_dir")"
+      mkdir -p "$output/runtimes"
+      cp -R "$rid_dir" "$output/runtimes/$name"
+    fi
+  done
 done
 
 echo "Merged native stages into $output"
