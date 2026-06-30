@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 
 use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
+use crate::paths::{is_repo_root, resolve_tool_root};
 use crate::tui::{can_launch, run_tui};
 use crate::{DharaStorageCapability, ensure_workspace_state, log_session_end};
 
@@ -23,11 +24,16 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
+    let current_exe = env::current_exe().ok();
+    let current_dir = env::current_dir().ok();
+
     let repo_root = resolve_repo_root(
         cli.repo_root.clone(),
-        env::current_dir().ok(),
-        env::current_exe().ok(),
+        current_dir.clone(),
+        current_exe.clone(),
     )?;
+
+    let tool_root = resolve_tool_root(current_exe, current_dir);
 
     let run_mode = if !cli.command.is_empty() {
         RunMode::Direct
@@ -41,6 +47,7 @@ pub fn run() -> Result<()> {
 
     let context = ToolContext {
         repo_root,
+        tool_root,
         run_mode,
         min: cli.min,
         trace: cli.trace,
@@ -102,8 +109,15 @@ fn resolve_repo_root(
     current_exe: Option<PathBuf>,
 ) -> Result<PathBuf> {
     if let Some(path) = requested_repo_root {
-        return normalize_repo_root(path.clone())
-            .with_context(|| format!("failed to canonicalize repo root '{}'", path.display()));
+        let root = normalize_repo_root(path.clone())
+            .with_context(|| format!("failed to canonicalize repo root '{}'", path.display()))?;
+        if !is_repo_root(&root) {
+            bail!(
+                "--repo-root '{}' is not a Dhara Storage workspace root (expected dhara.config.toml and tooling/dhara_tool/Cargo.toml)",
+                root.display()
+            );
+        }
+        return Ok(root);
     }
 
     discover_repo_root(current_dir, current_exe).context(
@@ -136,16 +150,15 @@ fn discover_repo_root(
 
 fn discover_repo_root_from(start: &Path) -> Option<PathBuf> {
     for candidate in start.ancestors() {
-        if looks_like_repo_root(candidate) {
-            return normalize_repo_root(candidate.to_path_buf()).ok();
+        if !is_repo_root(candidate) {
+            continue;
+        }
+        if let Ok(root) = normalize_repo_root(candidate.to_path_buf()) {
+            return Some(root);
         }
     }
 
     None
-}
-
-fn looks_like_repo_root(path: &Path) -> bool {
-    path.join("dhara.config.toml").is_file() && path.join("Cargo.toml").is_file()
 }
 
 fn normalize_repo_root(path: PathBuf) -> Result<PathBuf> {
@@ -341,6 +354,8 @@ mod tests {
         fs::create_dir_all(&nested).unwrap();
         fs::write(root.join("dhara.config.toml"), "placeholder").unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
+        fs::create_dir_all(root.join("tooling/dhara_tool")).unwrap();
+        fs::write(root.join("tooling/dhara_tool/Cargo.toml"), "[package]\n").unwrap();
 
         let resolved = resolve_repo_root(
             Some(root.clone()),
@@ -360,6 +375,8 @@ mod tests {
         fs::create_dir_all(&nested).unwrap();
         fs::write(root.join("dhara.config.toml"), "placeholder").unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
+        fs::create_dir_all(root.join("tooling/dhara_tool")).unwrap();
+        fs::write(root.join("tooling/dhara_tool/Cargo.toml"), "[package]\n").unwrap();
 
         let resolved = discover_repo_root_from(&nested).unwrap();
 
@@ -434,10 +451,23 @@ mod tests {
         fs::create_dir_all(&elsewhere).unwrap();
         fs::write(root.join("dhara.config.toml"), "placeholder").unwrap();
         fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
+        fs::create_dir_all(root.join("tooling/dhara_tool")).unwrap();
+        fs::write(root.join("tooling/dhara_tool/Cargo.toml"), "[package]\n").unwrap();
 
         let resolved =
             resolve_repo_root(None, Some(elsewhere), Some(nested.join("dhara_tool.exe"))).unwrap();
 
         assert_eq!(resolved, normalize_repo_root(root).unwrap());
+    }
+
+    #[test]
+    fn rejects_explicit_repo_root_outside_workspace_layout() {
+        let temp = tempdir().unwrap();
+        let crate_dir = temp.path().join("tooling").join("dhara_tool");
+        fs::create_dir_all(&crate_dir).unwrap();
+        fs::write(crate_dir.join("Cargo.toml"), "[package]\n").unwrap();
+
+        let error = resolve_repo_root(Some(crate_dir.clone()), Some(crate_dir), None).unwrap_err();
+        assert!(error.to_string().contains("--repo-root"));
     }
 }

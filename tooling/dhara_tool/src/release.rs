@@ -30,6 +30,7 @@ pub struct ReleaseOptions {
 
 pub fn run(
     repo_root: &Path,
+    tool_root: &Path,
     config: &DharaRepoConfig,
     options: &ReleaseOptions,
 ) -> Result<CommandResult> {
@@ -74,7 +75,7 @@ pub fn run(
     if let Some(_prepacked) = options.prepacked_nuget.clone() {
         if options.dry_run {
             if options.verify_package_on_dry_run {
-                nuget::verify(repo_root, config, &package_options)?;
+                nuget::verify(repo_root, tool_root, config, &package_options)?;
             }
             return Ok(CommandResult::with_message(if options.publish_cargo {
                 "Cargo and NuGet release dry run completed using pre-packed NuGet artifact."
@@ -83,7 +84,7 @@ pub fn run(
             }));
         }
 
-        nuget::publish_packed(repo_root, config, &package_options)?;
+        nuget::publish_packed(repo_root, tool_root, config, &package_options)?;
         return Ok(CommandResult::with_message(if options.publish_cargo {
             "Cargo and NuGet release completed successfully."
         } else {
@@ -92,7 +93,7 @@ pub fn run(
     }
 
     if options.dry_run {
-        nuget::publish(repo_root, config, &package_options)?;
+        nuget::publish(repo_root, tool_root, config, &package_options)?;
         return Ok(CommandResult::with_message(if options.publish_cargo {
             "Cargo and NuGet release dry run completed."
         } else {
@@ -100,8 +101,8 @@ pub fn run(
         }));
     }
 
-    nuget::pack(repo_root, config, &package_options)?;
-    nuget::publish_packed(repo_root, config, &package_options)?;
+    nuget::pack(repo_root, tool_root, config, &package_options)?;
+    nuget::publish_packed(repo_root, tool_root, config, &package_options)?;
 
     Ok(CommandResult::with_message(if options.publish_cargo {
         "Cargo and NuGet release completed successfully."

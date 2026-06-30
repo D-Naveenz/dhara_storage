@@ -10,7 +10,7 @@ use crate::command::{
     CommandResult, ReportField as CommandReportField, StructuredReport, ToolContext,
 };
 use crate::logging::{current_log_path, log_build_progress, log_file_path};
-use crate::paths::{resolve_defs_output_dir, resolve_logs_dir};
+use crate::paths::{default_package_dir, resolve_defs_output_dir, resolve_logs_dir, resolve_path_against_repo};
 
 pub use package::*;
 pub use runner::*;
@@ -31,17 +31,25 @@ pub struct DefsPaths {
 impl DefsPaths {
     /// Resolves defs working paths from the current tool context.
     pub fn from_context(context: &ToolContext) -> Self {
-        Self::from_repo_root(
-            &context.repo_root,
-            context.package_dir.clone(),
-            context.output_dir.clone(),
-            context.logs_dir.clone(),
-        )
+        Self {
+            repo_root: context.repo_root.clone(),
+            package_dir: context
+                .package_dir
+                .clone()
+                .map(|path| resolve_path_against_repo(&context.repo_root, &path))
+                .unwrap_or_else(|| default_package_dir(&context.repo_root)),
+            output_dir: resolve_defs_output_dir(
+                &context.repo_root,
+                context.output_dir.as_deref(),
+            ),
+            logs_dir: resolve_logs_dir(&context.tool_root, context.logs_dir.as_deref()),
+        }
     }
 
     /// Resolves defs working paths from a repo root plus optional overrides.
     pub fn from_repo_root(
         repo_root: &Path,
+        tool_root: &Path,
         package_dir: Option<PathBuf>,
         output_dir: Option<PathBuf>,
         logs_dir: Option<PathBuf>,
@@ -49,9 +57,10 @@ impl DefsPaths {
         Self {
             repo_root: repo_root.to_path_buf(),
             package_dir: package_dir
-                .unwrap_or_else(|| repo_root.join("tooling").join("dhara_tool").join("package")),
+                .map(|path| resolve_path_against_repo(repo_root, &path))
+                .unwrap_or_else(|| default_package_dir(repo_root)),
             output_dir: resolve_defs_output_dir(repo_root, output_dir.as_deref()),
-            logs_dir: resolve_logs_dir(repo_root, logs_dir.as_deref()),
+            logs_dir: resolve_logs_dir(tool_root, logs_dir.as_deref()),
         }
     }
 

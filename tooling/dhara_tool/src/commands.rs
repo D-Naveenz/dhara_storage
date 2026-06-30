@@ -4,6 +4,7 @@ use anyhow::{Context, Result, bail};
 use clap::{ArgAction, Parser, ValueEnum};
 
 use crate::command::{CommandResult, ToolContext};
+use crate::paths::resolve_path_against_repo;
 use crate::filedefs::{DefsCommand, execute as execute_defs, print_defs_help};
 use crate::nuget::{
     PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host,
@@ -366,7 +367,12 @@ pub(crate) fn verify_package_command(
         return Ok(CommandResult::success());
     };
     let config = current_config(context)?;
-    super::verify::verify_package(&context.repo_root, &config, &package_options(args, context))
+    super::verify::verify_package(
+        &context.repo_root,
+        &context.tool_root,
+        &config,
+        &package_options(args, context),
+    )
 }
 
 pub(crate) fn package_pack_command(
@@ -377,7 +383,12 @@ pub(crate) fn package_pack_command(
         return Ok(CommandResult::success());
     };
     let config = current_config(context)?;
-    pack_package(&context.repo_root, &config, &package_options(args, context))
+    pack_package(
+        &context.repo_root,
+        &context.tool_root,
+        &config,
+        &package_options(args, context),
+    )
 }
 
 pub(crate) fn package_stage_native_command(
@@ -409,6 +420,7 @@ pub(crate) fn package_stage_native_command(
     let config = current_config(context)?;
     stage_native_for_host(
         &context.repo_root,
+        &context.tool_root,
         &config,
         &PackageOptions {
             configuration: args.configuration,
@@ -424,7 +436,7 @@ pub(crate) fn package_stage_native_command(
 }
 
 pub(crate) fn native_merge_command(
-    _context: &ToolContext,
+    context: &ToolContext,
     args: &[String],
 ) -> Result<CommandResult> {
     let Some(args) = parse_args::<NativeMergeArgs>("native merge", args)? else {
@@ -433,10 +445,16 @@ pub(crate) fn native_merge_command(
     if args.input.is_empty() {
         bail!("native merge requires at least one --input path");
     }
-    crate::native_merge::merge_native_stages(&args.output, &args.input)?;
+    let output = resolve_path_against_repo(&context.repo_root, &args.output);
+    let inputs: Vec<PathBuf> = args
+        .input
+        .iter()
+        .map(|path| resolve_path_against_repo(&context.repo_root, path))
+        .collect();
+    crate::native_merge::merge_native_stages(&output, &inputs)?;
     Ok(CommandResult::with_message(format!(
         "Merged native stages into {}.",
-        args.output.display()
+        output.display()
     )))
 }
 
@@ -519,6 +537,7 @@ pub(crate) fn package_publish_command(
     let config = current_config(context)?;
     publish_package(
         &context.repo_root,
+        &context.tool_root,
         &config,
         &publish_options(args, context)?,
     )
@@ -553,7 +572,12 @@ pub(crate) fn release_run_command(context: &ToolContext, args: &[String]) -> Res
         return Ok(CommandResult::success());
     };
     let config = current_config(context)?;
-    run_release(&context.repo_root, &config, &release_options(args, context))
+    run_release(
+        &context.repo_root,
+        &context.tool_root,
+        &config,
+        &release_options(args, context),
+    )
 }
 
 #[cfg(test)]
@@ -567,6 +591,7 @@ mod tests {
     fn test_context() -> ToolContext {
         ToolContext {
             repo_root: PathBuf::from("."),
+            tool_root: PathBuf::from("."),
             run_mode: crate::command::RunMode::Direct,
             min: false,
             trace: false,

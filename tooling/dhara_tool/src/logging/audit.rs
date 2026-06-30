@@ -43,7 +43,7 @@ impl LoggingOptions {
             run_mode: context.run_mode,
             min: context.min,
             trace: context.trace,
-            logs_dir: resolve_logs_dir(&context.repo_root, context.logs_dir.as_deref()),
+            logs_dir: resolve_logs_dir(&context.tool_root, context.logs_dir.as_deref()),
             context: context.clone(),
         }
     }
@@ -145,7 +145,7 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
     );
 
     let output_dir = resolve_output_dir(
-        &options.context.repo_root,
+        &options.context.tool_root,
         options.context.output_dir.as_deref(),
     );
     let defs_output_dir = resolve_defs_output_dir(
@@ -155,6 +155,7 @@ pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
     debug!(
         target: AUDIT_TARGET,
         repo_root = %options.context.repo_root.display(),
+        tool_root = %options.context.tool_root.display(),
         output_dir = %output_dir.display(),
         defs_output_dir = %defs_output_dir.display(),
         logs_dir = %options.logs_dir.display(),

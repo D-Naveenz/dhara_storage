@@ -31,12 +31,13 @@ dhara_tool/src/
 ├── tui/             # interactive mode
 └── logging/         # audit log setup
 
-tooling/
-├── scripts/         # ensure-dhara-tool-dist, verify-local → dist quality run
-├── output/          # NuGet packages and operator artifacts
+{tool_root}/         # directory containing the running binary (exe-relative)
 ├── logs/            # audit logs ({date}_dhara_tool*.log)
-└── artifacts/       # gitignored native staging scratch
+├── output/          # NuGet packages and operator artifacts
+└── artifacts/       # native staging scratch (e.g. native-stage/)
 ```
+
+With the dist binary (`target/dist/dhara_tool`), `tool_root` is `target/dist/`. `cargo run` uses `target/debug/` instead. Workspace sources (TrID inputs, embedded defs) stay under the repo root — see [logging reference][logging].
 
 CI vs tool split: [CI/CD reference][ci-cd]. Audit log rules: [logging reference][logging].
 
@@ -92,11 +93,11 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 ```powershell
 ./tooling/scripts/ensure-dhara-tool-dist.ps1
 ./tooling/scripts/verify-local.ps1
-cargo run -p dhara_tool -- config sync
-cargo run -p dhara_tool -- package stage-native --msvc-env
-cargo run -p dhara_tool -- native merge --output tooling/artifacts/native-stage --input ...
-cargo run -p dhara_tool -- verify package --native-stage tooling/artifacts/native-stage
-cargo run -p dhara_tool -- release run --dry-run
+./target/dist/dhara_tool config sync
+./target/dist/dhara_tool package stage-native --msvc-env
+./target/dist/dhara_tool native merge --output target/dist/artifacts/native-stage --input ...
+./target/dist/dhara_tool verify package
+./target/dist/dhara_tool release run --dry-run
 ```
 
 **Troubleshooting**
@@ -129,7 +130,7 @@ cargo test -p dhara_tool
 cargo run -p dhara_tool --
 ```
 
-Audit logs land in `tooling/logs/{date}_dhara_tool[_N].log`.
+Audit logs land in `{tool_root}/logs/{date}_dhara_tool[_N].log` (e.g. `target/dist/logs/` after `ensure-dhara-tool-dist`).
 
 ## 🤝 Contributing & License
 

@@ -211,6 +211,8 @@ impl RunMode {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ToolContext {
     pub repo_root: PathBuf,
+    /// Directory containing the running executable; anchors generated logs, output, and artifacts.
+    pub tool_root: PathBuf,
     pub run_mode: RunMode,
     pub min: bool,
     pub trace: bool,
@@ -314,6 +316,7 @@ mod tests {
     fn context() -> ToolContext {
         ToolContext {
             repo_root: PathBuf::from("."),
+            tool_root: PathBuf::from("."),
             run_mode: RunMode::Direct,
             min: false,
             trace: false,

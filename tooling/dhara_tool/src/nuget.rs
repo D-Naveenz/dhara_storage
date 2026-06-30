@@ -30,6 +30,7 @@ pub struct PackageOptions {
 
 pub fn pack(
     repo_root: &Path,
+    tool_root: &Path,
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
@@ -42,8 +43,8 @@ pub fn pack(
     sync(repo_root)?;
 
     let version = effective_version(config, &options.version_override);
-    let artifacts_root = artifacts_root(repo_root)?;
-    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let artifacts_root = artifacts_root(tool_root)?;
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
     let native_stage_root = if let Some(stage) = options
         .native_stage_override
         .clone()
@@ -95,6 +96,7 @@ pub fn pack(
 
 pub fn verify(
     repo_root: &Path,
+    tool_root: &Path,
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
@@ -102,11 +104,11 @@ pub fn verify(
         "verifying NuGet package (configuration={})",
         options.configuration
     ));
-    pack(repo_root, config, options)?;
+    pack(repo_root, tool_root, config, options)?;
 
     let version = effective_version(config, &options.version_override);
-    let artifacts_root = artifacts_root(repo_root)?;
-    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let artifacts_root = artifacts_root(tool_root)?;
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
     let package_path = output_root
         .join("nuget")
         .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
@@ -159,6 +161,7 @@ pub fn verify(
 
 pub fn publish(
     repo_root: &Path,
+    tool_root: &Path,
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
@@ -166,7 +169,7 @@ pub fn publish(
         "publishing NuGet package (execute={})",
         options.execute_publish
     ));
-    verify(repo_root, config, options)?;
+    verify(repo_root, tool_root, config, options)?;
 
     if !options.execute_publish {
         return Ok(CommandResult::with_message(
@@ -182,7 +185,7 @@ pub fn publish(
         .unwrap_or_else(|| config.publish.api_key_env.clone());
     let api_key = secret_from_env(repo_root, &api_key_env)?;
 
-    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
     let package_path = output_root
         .join("nuget")
         .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
@@ -217,6 +220,7 @@ pub fn publish(
 
 pub fn publish_packed(
     repo_root: &Path,
+    tool_root: &Path,
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
@@ -230,7 +234,7 @@ pub fn publish_packed(
         .unwrap_or_else(|| config.publish.api_key_env.clone());
     let api_key = secret_from_env(repo_root, &api_key_env)?;
 
-    let output_root = output_root(repo_root, options.output_dir.as_ref())?;
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
     let package_path = if let Some(path) = options.prepacked_nuget_override.as_ref() {
         path.clone()
     } else {
@@ -340,13 +344,14 @@ fn stage_native_assets(
     Ok(())
 }
 
-/// Stages native libraries buildable on the current host into `tooling/artifacts/native-stage`.
+/// Stages native libraries buildable on the current host into `{tool_root}/artifacts/native-stage`.
 pub fn stage_native_for_host(
     repo_root: &Path,
+    tool_root: &Path,
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
-    let artifacts_root = artifacts_root(repo_root)?;
+    let artifacts_root = artifacts_root(tool_root)?;
     let stage_root = artifacts_root.join("native-stage");
     reset_directory(&stage_root)?;
     stage_native_assets(repo_root, config, options, &stage_root)?;
@@ -668,14 +673,14 @@ fn absolute_native_stage_root(repo_root: &Path, stage: &Path) -> PathBuf {
     }
 }
 
-fn artifacts_root(repo_root: &Path) -> Result<PathBuf> {
-    let root = default_artifacts_dir(repo_root);
+fn artifacts_root(tool_root: &Path) -> Result<PathBuf> {
+    let root = default_artifacts_dir(tool_root);
     fs::create_dir_all(&root).with_context(|| format!("failed to create {}", root.display()))?;
     Ok(root)
 }
 
-fn output_root(repo_root: &Path, override_value: Option<&PathBuf>) -> Result<PathBuf> {
-    let root = resolve_output_dir(repo_root, override_value.map(PathBuf::as_path));
+fn output_root(tool_root: &Path, override_value: Option<&PathBuf>) -> Result<PathBuf> {
+    let root = resolve_output_dir(tool_root, override_value.map(PathBuf::as_path));
     fs::create_dir_all(&root).with_context(|| format!("failed to create {}", root.display()))?;
     Ok(root)
 }

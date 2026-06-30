@@ -206,6 +206,7 @@ mod tests {
     fn test_context(root: &Path) -> ToolContext {
         ToolContext {
             repo_root: root.to_path_buf(),
+            tool_root: root.to_path_buf(),
             run_mode: RunMode::Direct,
             min: false,
             trace: false,

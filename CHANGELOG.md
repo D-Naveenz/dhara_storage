@@ -19,6 +19,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Pipeline** — PR/CD jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` ensures dist then runs `quality run` (CI parity).
 - **`dhara-tool-build`** — `cargo test -p dhara_tool` runs once on Linux; matrix legs only compile `profile.dist` per OS (binaries are not portable).
 - **Linux-primary orchestration** — `quality`, `publish-readiness`, and CD `publish` run on `ubuntu-latest` with `linux-x64` tool cache; `platform-windows` remains on `windows-latest` for MSVC native DLL builds.
+- **Operator output paths** — `dhara_tool` writes logs, scratch artifacts, and NuGet output under the executable directory (`{tool_root}/logs`, `{tool_root}/artifacts`, `{tool_root}/output`); e.g. `target/dist/logs/` when using the cached dist binary. Workspace sources (`filedefs.dat`, TrID package inputs) stay repo-relative.
 
 ### Removed
 

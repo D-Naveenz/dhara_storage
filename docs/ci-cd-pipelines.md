@@ -83,16 +83,16 @@ Restores matching OS cache key, then:
 - `dhara_tool quality test-dotnet` (Windows only)
 - `dhara_tool package stage-native` (`--msvc-env` on Windows)
 
-Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact.
+Upload `native-stage-{windows,linux,linux-arm64,macos}` from `target/dist/artifacts/native-stage`.
 
 ### `publish-readiness` (linux)
 
 On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 
-1. Download per-OS native artifacts (`native-stage-*`)
-2. `dhara_tool native merge --output … --input …` (four inputs)
-3. `dhara_tool verify package --native-stage …`
-4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention)
+1. Download per-OS native artifacts into `target/dist/artifacts/native-inputs/`
+2. `dhara_tool native merge --output target/dist/artifacts/native-stage --input …` (four inputs)
+3. `dhara_tool verify package` (default stage under dist `tool_root`)
+4. Upload `release-native-stage`, `release-nuget-package` (`target/dist/output/nuget/`), `release-metadata` (90-day retention)
 
 ## CD job: `publish`
 
@@ -121,7 +121,7 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 ## Related docs
 
 - [Multi-platform native packaging][native-packaging] — RID staging rules, artifact SHA pitfalls
-- [Logging conventions][logging] — audit logs under `tooling/logs/`
+- [Logging conventions][logging] — audit logs under `{tool_root}/logs/` (e.g. `target/dist/logs/`)
 - [dhara_tool README][readme-tool] — full command surface
 - [Docs index][docs-index]
 

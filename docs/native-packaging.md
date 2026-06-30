@@ -15,7 +15,7 @@ flowchart LR
     M[macos: osx-arm64]
   end
 
-  subgraph merge ["publish-readiness (windows)"]
+  subgraph merge ["publish-readiness (linux)"]
     DL[download native-stage-* artifacts]
     MG[dhara_tool native merge]
     VP[dhara_tool verify package]
@@ -25,11 +25,11 @@ flowchart LR
   VP --> NUPKG[Dhara.Storage.nupkg]
 ```
 
-Each platform job runs `dhara_tool package stage-native` (with `--msvc-env` on Windows), uploads a `native-stage-{os}` artifact, and exits. The `publish-readiness` job downloads all four artifacts, runs `native merge`, then `verify package` with the combined stage as `--native-stage`.
+Each platform job runs `dhara_tool package stage-native` (with `--msvc-env` on Windows), uploads a `native-stage-{os}` artifact from `target/dist/artifacts/native-stage`, and exits. The `publish-readiness` job downloads all four artifacts, runs `native merge` into the same default stage directory, then `verify package` (no `--native-stage` when the merged tree matches the dist binary default).
 
 ## Expected layout
 
-After merge, `tooling/artifacts/native-stage` must contain:
+After merge, `target/dist/artifacts/native-stage` (dist `tool_root`) must contain:
 
 ```text
 runtimes/
@@ -62,18 +62,20 @@ runtimes/
 
 ## Merging native artifacts
 
-`publish-readiness` merges RID directories with `dhara_tool native merge`:
+`publish-readiness` merges RID directories with `dhara_tool native merge` (paths are repo-relative):
 
 ```bash
 dhara_tool native merge \
-  --output tooling/artifacts/native-stage \
-  --input tooling/artifacts/native-inputs/native-stage-windows \
-  --input tooling/artifacts/native-inputs/native-stage-linux \
-  --input tooling/artifacts/native-inputs/native-stage-linux-arm64 \
-  --input tooling/artifacts/native-inputs/native-stage-macos
+  --output target/dist/artifacts/native-stage \
+  --input target/dist/artifacts/native-inputs/native-stage-windows \
+  --input target/dist/artifacts/native-inputs/native-stage-linux \
+  --input target/dist/artifacts/native-inputs/native-stage-linux-arm64 \
+  --input target/dist/artifacts/native-inputs/native-stage-macos
+
+dhara_tool verify package
 ```
 
-Repeat `--input` once per downloaded artifact directory (each must contain a `runtimes/` folder).
+Repeat `--input` once per downloaded artifact directory (each must contain a `runtimes/` folder). When the dist binary lives in `target/dist/`, `verify package` picks up `{tool_root}/artifacts/native-stage` by default — no `--native-stage` needed after merge.
 
 ## Packing staged natives into the NuGet
 
@@ -81,7 +83,7 @@ When `StagedNativeRoot` is set, [Dhara.Storage.csproj][csproj] skips local `carg
 
 ### Pass an absolute repository-root path
 
-`dhara_tool` resolves relative stage paths against the repo root before calling `dotnet pack` ([`absolute_native_stage_root`][nuget-rs]). MSBuild globs in the csproj are evaluated relative to the **project file**, not the working directory; a bare relative `tooling/artifacts/native-stage` from CI will not match files.
+`dhara_tool` resolves relative `--native-stage` paths against the **repo root** before calling `dotnet pack` ([`absolute_native_stage_root`][nuget-rs]). `native merge` `--output` / `--input` paths use the same repo-root rule. MSBuild globs in the csproj are evaluated relative to the **project file**, not the working directory; pass an absolute `StagedNativeRoot` in local `dotnet pack` smoke tests.
 
 ### Use `_PackageFiles`, not static `ItemGroup`
 
@@ -90,13 +92,13 @@ Staged natives must be added in a `Pack` target as `_PackageFiles` with an expli
 ### Local smoke test
 
 ```powershell
-$stage = (Resolve-Path tooling/artifacts/native-stage).Path
+$stage = (Resolve-Path target/dist/artifacts/native-stage).Path
 dotnet pack src/bindings/Dhara.Storage/Dhara.Storage.csproj `
   -c Release -p:StagedNativeRoot=$stage `
-  --output tooling/output/test-nuget
+  --output target/dist/output/test-nuget
 ```
 
-Inspect the nupkg for `runtimes/win-x64/native/dharastorage.dll` (and the other four RIDs).
+Inspect the nupkg for `runtimes/win-x64/native/dharastorage.dll` (and the other four RIDs). Packed release artifacts land in `target/dist/output/nuget/` when using the dist binary.
 
 ## Platform quirks (runtime and tests)
 
