@@ -197,3 +197,15 @@ Use typed ABI for hot structured result paths such as listings, file information
 - Convert immediately into public managed models.
 - Add Rust layout tests and C# behavior tests.
 - Keep the public .NET API unchanged unless the product API itself needs to change.
+
+## Related docs
+
+- [dharastorage README][readme-dharastorage] — exported C entry points and logger bridge
+- [Dhara.Storage README][readme-nuget] — managed consumer API
+- [CI/CD pipelines][ci-cd] — native package verification on Windows CI
+- [Docs index][docs-index]
+
+[readme-dharastorage]: ../src/dharastorage/README.md
+[readme-nuget]: ../src/bindings/Dhara.Storage/README.md
+[ci-cd]: ci-cd-pipelines.md
+[docs-index]: README.md

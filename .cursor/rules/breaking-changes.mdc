@@ -1,6 +1,6 @@
 ---
 description: Breaking changes are acceptable pre-1.0; no legacy paths, deprecations, or parallel V1/V2 APIs
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Breaking changes are acceptable

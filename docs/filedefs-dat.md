@@ -210,8 +210,16 @@ validation and matching (`package_revision`, `tags`, records) stay in the binary
 payload. Fields that describe provenance and build context (`package_version`,
 `definitions_release`) live in XML where tooling and humans can read them directly.
 
-## Related documentation
+## Related docs
 
-- [Logging conventions](logging.md) — audit log format for `dhara_tool` builds
-- [`dhara_storage_dal` README](../src/core/dhara_storage_dal/README.md) — crate-local quick reference
-- [`tooling/dhara_tool/package/README.md`](../tooling/dhara_tool/package/README.md) — builder input assets
+- [Logging conventions][logging] — audit log format for `dhara_tool` builds
+- [dhara_storage_dal README][readme-dal] — crate-local quick reference
+- [dhara_tool package/ notes][package-readme] — builder input assets
+- [CI/CD pipelines][ci-cd] — defs build in release flow
+- [Docs index][docs-index]
+
+[logging]: logging.md
+[readme-dal]: ../src/core/dhara_storage_dal/README.md
+[package-readme]: ../tooling/dhara_tool/package/README.md
+[ci-cd]: ci-cd-pipelines.md
+[docs-index]: README.md

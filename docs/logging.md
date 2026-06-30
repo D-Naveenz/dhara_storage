@@ -239,3 +239,15 @@ grep "finished in" logfile
 grep "TrID transform" logfile
 grep "exiting" logfile
 ```
+
+## Related docs
+
+- [dhara_tool README][readme-tool] — commands, flags, output layout
+- [filedefs.dat / DSFD format][filedefs-dat] — TrID build phases referenced in audit logs
+- [CI/CD pipelines][ci-cd] — direct mode in CI vs interactive TUI locally
+- [Docs index][docs-index]
+
+[readme-tool]: ../tooling/dhara_tool/README.md
+[filedefs-dat]: filedefs-dat.md
+[ci-cd]: ci-cd-pipelines.md
+[docs-index]: README.md

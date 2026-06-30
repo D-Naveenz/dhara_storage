@@ -1,0 +1,60 @@
+---
+description: Route README and docs/ work to readme-generation and reference-docs skills
+alwaysApply: true
+---
+
+# Documentation skills
+
+When creating or editing project documentation, **read and follow the matching skill first** — do not improvise structure from memory or copy legacy README prose.
+
+## Routing
+
+| Target | Skill |
+|--------|-------|
+| Any `README.md` **except** `docs/README.md` | **readme-generation** |
+| `docs/**/*.md` (including `docs/README.md`) | **reference-docs** |
+
+## All READMEs matter
+
+This monorepo has multiple READMEs; each is a real publish or discovery surface:
+
+| README | Audience / surface |
+|--------|-------------------|
+| [`README.md`][root-readme] | **GitHub** — workspace overview, clone, local dev |
+| [`src/core/dhara_storage/README.md`][crate-dhara-storage] | **crates.io** (`readme` in Cargo.toml) |
+| [`src/core/dhara_storage_dal/README.md`][crate-dal] | **crates.io** |
+| [`src/dharastorage/README.md`][crate-dharastorage] | **crates.io** |
+| [`tooling/dhara_tool/README.md`][crate-tool] | **crates.io** |
+| [`src/bindings/Dhara.Storage/README.md`][nuget-readme] | **NuGet** (`PackageReadmeFile` / `dhara.config.toml`) |
+
+When editing a project README, **scope content to that package** — install, API, and examples for that crate or NuGet package only. Link to the root README or `docs/` for workspace-wide context; do not paste the whole monorepo story into every package README.
+
+When editing the **root** README, orient GitHub visitors: what the workspace is, how to build/verify, and where each published package lives.
+
+**Exception:** `tooling/dhara_tool/package/README.md` is internal operator notes for builder assets (excluded from `cargo package`), not a registry README — keep it short; use **reference-docs** tone, not the 8-section layout.
+
+## Must do
+
+- Discover facts from **that project's** manifest (`Cargo.toml`, `.csproj`, `dhara.config.toml`), code, and workflows before writing.
+- Use **reference-style** markdown links in README and docs.
+- Link to `docs/` for depth instead of duplicating ABI, pipeline, or architecture essays in any README.
+
+## Must not
+
+- Put agent prompts, Cursor rules, or skill instructions in any README.
+- Assume only the repo-root README exists or matters.
+- Treat existing README structure as canonical when it conflicts with readme-generation (recreate from code if needed).
+
+## New reference docs
+
+- Filename: `docs/<topic>.md` (kebab-case).
+- Optional assets: `docs/references/`.
+- Update [docs/README.md][docs-index] when adding a top-level doc.
+
+[root-readme]: ../README.md
+[crate-dhara-storage]: ../src/core/dhara_storage/README.md
+[crate-dal]: ../src/core/dhara_storage_dal/README.md
+[crate-dharastorage]: ../src/dharastorage/README.md
+[crate-tool]: ../tooling/dhara_tool/README.md
+[nuget-readme]: ../src/bindings/Dhara.Storage/README.md
+[docs-index]: ../docs/README.md

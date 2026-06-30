@@ -1,62 +1,94 @@
 # dharastorage
 
-`dharastorage` exposes a path-based native C ABI over `dhara_storage`.
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/D-Naveenz/dhara_storage/blob/main/LICENSE.txt)
 
-It is the supported interop layer for `src/bindings/Dhara.Storage` and for any
-other host that wants to consume the Rust runtime through a stable UTF-8 oriented
-ABI instead of linking Rust types directly.
+`dharastorage` is the native C ABI layer over [dhara_storage][repo-dhara-storage].
+It exposes a stable, UTF-8-oriented FFI for [Dhara.Storage][repo-nuget] and other hosts that cannot link Rust types directly.
+Filesystem behavior stays in the core crate; this crate marshals results across the boundary.
 
-## Surface
+## ✨ Key Features
 
-- immediate query functions for analysis, metadata, listings, reads, writes, and path mutations
-- background operation handles for copy, move, delete, read, and write workflows with progress and cancellation
-- directory watch handles with debounced typed native events
-- streaming write sessions for chunked uploads from managed hosts
-- explicit buffer-free helpers for owned strings and byte arrays
-- native logger registration for forwarding structured `tracing` events into a host environment
+- **Immediate queries** — analysis, metadata, listings, reads, writes, path mutations
+- **Background operations** — copy, move, delete, read, write with progress and cancellation
+- **Directory watches** — debounced typed native events
+- **Streaming writes** — chunked upload sessions for managed hosts
+- **Typed hot-path ABI** — `#[repr(C)]` result handles with matching `*_free` functions
+- **Logger bridge** — forwards `tracing` events as JSON to a host callback
 
-## ABI Policy
+## 📦 Tech Stack & Architecture
 
-The structured-result ABI is typed and C-compatible:
+| Piece | Role |
+|-------|------|
+| `dhara_storage` | All filesystem and analysis behavior |
+| `serde_json` | Cold-path errors, operation errors, log records |
+| `cdylib` | Native library shipped inside NuGet `runtimes/` |
+
+```
+dharastorage/src/
+├── ffi/           # exported C entry points
+├── typed/         # #[repr(C)] result structs and owners
+├── operations/    # background handle lifecycle
+└── logging/       # dhara_register_logger bridge
+```
+
+ABI design rules and ownership patterns: [typed C-compatible ABI reference][typed-abi].
+
+## 🚀 Getting Started & Installation
+
+**Prerequisites:** Rust stable. This crate is built as a workspace member and staged into NuGet — not published standalone to crates.io.
+
+Build from the workspace root:
+
+```powershell
+cargo build -p dharastorage --release
+```
+
+Multi-RID packaging uses [dhara_tool `package stage-native`][repo-tool] and CI merge scripts — see [CI/CD reference][ci-cd].
+
+## 🔧 Configuration & Environment Variables
+
+No crate-specific environment variables.
+
+Hosts register a logger with `dhara_register_logger` to receive UTF-8 JSON log records (level, target, message, timestamp, optional file/line, structured fields).
+
+## 🛠️ Usage Examples
+
+**Representative typed exports** (full list in source):
 
 - `dhara_analyze_path`
-- `dhara_get_file_info`
-- `dhara_get_directory_info`
-- `dhara_list_files`
-- `dhara_list_directories`
-- `dhara_list_entries`
-- `dhara_watch_try_recv_event`
-- `dhara_watch_recv_event`
-- `dhara_watch_recv_event_timeout`
+- `dhara_get_file_info` / `dhara_get_directory_info`
+- `dhara_list_files` / `dhara_list_directories` / `dhara_list_entries`
+- `dhara_watch_try_recv_event` / `dhara_watch_recv_event` / `dhara_watch_recv_event_timeout`
 
-These functions return Rust-owned `#[repr(C)]` result handles containing only
-fixed-layout fields, UTF-8 pointer/length slices, typed pointer/length arrays,
-and fixed integer discriminants. Callers must copy what they need immediately
-and release the result with the matching `*_free` function.
+**ABI policy (summary)**
 
-JSON is used only for cold-path errors, operation error payloads, and logging records.
+- Hot structured results use Rust-owned `#[repr(C)]` handles — copy immediately, then call the matching `*_free`.
+- Strings in results are UTF-8 pointer/length slices, not embedded host strings.
+- JSON is reserved for errors, diagnostics, and logging — not hot query paths.
 
-## Design Notes
+**.NET consumers** should use [Dhara.Storage][repo-nuget] rather than calling this ABI directly.
 
-- String inputs are UTF-8 and null-terminated.
-- Hot structured results cross the ABI through typed Rust-owned handles.
-- Strings inside typed results cross as UTF-8 pointer/length slices, not embedded C# strings.
-- Raw file reads cross the ABI as owned byte buffers.
-- The crate stays intentionally thin; filesystem behavior remains owned by `dhara_storage`.
+**Troubleshooting**
 
-## Logging
+- Layout mismatches between Rust and C# → follow [typed ABI reference][typed-abi]; add layout tests when changing structs.
+- Memory leaks → ensure every success path calls the matching `*_free` in a `finally` block.
 
-Hosts can register a logger callback through `dhara_register_logger`. Each callback
-invocation receives a UTF-8 JSON record with:
+## ✅ Testing & Quality Assurance
 
-- log level
-- target/category
-- rendered message
-- timestamp
-- file/module/line information when available
-- structured event fields captured from Rust `tracing`
+```powershell
+cargo test -p dharastorage
+cargo clippy -p dharastorage --all-targets -- -D warnings
+```
 
-## Related Docs
+Integration coverage also runs through [Dhara.Storage.Tests][repo-nuget] on Windows CI.
 
-- Core runtime: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage>
-- .NET wrapper: <https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/Dhara.Storage>
+## 🤝 Contributing & License
+
+Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
+
+[repo-root]: https://github.com/D-Naveenz/dhara_storage
+[repo-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage
+[repo-nuget]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/Dhara.Storage
+[repo-tool]: https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool
+[typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md
+[ci-cd]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/ci-cd-pipelines.md

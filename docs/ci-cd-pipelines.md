@@ -1,6 +1,6 @@
 # CI/CD Pipeline Flow
 
-Human-readable map of [`.github/workflows/pipeline.yml`](../.github/workflows/pipeline.yml), [`tooling/scripts/`](../tooling/scripts/), and where `dhara_tool` is used.
+Human-readable map of the [pipeline workflow][pipeline-yml], [tooling scripts][tooling-scripts], and where `dhara_tool` is used.
 
 ## Triggers
 
@@ -43,7 +43,7 @@ flowchart TB
 | `verify package` | `dhara_tool` via `verify-package.ps1` |
 | `release run` | `dhara_tool` via `release-run-windows.ps1` with `--prepacked-nuget` on CD |
 
-Local developers use [`verify-local.ps1`](../tooling/scripts/verify-local.ps1) / [`.sh`](../tooling/scripts/verify-local.sh) for CI parity. GitHub Actions does **not** invoke a combined verify command in the tool.
+Local developers use [verify-local][verify-local-ps1] / [`.sh`][verify-local-sh] for CI parity. GitHub Actions does **not** invoke a combined verify command in the tool.
 
 ## PR jobs
 
@@ -79,21 +79,39 @@ Runs on `workflow_dispatch` or `push` to `main` when non-doc paths changed.
 
 ## `dhara_tool` build profile in CI
 
-Root [`Cargo.toml`](../Cargo.toml) defines `[profile.ci]` (release without LTO) for the operator CLI. Shipped `dharastorage` natives still use workspace `[profile.release]` with LTO.
+Root [Cargo.toml][workspace-cargo] defines `[profile.ci]` (release without LTO) for the operator CLI. Shipped `dharastorage` natives still use workspace `[profile.release]` with LTO.
 
 ## Scripts
 
 | Script | Role |
 |--------|------|
-| [`verify-local.ps1`](../tooling/scripts/verify-local.ps1) / [`.sh`](../tooling/scripts/verify-local.sh) | Local CI parity: fmt, clippy, doc, Rust tests, dotnet test |
-| [`merge-native.ps1`](../tooling/scripts/merge-native.ps1) / [`.sh`](../tooling/scripts/merge-native.sh) | Merge `runtimes/**` trees |
-| [`stage-native-windows.ps1`](../tooling/scripts/stage-native-windows.ps1) | vcvars + `package stage-native` |
-| [`stage-native-linux.sh`](../tooling/scripts/stage-native-linux.sh) / [`stage-native-macos.sh`](../tooling/scripts/stage-native-macos.sh) | Build ci-profile tool + `package stage-native` |
-| [`verify-package.ps1`](../tooling/scripts/verify-package.ps1) | Build ci-profile tool + `verify package` |
-| [`release-run-windows.ps1`](../tooling/scripts/release-run-windows.ps1) | vcvars + `release run` with dispatch flags |
+| [verify-local.ps1][verify-local-ps1] / [`.sh`][verify-local-sh] | Local CI parity: fmt, clippy, doc, Rust tests, dotnet test |
+| [merge-native.ps1][merge-native-ps1] / [`.sh`][merge-native-sh] | Merge `runtimes/**` trees |
+| [stage-native-windows.ps1][stage-native-windows] | vcvars + `package stage-native` |
+| [stage-native-linux.sh][stage-native-linux] / [stage-native-macos.sh][stage-native-macos] | Build ci-profile tool + `package stage-native` |
+| [verify-package.ps1][verify-package] | Build ci-profile tool + `verify package` |
+| [release-run-windows.ps1][release-run-windows] | vcvars + `release run` with dispatch flags |
 
 ## Related docs
 
-- [logging.md](./logging.md) — audit logs under `tooling/logs/`
-- [filedefs-dat.md](./filedefs-dat.md) — DSFD `packageVersion` uses DAL semver
-- [tooling/dhara_tool/README.md](../tooling/dhara_tool/README.md)
+- [Logging conventions][logging] — audit logs under `tooling/logs/`
+- [filedefs.dat / DSFD format][filedefs-dat] — DSFD `packageVersion` uses DAL semver
+- [dhara_tool README][readme-tool] — operator command surface
+- [Docs index][docs-index]
+
+[pipeline-yml]: ../.github/workflows/pipeline.yml
+[tooling-scripts]: ../tooling/scripts/
+[workspace-cargo]: ../Cargo.toml
+[verify-local-ps1]: ../tooling/scripts/verify-local.ps1
+[verify-local-sh]: ../tooling/scripts/verify-local.sh
+[merge-native-ps1]: ../tooling/scripts/merge-native.ps1
+[merge-native-sh]: ../tooling/scripts/merge-native.sh
+[stage-native-windows]: ../tooling/scripts/stage-native-windows.ps1
+[stage-native-linux]: ../tooling/scripts/stage-native-linux.sh
+[stage-native-macos]: ../tooling/scripts/stage-native-macos.sh
+[verify-package]: ../tooling/scripts/verify-package.ps1
+[release-run-windows]: ../tooling/scripts/release-run-windows.ps1
+[logging]: logging.md
+[filedefs-dat]: filedefs-dat.md
+[readme-tool]: ../tooling/dhara_tool/README.md
+[docs-index]: README.md

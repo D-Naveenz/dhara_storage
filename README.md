@@ -4,36 +4,90 @@
 [![dhara_storage_dal on crates.io](https://img.shields.io/crates/v/dhara_storage_dal?label=dhara_storage_dal)](https://crates.io/crates/dhara_storage_dal)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 
-Dhara Storage is a Rust-first storage runtime with a Windows-first delivery story.
-It combines definition-driven file analysis, path-based file and directory operations,
-debounced watching, a FlatBuffers-backed definitions data layer, and a managed .NET wrapper over
-the native core.
+Dhara Storage is a Rust-first storage and file-analysis workspace with a Windows-first delivery story.
+It ships a native runtime, a C ABI layer, a .NET NuGet package, and operator tooling from one repo.
+Current release line: **0.7.1** (shared across crates and NuGet).
 
-Rust crates and the `Dhara.Storage` NuGet package are versioned together from
-shared release metadata. The current publish target is `0.7.1`.
+## ✨ Key Features
 
-## Workspace
+- **Definition-driven analysis** — content-based file typing via bundled `filedefs.dat`
+- **Path-based storage API** — files, directories, copy/move/delete, optional progress
+- **Debounced watching** — stable directory change notifications
+- **Layered delivery** — Rust core → C ABI → `net10.0` managed wrapper
+- **Multi-RID NuGet** — `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`
+- **Operator CLI** — config sync, native staging, package verify, and release flows
 
-| Project                            | Purpose                                                                                               |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| `src/core/dhara_storage_dal` | FlatBuffers data access layer; runtime defs at `src/core/dhara_storage_dal/resources/filedefs.dat` |
-| `src/core/dhara_storage`     | Rust-native runtime for analysis, metadata, operations, navigation, and watching                      |
-| `src/dharastorage`     | Thin C ABI over `dhara_storage` for managed and native hosts                                          |
-| `src/bindings/Dhara.Storage`   | `net10.0` wrapper over `dharastorage`                                                                |
-| `tooling/dhara_tool`           | Operator CLI for verification, packaging, release, and defs workflows                                 |
+## 📦 Tech Stack & Architecture
 
-## Highlights
+| Layer | Technology |
+|-------|------------|
+| Core runtime | Rust (edition 2024), `tracing` |
+| Definitions DAL | FlatBuffers, embedded `filedefs.dat` |
+| Native interop | `cdylib` C ABI (`dharastorage`) |
+| Managed bindings | .NET 10 (`Dhara.Storage`) |
+| Operator surface | `dhara_tool` (Clap + Ratatui TUI) |
+| CI / release | GitHub Actions, `dhara.config.toml` |
 
-- Rust-native public API in `dhara_storage`, not a class-for-class port of the legacy C# model
-- Bundled `filedefs.dat` runtime package for content-based file analysis
-- File and directory operations that keep the simple path fast and opt into progress only when needed
-- Debounced directory watching for stable change notifications
-- Structured logging with `tracing` in Rust, native log forwarding through `dharastorage`, and host integration through `Microsoft.Extensions.Logging`
-- Multi-runtime NuGet packaging for Windows `win-x64` and `win-arm64`
+```
+dhara_storage/
+├── src/
+│   ├── core/
+│   │   ├── dhara_storage/       # Rust runtime (crates.io)
+│   │   └── dhara_storage_dal/   # FlatBuffers DAL (crates.io)
+│   ├── dharastorage/            # C ABI for FFI hosts
+│   └── bindings/Dhara.Storage/  # NuGet package source
+├── tooling/
+│   ├── dhara_tool/              # Operator CLI
+│   ├── scripts/                 # verify-local, stage-native, merge
+│   └── output/                  # staged packages (gitignored)
+├── docs/                        # technical reference
+├── dhara.config.toml            # shared version + publish metadata
+└── .env.local                   # local secrets (from .env.example)
+```
 
-## Quick Start
+| Package | README | Publish surface |
+|---------|--------|-----------------|
+| `dhara_storage` | [crate readme][readme-dhara-storage] | crates.io |
+| `dhara_storage_dal` | [crate readme][readme-dal] | crates.io |
+| `dharastorage` | [crate readme][readme-dharastorage] | native asset in NuGet |
+| `Dhara.Storage` | [package readme][readme-nuget] | NuGet.org |
+| `dhara_tool` | [tool readme][readme-tool] | workspace-only |
 
-Rust runtime:
+## 🚀 Getting Started & Installation
+
+**Prerequisites**
+
+- Rust **stable** toolchain (`cargo`, `rustfmt`, `clippy`)
+- .NET SDK **10.0.x** (for bindings tests and local .NET dev)
+- PowerShell or bash (for [verify-local][verify-local])
+- Windows: MSVC build tools when compiling `win-x64` / `win-arm64` natives locally
+
+**Setup**
+
+1. Clone the repository.
+2. Copy [.env.example][env-example] to `.env.local` and fill publish keys only when releasing.
+3. Run the local verify script from the repo root:
+
+```powershell
+./tooling/scripts/verify-local.ps1
+```
+
+## 🔧 Configuration & Environment Variables
+
+Shared release metadata lives in [dhara.config.toml][dhara-config] (versions, NuGet IDs, native RIDs).
+
+| Variable | Example | Purpose |
+|----------|---------|---------|
+| `CARGO_REGISTRY_TOKEN` | *(secret)* | crates.io publish (`release run`) |
+| `NUGET_API_KEY` | *(secret)* | NuGet.org publish |
+| `NUGET_SOURCE` | `https://api.nuget.org/v3/index.json` | NuGet feed URL |
+| `TOOL_MAX_WORKERS` | `4` | Caps Rayon workers in `dhara_tool` defs builds |
+
+Local secrets belong in `.env.local`, not in git. Run `cargo run -p dhara_tool -- config env init` to scaffold from the example file.
+
+## 🛠️ Usage Examples
+
+**Rust** — add [dhara_storage][readme-dhara-storage] to `Cargo.toml`:
 
 ```toml
 [dependencies]
@@ -48,75 +102,59 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 # Ok::<(), dhara_storage::StorageError>(())
 ```
 
-.NET wrapper:
+**.NET** — install [Dhara.Storage][readme-nuget]:
 
 ```powershell
 dotnet add package Dhara.Storage --version 0.7.1
 ```
 
-```csharp
-using Microsoft.Extensions.Logging;
-using Dhara.Storage;
-
-using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-DharaStorage.UseLoggerFactory(loggerFactory);
-
-var file = DharaStorage.File(@"C:\data\sample.pdf");
-var analysis = file.Analyze();
-var bytes = await file.ReadBytesAsync();
-```
-
-Tooling:
+**Operator** — verify package shape and dry-run release:
 
 ```powershell
-./tooling/scripts/verify-local.ps1
 cargo run -p dhara_tool -- verify package
 cargo run -p dhara_tool -- release run --dry-run
 ```
 
-## Support Matrix
+**Troubleshooting**
 
-| Surface                       | Status                                                                                      |
-| ----------------------------- | ------------------------------------------------------------------------------------------- |
-| `dhara_storage_dal`           | Shared FlatBuffers definitions DAL                                                          |
-| `dhara_storage`               | Cross-platform core with Windows-first shell metadata; OS shell icons via `file_icon_provider` |
-| `dharastorage`                | Cross-platform native ABI (`dll` / `so` / `dylib`)                                            |
-| `Dhara.Storage` NuGet package | `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`                             |
+- Missing native RID at runtime → ensure the NuGet package includes your `runtimes/{rid}/native` asset; see [CI/CD reference][ci-cd].
+- Local `dotnet pack` blocked → use `dhara_tool` staging; single-runtime packs are intentionally guarded.
+- Wrong worker count in defs builds → set `-w` / `--workers` or `TOOL_MAX_WORKERS`; see [logging reference][logging].
 
-The NuGet package rejects unsupported 32-bit RIDs and platforms. Shell icons are returned as raw RGBA bytes (`ShellIcon`) when `includeIcon: true`; this is not PNG.
-
-### Local Windows native builds (x64 + ARM64)
+## ✅ Testing & Quality Assurance
 
 ```powershell
-rustup target add aarch64-pc-windows-msvc
-# Visual Studio: Desktop development with C++ + MSVC x64/ARM64 build tools
-$vcvars = "<VS>\VC\Auxiliary\Build\vcvarsall.bat"
-cmd /c "call `"$vcvars`" x64_arm64 && cargo build -p dharastorage --release --target x86_64-pc-windows-msvc"
-cmd /c "call `"$vcvars`" x64_arm64 && cargo build -p dharastorage --release --target aarch64-pc-windows-msvc"
+# Full local parity with CI (fmt, clippy, doc, Rust + .NET tests)
+./tooling/scripts/verify-local.ps1
+
+# Per-crate Rust tests
+cargo test -p dhara_storage --all-features
+cargo test -p dhara_storage_dal
+cargo test -p dharastorage
+
+# NuGet package verification (after native staging)
+cargo run -p dhara_tool -- verify package
 ```
 
-Full five-RID package verification runs in CI after merging per-OS native stage artifacts. On Windows alone, `cargo run -p dhara_tool -- package stage-native` stages only `win-x64` and `win-arm64`.
+Skip `cargo doc` with `./tooling/scripts/verify-local.ps1 -SkipDocs` when iterating quickly.
 
-## Logging
+## 🤝 Contributing & License
 
-- Rust crates emit structured `tracing` events for analysis, metadata loading, operations, watching, package verification, and release flows.
-- `dharastorage` exposes a native logger registration API that forwards JSON log records across the ABI.
-- `Dhara.Storage` forwards both managed wrapper logs and native runtime logs into a host `ILoggerFactory`.
-- `dhara_tool` now emits richer command, configuration, transfer, and verification logs for release diagnostics.
+Open a pull request against `main`. Keep workspace and package READMEs accurate when behavior or publish surfaces change.
 
-## Release Flow
+Licensed under [Apache-2.0][license]. See per-crate `Cargo.toml` and the NuGet package for attribution.
 
-- Shared release metadata lives in [dhara.config.toml](./dhara.config.toml).
-- Local secrets belong in [.env.local](./.env.example), created from the example file.
-- [tooling/dhara_tool](./tooling/dhara_tool/README.md) is the supported operator surface for config sync, verification, packaging, and publish flows.
-- `cargo run -p dhara_tool -- release run --dry-run` validates the Cargo-first release flow without publishing.
-- `cargo run -p dhara_tool -- release run` publishes `dhara_storage_dal` and `dhara_storage` first, then publishes the `Dhara.Storage` NuGet package.
-- `cargo run -p dhara_tool -- release run --skip-cargo` publishes only the NuGet package when the Rust crates for the current version already exist.
-- NuGet verification checks that all configured `runtimes/{rid}/native/*` entries are present in the package.
+**Technical reference** (ABI, DSFD format, CI maps, logging): [docs index][docs-index].
 
-## Docs
-
-- [dhara_storage_dal README](./src/core/dhara_storage_dal/README.md)
-- [dhara_storage README](./src/core/dhara_storage/README.md)
-- [dharastorage README](./src/dharastorage/README.md)
-- [Dhara.Storage README](./src/bindings/Dhara.Storage/README.md)
+[readme-dhara-storage]: src/core/dhara_storage/README.md
+[readme-dal]: src/core/dhara_storage_dal/README.md
+[readme-dharastorage]: src/dharastorage/README.md
+[readme-nuget]: src/bindings/Dhara.Storage/README.md
+[readme-tool]: tooling/dhara_tool/README.md
+[verify-local]: tooling/scripts/verify-local.ps1
+[env-example]: .env.example
+[dhara-config]: dhara.config.toml
+[ci-cd]: docs/ci-cd-pipelines.md
+[logging]: docs/logging.md
+[license]: LICENSE.txt
+[docs-index]: docs/README.md
