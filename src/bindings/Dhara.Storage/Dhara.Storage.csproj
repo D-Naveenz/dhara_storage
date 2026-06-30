@@ -56,14 +56,15 @@
   <Target Name="IncludeStagedNativeRuntimes" BeforeTargets="_GetPackageFiles" Condition="&apos;$(StagedNativeRoot)&apos; != &apos;&apos;">
     <PropertyGroup>
       <_StagedNativeFullPath>$([System.IO.Path]::GetFullPath(&apos;$(StagedNativeRoot)&apos;))</_StagedNativeFullPath>
+      <_StagedRuntimesRoot>$(_StagedNativeFullPath)\runtimes</_StagedRuntimesRoot>
     </PropertyGroup>
     <ItemGroup>
-      <_StagedRuntimeFile Include="$(_StagedNativeFullPath)\runtimes\**\native\*.dll" />
-      <_StagedRuntimeFile Include="$(_StagedNativeFullPath)\runtimes\**\native\*.so" />
-      <_StagedRuntimeFile Include="$(_StagedNativeFullPath)\runtimes\**\native\*.dylib" />
-      <None Include="@(_StagedRuntimeFile)" Pack="true" Visible="false">
-        <PackagePath>runtimes/%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
-      </None>
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)\**\native\*.dll" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)\**\native\*.so" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)\**\native\*.dylib" />
+      <_PackageFiles Include="@(_StagedRuntimeFile)">
+        <PackagePath>runtimes/$([MSBuild]::MakeRelative(&apos;$(_StagedRuntimesRoot)\&apos;, &apos;%(FullPath)&apos;).Replace(&apos;\&apos;, &apos;/&apos;))</PackagePath>
+      </_PackageFiles>
     </ItemGroup>
   </Target>
   <!-- Include native assets for supported runtimes -->

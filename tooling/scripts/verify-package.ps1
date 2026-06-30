@@ -9,9 +9,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 
-if (-not (Test-Path -LiteralPath $ToolPath)) {
-    cargo build -p dhara_tool --profile ci
-}
+cargo build -p dhara_tool --profile ci
 
 & $ToolPath verify package --configuration $Configuration --native-stage $NativeStage
 if ($LASTEXITCODE -ne 0) {

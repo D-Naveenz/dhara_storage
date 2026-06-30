@@ -59,6 +59,8 @@ pub fn pack(
     let nuget_output = output_root.join("nuget");
     reset_directory(&nuget_output)?;
 
+    validate_staged_native_assets(&native_stage_root, config)?;
+
     run_command(
         "dotnet",
         &[
@@ -638,6 +640,24 @@ fn non_empty_option(value: String) -> Option<String> {
     } else {
         Some(trimmed.to_owned())
     }
+}
+
+fn validate_staged_native_assets(stage_root: &Path, config: &DharaRepoConfig) -> Result<()> {
+    for rid in &config.ci.native_runtimes {
+        let lib_name = native_lib_filename(rid)?;
+        let path = stage_root
+            .join("runtimes")
+            .join(rid)
+            .join("native")
+            .join(lib_name);
+        if !path.is_file() {
+            bail!(
+                "staged native asset missing before pack: {}",
+                path.display()
+            );
+        }
+    }
+    Ok(())
 }
 
 fn absolute_native_stage_root(repo_root: &Path, stage: &Path) -> PathBuf {
