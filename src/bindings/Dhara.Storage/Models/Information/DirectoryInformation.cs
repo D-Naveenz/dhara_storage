@@ -16,5 +16,7 @@ public sealed record DirectoryInformation(
     DateTimeOffset? ModifiedAtUtc,
     DateTimeOffset? AccessedAtUtc,
     string DisplayName,
-    DirectorySummary? Summary)
+    DirectorySummary? Summary,
+    ShellIcon? Icon,
+    ShellDetails? ShellDetails)
     : StorageInformation(Path, Name, IsReadOnly, IsHidden, IsSystem, IsTemporary, IsSymbolicLink, LinkTarget, CreatedAtUtc, ModifiedAtUtc, AccessedAtUtc);

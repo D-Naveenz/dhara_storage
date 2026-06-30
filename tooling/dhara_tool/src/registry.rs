@@ -9,9 +9,8 @@ use crate::command::{
 use crate::commands::{
     config_env_init, config_show, config_sync, defs_build_trid_xml, defs_inspect,
     defs_inspect_trid_xml, defs_normalize, defs_pack, defs_sync_embedded, defs_verify,
-    package_pack_command, package_publish_command, release_publish_command, release_run_command,
-    verify_ci_command, verify_docs_command, verify_package_command, verify_release_config_command,
-    version_bump, version_set,
+    package_pack_command, package_publish_command, package_stage_native_command,
+    release_run_command, verify_package_command, version_bump, version_set,
 };
 const VERSION_PARTS: &[&str] = &["major", "minor", "patch"];
 const CONFIGURATIONS: &[&str] = &["Release"];
@@ -184,30 +183,6 @@ impl DharaStorageCapability {
                 defs_sync_embedded,
             ),
             command(
-                "verify.release-config",
-                &["verify", "release-config"],
-                "Validate release configuration",
-                "",
-                "verify",
-                verify_release_config_command,
-            ),
-            command(
-                "verify.ci",
-                &["verify", "ci"],
-                "Run local CI-equivalent checks",
-                "",
-                "verify",
-                verify_ci_command,
-            ),
-            command(
-                "verify.docs",
-                &["verify", "docs"],
-                "Build docs for core crates",
-                "",
-                "verify",
-                verify_docs_command,
-            ),
-            command(
                 "verify.package",
                 &["verify", "package"],
                 "Pack and verify the NuGet package",
@@ -224,20 +199,20 @@ impl DharaStorageCapability {
                 package_pack_command,
             ),
             command(
+                "package.stage-native",
+                &["package", "stage-native"],
+                "Stage host-buildable native libraries",
+                "[--configuration <name>]",
+                "package",
+                package_stage_native_command,
+            ),
+            command(
                 "package.publish",
                 &["package", "publish"],
                 "Verify and optionally publish the NuGet package",
                 "[--configuration <name>] [--version <semver>] [--source <url>] [--api-key-env <name>] [--dry-run|--execute]",
                 "package",
                 package_publish_command,
-            ),
-            command(
-                "release.publish",
-                &["release", "publish"],
-                "Release the NuGet package",
-                "[--configuration <name>] [--version <semver>] [--source <url>] [--api-key-env <name>] [--dry-run|--execute]",
-                "release",
-                release_publish_command,
             ),
             command(
                 "release.run",
@@ -417,25 +392,13 @@ fn ui_for_command(
             quick_run: false,
             supports_cancel: false,
         },
-        "verify.release-config" => quick_command(
-            "Validate the release configuration and required repo layout.",
-            false,
-        ),
-        "verify.ci" => quick_command(
-            "Run the repo's local CI-equivalent checks for formatting, linting, tests, and .NET verification.",
-            true,
-        ),
-        "verify.docs" => quick_command(
-            "Build documentation for the Dhara crates without dependencies.",
-            true,
-        ),
         "verify.package" => package_command(
             "Pack and verify the Dhara.Storage NuGet package, including smoke-consumer validation.",
         ),
         "package.pack" => {
             package_command("Pack the Dhara.Storage NuGet package with staged native assets.")
         }
-        "package.publish" | "release.publish" => CommandUi {
+        "package.publish" => CommandUi {
             description: "Verify and optionally publish the Dhara.Storage NuGet package.",
             fields: vec![
                 FieldSpec {
@@ -658,7 +621,6 @@ mod tests {
         assert!(commands.contains(&"config.show"));
         assert!(commands.contains(&"defs.inspect-trid-xml"));
         assert!(commands.contains(&"verify.package"));
-        assert!(commands.contains(&"release.publish"));
         assert!(commands.contains(&"release.run"));
         assert!(
             registry

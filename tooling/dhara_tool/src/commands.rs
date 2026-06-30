@@ -5,7 +5,9 @@ use clap::{ArgAction, Parser, ValueEnum};
 
 use crate::command::{CommandResult, ToolContext};
 use crate::filedefs::{DefsCommand, execute as execute_defs, print_defs_help};
-use crate::nuget::{PackageOptions, pack as pack_package, publish as publish_package};
+use crate::nuget::{
+    PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host,
+};
 use crate::release::run as run_release;
 use crate::repo_config::{
     VersionPart, bump_version, init_env, load_config, set_version, show, sync,
@@ -43,11 +45,19 @@ struct VersionBumpArgs {
 }
 
 #[derive(Debug, Parser)]
+struct StageNativeArgs {
+    #[arg(long, default_value = "Release")]
+    configuration: String,
+}
+
+#[derive(Debug, Parser)]
 struct PackageArgs {
     #[arg(long, default_value = "Release")]
     configuration: String,
     #[arg(long)]
     version: Option<String>,
+    #[arg(long)]
+    native_stage: Option<PathBuf>,
 }
 
 #[derive(Debug, Parser)]
@@ -80,6 +90,12 @@ pub(crate) struct ReleaseRunArgs {
     skip_cargo: bool,
     #[arg(long, action = ArgAction::SetTrue)]
     skip_nuget: bool,
+    #[arg(long)]
+    native_stage: Option<PathBuf>,
+    #[arg(long)]
+    prepacked_nuget: Option<PathBuf>,
+    #[arg(long, action = ArgAction::SetTrue)]
+    verify_package: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -145,6 +161,8 @@ fn package_options(args: PackageArgs, context: &ToolContext) -> PackageOptions {
         api_key_env_override: None,
         output_dir: context.output_dir.clone(),
         execute_publish: false,
+        native_stage_override: args.native_stage,
+        prepacked_nuget_override: None,
     }
 }
 
@@ -160,6 +178,8 @@ fn publish_options(args: PublishArgs, context: &ToolContext) -> Result<PackageOp
         api_key_env_override: args.api_key_env,
         output_dir: context.output_dir.clone(),
         execute_publish: args.execute && !args.dry_run,
+        native_stage_override: None,
+        prepacked_nuget_override: None,
     })
 }
 
@@ -175,6 +195,9 @@ pub(crate) fn release_options(
         dry_run: args.dry_run,
         publish_cargo: !args.skip_cargo,
         publish_nuget: !args.skip_nuget,
+        native_stage_override: args.native_stage,
+        prepacked_nuget: args.prepacked_nuget,
+        verify_package_on_dry_run: args.verify_package,
     }
 }
 
@@ -311,31 +334,6 @@ pub(crate) fn defs_sync_embedded(context: &ToolContext, args: &[String]) -> Resu
     )
 }
 
-pub(crate) fn verify_release_config_command(
-    context: &ToolContext,
-    args: &[String],
-) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("verify release-config", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    super::verify::verify_release_config(&context.repo_root)
-}
-
-pub(crate) fn verify_ci_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("verify ci", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    let config = current_config(context)?;
-    super::verify::verify_ci(&context.repo_root, &config)
-}
-
-pub(crate) fn verify_docs_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("verify docs", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    super::verify::verify_docs(&context.repo_root)
-}
-
 pub(crate) fn verify_package_command(
     context: &ToolContext,
     args: &[String],
@@ -358,26 +356,35 @@ pub(crate) fn package_pack_command(
     pack_package(&context.repo_root, &config, &package_options(args, context))
 }
 
+pub(crate) fn package_stage_native_command(
+    context: &ToolContext,
+    args: &[String],
+) -> Result<CommandResult> {
+    let Some(args) = parse_args::<StageNativeArgs>("package stage-native", args)? else {
+        return Ok(CommandResult::success());
+    };
+    let config = current_config(context)?;
+    stage_native_for_host(
+        &context.repo_root,
+        &config,
+        &PackageOptions {
+            configuration: args.configuration,
+            version_override: None,
+            source_override: None,
+            api_key_env_override: None,
+            output_dir: context.output_dir.clone(),
+            execute_publish: false,
+            native_stage_override: None,
+            prepacked_nuget_override: None,
+        },
+    )
+}
+
 pub(crate) fn package_publish_command(
     context: &ToolContext,
     args: &[String],
 ) -> Result<CommandResult> {
     let Some(args) = parse_args::<PublishArgs>("package publish", args)? else {
-        return Ok(CommandResult::success());
-    };
-    let config = current_config(context)?;
-    publish_package(
-        &context.repo_root,
-        &config,
-        &publish_options(args, context)?,
-    )
-}
-
-pub(crate) fn release_publish_command(
-    context: &ToolContext,
-    args: &[String],
-) -> Result<CommandResult> {
-    let Some(args) = parse_args::<PublishArgs>("release publish", args)? else {
         return Ok(CommandResult::success());
     };
     let config = current_config(context)?;

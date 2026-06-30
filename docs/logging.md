@@ -73,7 +73,7 @@ flowchart TD
 One line with what matters to orient a reader:
 
 ```
-dhara_tool 0.7.1 started — mode=direct, workers=4
+dhara_tool 0.8.0 started — mode=direct, workers=4
 ```
 
 Do **not** include the log file path on INFO (no self-reference).
@@ -121,7 +121,7 @@ Full begin / phase timings / end with stats and duration:
 Example (default mode):
 
 ```
-INFO  dhara_tool 0.7.1 started — mode=direct, workers=4
+INFO  dhara_tool 0.8.0 started — mode=direct, workers=4
 INFO  defs.build-trid-xml started — defaults
 INFO  phase extract finished in 15.4s — extracted archive
 INFO  phase parse finished in 21.7s — parsed 21692 definitions
@@ -239,3 +239,15 @@ grep "finished in" logfile
 grep "TrID transform" logfile
 grep "exiting" logfile
 ```
+
+## Related docs
+
+- [dhara_tool README][readme-tool] — commands, flags, output layout
+- [filedefs.dat / DSFD format][filedefs-dat] — TrID build phases referenced in audit logs
+- [CI/CD pipelines][ci-cd] — direct mode in CI vs interactive TUI locally
+- [Docs index][docs-index]
+
+[readme-tool]: ../tooling/dhara_tool/README.md
+[filedefs-dat]: filedefs-dat.md
+[ci-cd]: ci-cd-pipelines.md
+[docs-index]: README.md

@@ -250,12 +250,15 @@ where
     })
 }
 
+fn packages_match_content(left: &DefinitionPackage, right: &DefinitionPackage) -> bool {
+    left.definitions_release == right.definitions_release
+        && left.tags == right.tags
+        && left.definitions == right.definitions
+}
+
 fn current_validity_reason(current: &LoadedPackage, desired: &DefinitionPackage) -> Option<String> {
-    if current.package.package_version != desired.package_version {
-        return Some(format!(
-            "package version mismatch: current='{}', desired='{}'",
-            current.package.package_version, desired.package_version
-        ));
+    if packages_match_content(&current.package, desired) {
+        return None;
     }
     if current.package.definitions_release != desired.definitions_release {
         return Some(format!(
@@ -263,13 +266,7 @@ fn current_validity_reason(current: &LoadedPackage, desired: &DefinitionPackage)
             current.package.definitions_release, desired.definitions_release
         ));
     }
-    if current.package.package_revision != desired.package_revision {
-        return Some(format!(
-            "package revision mismatch: current='{}', desired='{}'",
-            current.package.package_revision, desired.package_revision
-        ));
-    }
-    None
+    Some("definition payload differs from desired build".to_owned())
 }
 
 #[cfg(test)]
@@ -285,7 +282,7 @@ mod tests {
         packages_match, sync_embedded_package, write_package,
     };
 
-    use dhara_storage_dal::DEFINITION_PACKAGE_SIGNATURE;
+    use dhara_storage_dal::{DEFINITION_PACKAGE_SIGNATURE, PACKAGE_VERSION};
 
     fn fixtures_root() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -319,7 +316,7 @@ mod tests {
     #[test]
     fn bundled_package_has_expected_summary() {
         let package = load_bundled_package().expect("bundled package should load");
-        assert_eq!(package.package_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(package.package_version, PACKAGE_VERSION);
         assert!(!package.definitions.is_empty());
     }
 
@@ -344,7 +341,7 @@ mod tests {
         assert_eq!(package.tags, 48);
         assert_eq!(package.definitions_release, "2026-06-24");
         assert_eq!(package.package_revision, 1);
-        assert_eq!(package.package_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(package.package_version, PACKAGE_VERSION);
         assert_eq!(package.definitions.len(), 3);
     }
 
@@ -473,7 +470,7 @@ mod tests {
             PackageSummary {
                 signature: DEFINITION_PACKAGE_SIGNATURE.to_string(),
                 package_id: "DSFD".to_string(),
-                package_version: env!("CARGO_PKG_VERSION").to_string(),
+                package_version: PACKAGE_VERSION.to_string(),
                 definitions_release: "2026-06-24".to_string(),
                 package_revision: 1,
                 tags: 48,
@@ -516,7 +513,7 @@ mod tests {
 
         let mut package = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
             .expect("fixture should build");
-        package.package_version = "stale".to_owned();
+        package.definitions_release = "1970-01-01".to_owned();
         write_package(&package, &output_path).expect("stale package should be written");
 
         let outcome = sync_embedded_package(&archive_path, &output_path, false, |_| {})
@@ -525,7 +522,7 @@ mod tests {
 
         let loaded =
             crate::filedefs::load_package(&output_path).expect("updated package should load");
-        assert_eq!(loaded.package.package_version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(loaded.package.package_version, PACKAGE_VERSION);
     }
 
     #[test]

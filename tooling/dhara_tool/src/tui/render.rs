@@ -105,23 +105,29 @@ fn render_dashboard(
     state: &AppState,
     registry: &CommandRegistry,
 ) {
-    let quick_actions = ["verify ci", "verify package", "config show", "version bump"]
-        .iter()
-        .enumerate()
-        .map(|(index, label)| {
-            let prefix = if index == state.selected_quick_action {
-                ">"
-            } else {
-                " "
-            };
-            format!("{prefix} {label}")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let quick_actions = [
+        "verify package",
+        "config show",
+        "version bump",
+        "release run",
+    ]
+    .iter()
+    .enumerate()
+    .map(|(index, label)| {
+        let prefix = if index == state.selected_quick_action {
+            ">"
+        } else {
+            " "
+        };
+        format!("{prefix} {label}")
+    })
+    .collect::<Vec<_>>()
+    .join("\n");
     let tool_version = crate::version();
+    let packaging_version = crate::defs_package_version();
     let next_revision = state
         .workspace
-        .next_package_revision(tool_version)
+        .next_package_revision(packaging_version)
         .map(|value| value.to_string())
         .unwrap_or_else(|_| "?".to_owned());
     let package_version = state.workspace.package_version.as_deref().unwrap_or("—");
@@ -145,7 +151,7 @@ fn render_dashboard(
          Definitions package\n\
          Path: {}\n\
          Status: {}\n\
-         Package version: {package_version} (tool: {tool_version}, {})\n\
+         Package version: {package_version} (DAL: {packaging_version}, tool: {tool_version}, {})\n\
          Revision: {revision} (next build: {next_revision})\n\
          Release: {release}\n\
          Definitions: {definitions}\n\n\
@@ -157,7 +163,7 @@ fn render_dashboard(
          Recent history: {}",
         state.workspace.defs_path.display(),
         state.workspace.status_label(),
-        state.workspace.version_match_label(tool_version),
+        state.workspace.packaging_lineage_label(packaging_version),
         state.current_section(registry).unwrap_or("none"),
         state.commands_for_current_section(registry).len(),
         std::env::current_dir()
@@ -323,12 +329,12 @@ mod tests {
             summary: "Verification commands",
         });
         registry.add_command(CommandSpec {
-            id: "verify.ci",
-            path: &["verify", "ci"],
-            summary: "Verify CI",
+            id: "verify.package",
+            path: &["verify", "package"],
+            summary: "Verify package",
             args_summary: "",
             section: "verify",
-            ui: CommandUi::empty("Run CI"),
+            ui: CommandUi::empty("Verify package"),
             handler: Arc::new(noop),
         });
         registry
@@ -377,6 +383,6 @@ mod tests {
         let text = buffer_text(&terminal);
         assert!(text.contains("Dhara Tool"));
         assert!(text.contains("Command Form"));
-        assert!(text.contains("verify ci"));
+        assert!(text.contains("verify package"));
     }
 }

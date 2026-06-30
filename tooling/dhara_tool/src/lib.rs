@@ -3,10 +3,10 @@ pub mod command;
 pub mod commands;
 pub mod filedefs;
 pub mod logging;
+pub mod native_rids;
 pub mod nuget;
 pub mod output;
 pub mod paths;
-pub mod process;
 pub mod registry;
 pub mod release;
 pub mod repo_config;
@@ -30,7 +30,9 @@ pub use logging::{
     log_module_step_debug, log_module_step_error, log_module_step_warn, log_session_begin,
     log_session_end, log_transform_statistics, summarize_command_result,
 };
-pub use nuget::{PackageOptions, pack as pack_package, publish as publish_package};
+pub use nuget::{
+    PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host,
+};
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,
     emit_stdout_line,
@@ -55,4 +57,9 @@ pub use workspace::{
 
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
+}
+
+/// Semver stamped into DSFD `packageVersion` metadata (DAL packaging authority).
+pub fn defs_package_version() -> &'static str {
+    dhara_storage_dal::PACKAGE_VERSION
 }

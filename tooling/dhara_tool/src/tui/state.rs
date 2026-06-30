@@ -8,7 +8,12 @@ use crate::command::{CommandRegistry, CommandResult, CommandSpec, ToolContext};
 use super::exec::{RunCompletion, RunHandle, cancel_run, start_run};
 use super::schema::CommandForm;
 
-const QUICK_ACTIONS: &[&str] = &["verify.ci", "verify.package", "config.show", "version.bump"];
+const QUICK_ACTIONS: &[&str] = &[
+    "verify.package",
+    "config.show",
+    "version.bump",
+    "release.run",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Focus {

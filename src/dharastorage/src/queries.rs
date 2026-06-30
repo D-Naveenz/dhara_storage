@@ -10,45 +10,15 @@ use dhara_storage::{
 use crate::abi::DharaStatus;
 use crate::errors::FfiFailure;
 use crate::marshal::{
-    execute_bytes, execute_json, execute_result_handle, execute_string, execute_unit,
-    parse_bytes_arg, parse_path_arg, parse_string_arg,
+    execute_bytes, execute_result_handle, execute_string, execute_unit, parse_bytes_arg,
+    parse_path_arg, parse_string_arg,
 };
-use crate::models::{
-    AnalysisReportDto, DirectoryInfoDto, EntryKind, FileInfoDto, list_entries_json, path_to_string,
-};
+use crate::models::{EntryKind, list_entries, path_to_string};
 use crate::typed::{
     NativeAnalysisReport, NativeDirectoryInformation, NativeFileInformation,
     NativeStorageEntryList, analysis_report_to_native, directory_info_to_native,
     file_info_to_native, storage_entries_to_native,
 };
-
-#[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_analyze_path export instead")]
-/// Analyzes a file path immediately and returns a JSON report.
-///
-/// # Safety
-///
-/// `path`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow the
-/// Dhara Storage FFI pointer contracts. `path` must be a valid null-terminated UTF-8 string.
-pub unsafe extern "C" fn dhara_analyze_path_json_old(
-    path: *const c_char,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            let path = parse_path_arg(path, "path")?;
-            let report = analyze_path(&path).map_err(FfiFailure::from)?;
-            Ok(AnalysisReportDto::from(report))
-        }
-    ))
-}
 
 #[unsafe(no_mangle)]
 /// Analyzes a file path immediately and returns a typed native analysis report.
@@ -77,41 +47,6 @@ pub unsafe extern "C" fn dhara_analyze_path(
 }
 
 #[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_get_file_info export instead")]
-/// Reads file metadata and optionally content-analysis data, returning JSON.
-///
-/// # Safety
-///
-/// `path`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow the
-/// Dhara Storage FFI pointer contracts. `path` must be a valid null-terminated UTF-8 string.
-pub unsafe extern "C" fn dhara_get_file_info_json_old(
-    path: *const c_char,
-    include_analysis: u8,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            let path = parse_path_arg(path, "path")?;
-            let info = if include_analysis != 0 {
-                FileInfo::from_path_with_analysis(&path)
-            } else {
-                FileInfo::from_path(&path)
-            }
-            .map_err(FfiFailure::from)?;
-
-            FileInfoDto::try_from_info(info, include_analysis != 0)
-        }
-    ))
-}
-
-#[unsafe(no_mangle)]
 /// Reads file metadata and optionally analysis data, returning typed native file information.
 ///
 /// # Safety
@@ -122,6 +57,8 @@ pub unsafe extern "C" fn dhara_get_file_info_json_old(
 pub unsafe extern "C" fn dhara_get_file_info(
     path: *const c_char,
     include_analysis: u8,
+    include_icon: u8,
+    icon_size: u32,
     out_info: *mut *mut NativeFileInformation,
     out_error_ptr: *mut *mut u8,
     out_error_len: *mut usize,
@@ -139,42 +76,13 @@ pub unsafe extern "C" fn dhara_get_file_info(
             }
             .map_err(FfiFailure::from)?;
 
-            file_info_to_native(info, include_analysis != 0)
-        }
-    ))
-}
-
-#[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_get_directory_info export instead")]
-/// Reads directory metadata and optionally directory-summary data, returning JSON.
-///
-/// # Safety
-///
-/// `path`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow the
-/// Dhara Storage FFI pointer contracts. `path` must be a valid null-terminated UTF-8 string.
-pub unsafe extern "C" fn dhara_get_directory_info_json_old(
-    path: *const c_char,
-    include_summary: u8,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            let path = parse_path_arg(path, "path")?;
-            let info = if include_summary != 0 {
-                DirectoryInfo::from_path_with_summary(&path)
+            let icon_size = if icon_size == 0 {
+                dhara_storage::DEFAULT_SHELL_ICON_SIZE
             } else {
-                DirectoryInfo::from_path(&path)
-            }
-            .map_err(FfiFailure::from)?;
+                icon_size
+            };
 
-            DirectoryInfoDto::try_from_info(info, include_summary != 0)
+            file_info_to_native(info, include_analysis != 0, include_icon != 0, icon_size)
         }
     ))
 }
@@ -190,6 +98,8 @@ pub unsafe extern "C" fn dhara_get_directory_info_json_old(
 pub unsafe extern "C" fn dhara_get_directory_info(
     path: *const c_char,
     include_summary: u8,
+    include_icon: u8,
+    icon_size: u32,
     out_info: *mut *mut NativeDirectoryInformation,
     out_error_ptr: *mut *mut u8,
     out_error_len: *mut usize,
@@ -207,35 +117,13 @@ pub unsafe extern "C" fn dhara_get_directory_info(
             }
             .map_err(FfiFailure::from)?;
 
-            directory_info_to_native(info, include_summary != 0)
-        }
-    ))
-}
+            let icon_size = if icon_size == 0 {
+                dhara_storage::DEFAULT_SHELL_ICON_SIZE
+            } else {
+                icon_size
+            };
 
-#[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_list_files export instead")]
-/// Lists child files for a directory and returns the result as JSON.
-///
-/// # Safety
-///
-/// `path`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow the
-/// Dhara Storage FFI pointer contracts. `path` must be a valid null-terminated UTF-8 string.
-pub unsafe extern "C" fn dhara_list_files_json_old(
-    path: *const c_char,
-    recursive: u8,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            let path = parse_path_arg(path, "path")?;
-            list_entries_json(&path, recursive != 0, EntryKind::Files)
+            directory_info_to_native(info, include_summary != 0, include_icon != 0, icon_size)
         }
     ))
 }
@@ -261,39 +149,11 @@ pub unsafe extern "C" fn dhara_list_files(
         out_error_len,
         || {
             let path = parse_path_arg(path, "path")?;
-            Ok(storage_entries_to_native(list_entries_json(
+            Ok(storage_entries_to_native(list_entries(
                 &path,
                 recursive != 0,
                 EntryKind::Files,
             )?))
-        }
-    ))
-}
-
-#[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_list_directories export instead")]
-/// Lists child directories for a directory and returns the result as JSON.
-///
-/// # Safety
-///
-/// `path`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow the
-/// Dhara Storage FFI pointer contracts. `path` must be a valid null-terminated UTF-8 string.
-pub unsafe extern "C" fn dhara_list_directories_json_old(
-    path: *const c_char,
-    recursive: u8,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            let path = parse_path_arg(path, "path")?;
-            list_entries_json(&path, recursive != 0, EntryKind::Directories)
         }
     ))
 }
@@ -319,7 +179,7 @@ pub unsafe extern "C" fn dhara_list_directories(
         out_error_len,
         || {
             let path = parse_path_arg(path, "path")?;
-            Ok(storage_entries_to_native(list_entries_json(
+            Ok(storage_entries_to_native(list_entries(
                 &path,
                 recursive != 0,
                 EntryKind::Directories,
@@ -329,35 +189,7 @@ pub unsafe extern "C" fn dhara_list_directories(
 }
 
 #[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_list_entries export instead")]
-/// Lists both files and directories for a directory and returns the result as JSON.
-///
-/// # Safety
-///
-/// `path`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow the
-/// Dhara Storage FFI pointer contracts. `path` must be a valid null-terminated UTF-8 string.
-pub unsafe extern "C" fn dhara_list_entries_json_old(
-    path: *const c_char,
-    recursive: u8,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            let path = parse_path_arg(path, "path")?;
-            list_entries_json(&path, recursive != 0, EntryKind::All)
-        }
-    ))
-}
-
-#[unsafe(no_mangle)]
-/// Lists child files and directories for a directory and returns a typed native entry list.
+/// Lists both files and directories for a directory and returns a typed native entry list.
 ///
 /// # Safety
 ///
@@ -377,7 +209,7 @@ pub unsafe extern "C" fn dhara_list_entries(
         out_error_len,
         || {
             let path = parse_path_arg(path, "path")?;
-            Ok(storage_entries_to_native(list_entries_json(
+            Ok(storage_entries_to_native(list_entries(
                 &path,
                 recursive != 0,
                 EntryKind::All,
@@ -750,7 +582,7 @@ pub unsafe extern "C" fn dhara_delete_directory(
         if recursive == 0 {
             return Err(FfiFailure::invalid_argument(
                 "recursive",
-                "delete_directory requires recursive=1 in v1",
+                "delete_directory requires recursive=1",
             ));
         }
 

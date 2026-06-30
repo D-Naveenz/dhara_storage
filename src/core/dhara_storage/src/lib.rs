@@ -29,7 +29,10 @@ pub use definitions::{
     SignatureDefinition, SignaturePattern, bundled_definition_package, decode_definition_package,
 };
 pub use error::StorageError;
-pub use info::{DirectoryInfo, DirectorySummary, FileInfo, SizeUnit, StorageMetadata, format_size};
+pub use info::{
+    DEFAULT_SHELL_ICON_SIZE, DirectoryInfo, DirectorySummary, FileInfo, ShellDetails, ShellIcon,
+    SizeUnit, StorageMetadata, format_size,
+};
 pub use operations::{
     DirectoryDeleteOptions, ProgressReporter, ReadOptions, SharedProgressReporter,
     StorageCancellationToken, StorageProgress, TransferOptions, WriteOptions, copy_directory,

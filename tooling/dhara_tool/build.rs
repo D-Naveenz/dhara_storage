@@ -1,5 +1,4 @@
 use std::env;
-use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -14,24 +13,23 @@ fn main() {
     }
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR"));
-    let profile = env::var_os("PROFILE").expect("PROFILE");
-    let Some(artifact_dir) = profile_artifact_dir(&out_dir, &profile) else {
+    let artifact_dir = profile_artifact_dir(&out_dir).unwrap_or_else(|| {
         panic!(
             "failed to resolve artifact directory from OUT_DIR '{}'",
             out_dir.display()
-        );
-    };
+        )
+    });
 
     let destination_dir = artifact_dir.join("package");
     recreate_directory(&destination_dir).expect("recreate package output directory");
     copy_directory_recursive(&source_dir, &destination_dir).expect("copy package directory");
 }
 
-fn profile_artifact_dir(out_dir: &Path, profile: &OsStr) -> Option<PathBuf> {
-    out_dir
-        .ancestors()
-        .find(|path| path.file_name() == Some(profile))
-        .map(Path::to_path_buf)
+fn profile_artifact_dir(out_dir: &Path) -> Option<PathBuf> {
+    // OUT_DIR is target/<profile>/build/<crate-hash>/out
+    let build_dir = out_dir.parent()?;
+    let profile_dir = build_dir.parent()?;
+    Some(profile_dir.to_path_buf())
 }
 
 fn recreate_directory(path: &Path) -> io::Result<()> {

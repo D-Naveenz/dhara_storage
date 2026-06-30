@@ -26,12 +26,12 @@ pub struct WorkspaceSnapshot {
 }
 
 impl WorkspaceSnapshot {
-    pub fn next_package_revision(&self, tool_version: &str) -> Result<u16, String> {
+    pub fn next_package_revision(&self, packaging_version: &str) -> Result<u16, String> {
         if self.defs_status != DefsPackageStatus::Present {
             return Ok(1);
         }
 
-        if self.package_version.as_deref() != Some(tool_version) {
+        if self.package_version.as_deref() != Some(packaging_version) {
             return Ok(1);
         }
 
@@ -49,10 +49,10 @@ impl WorkspaceSnapshot {
         }
     }
 
-    pub fn version_match_label(&self, tool_version: &str) -> &'static str {
+    pub fn packaging_lineage_label(&self, packaging_version: &str) -> &'static str {
         match self.package_version.as_deref() {
-            Some(version) if version == tool_version => "match",
-            Some(_) => "mismatch",
+            Some(version) if version == packaging_version => "current lineage",
+            Some(_) => "older lineage",
             None => "—",
         }
     }
@@ -123,22 +123,25 @@ pub fn workspace_snapshot(context: &ToolContext) -> WorkspaceSnapshot {
     ensure_workspace_state(context)
 }
 
-/// Allocate the next package revision for a build at `tool_version`.
-pub fn next_package_revision(context: &ToolContext, tool_version: &str) -> Result<u16, String> {
+/// Allocate the next package revision for a build at `packaging_version`.
+pub fn next_package_revision(
+    context: &ToolContext,
+    packaging_version: &str,
+) -> Result<u16, String> {
     let snapshot = ensure_workspace_state(context);
-    snapshot.next_package_revision(tool_version)
+    snapshot.next_package_revision(packaging_version)
 }
 
 /// Allocate the next package revision using the cached workspace snapshot.
 ///
 /// Falls back to revision `1` when workspace analysis has not run yet.
-pub fn next_package_revision_for_build(tool_version: &str) -> Result<u16, String> {
+pub fn next_package_revision_for_build(packaging_version: &str) -> Result<u16, String> {
     let Some(mutex) = WORKSPACE.get() else {
         return Ok(1);
     };
 
     let state = mutex.lock().expect("workspace state lock poisoned");
-    state.snapshot.next_package_revision(tool_version)
+    state.snapshot.next_package_revision(packaging_version)
 }
 
 /// Refresh the cached snapshot after writing a definitions package.
@@ -237,7 +240,7 @@ mod tests {
     }
 
     #[test]
-    fn mismatched_version_resets_revision() {
+    fn mismatched_packaging_version_resets_revision() {
         let snapshot = WorkspaceSnapshot {
             defs_path: PathBuf::from("filedefs.dat"),
             defs_status: DefsPackageStatus::Present,

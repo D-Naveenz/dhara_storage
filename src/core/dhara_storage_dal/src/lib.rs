@@ -30,3 +30,6 @@ pub use model::{
     DSFD_FORMAT_VERSION, DSFD_METADATA_XMLNS, DefinitionPackage, DefinitionPackageView,
     DefinitionRecord, FILEDEFS_DAT_FILE_NAME, SignatureDefinition, SignaturePattern,
 };
+
+/// Semver of the DSFD packaging authority (`dhara_storage_dal`).
+pub const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -1,50 +1,125 @@
 # dhara_tool
 
-`dhara_tool` is the supported operator CLI for this repository.
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/D-Naveenz/dhara_storage/blob/main/LICENSE.txt)
 
-It acts as the front door for:
+`dhara_tool` is the operator CLI for the Dhara Storage workspace.
+It syncs shared config, builds and verifies definition packages, stages native assets, validates NuGet shape, and runs release publishes.
+For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] over inventing one-off cargo invocations.
 
-- repo config and version synchronization
-- local CI-style verification
-- multi-runtime NuGet packaging and publish flows
-- definitions package workflows
-- interactive TUI usage for common maintenance paths
+## ✨ Key Features
 
-## Examples
+- **Config sync** — propagates [dhara.config.toml][dhara-config] into manifests
+- **Definitions pipeline** — pack, build TrID XML, inspect, verify, sync embedded `filedefs.dat`
+- **Native staging** — per-OS `runtimes/{rid}/native` trees for NuGet
+- **Package verify** — checks merged native layout before publish
+- **Release orchestration** — crates.io + NuGet publish with dry-run support
+- **Interactive TUI** — launch without a subcommand in a real terminal
 
-```powershell
-cargo run -p dhara_tool -- verify ci
-cargo run -p dhara_tool -- verify package
-cargo run -p dhara_tool -- release run --dry-run
-cargo run -p dhara_tool -- release run --skip-cargo
+## 📦 Tech Stack & Architecture
+
+| Piece | Role |
+|-------|------|
+| Clap | Subcommand parsing (direct mode) |
+| Ratatui | Interactive operator TUI |
+| Rayon | Parallel TrID parse/reduce |
+| `dhara_storage_dal` | DSFD encode/decode for defs commands |
+
+```
+dhara_tool/src/
+├── commands/        # config, defs, verify, package, release, version
+├── tui/             # interactive mode
+└── logging/         # audit log setup
+
+tooling/
+├── scripts/         # CI wrappers (stage-native, merge, verify-package)
+├── output/          # NuGet packages and operator artifacts
+├── logs/            # audit logs ({date}_dhara_tool*.log)
+└── artifacts/       # gitignored native staging scratch
 ```
 
-Launching `dhara_tool` without a subcommand in an interactive terminal opens the
-Dhara TUI (**interactive** mode). Explicit subcommands use **direct** mode (no TUI).
+CI vs tool split: [CI/CD reference][ci-cd]. Audit log rules: [logging reference][logging].
 
-## Logging
+## 🚀 Getting Started & Installation
 
-Audit logs follow [docs/logging.md](../docs/logging.md). Each run writes to
-`tooling/logs/{date}_dhara_tool[_N].log` with session-scoped files.
+**Prerequisites:** Rust stable. .NET 10 when running full [verify-local][verify-local].
 
-`dhara_tool` emits human-readable audit lines for:
+From the workspace root:
 
-- session and module lifecycle (start, steps, finish)
-- TrID transformation statistics
-- subprocess milestones (verify, package, release)
-- failures with exit codes and timestamps
+```powershell
+cargo run -p dhara_tool -- --help
+```
 
-Default logging uses INFO (level 3) on console and file. Use `-m` / `--min` for WARN-only file logs, or `-t` / `--trace` for DEBUG file detail (including per-definition reduce trace).
+Launch the TUI (interactive mode — no subcommand, real TTY):
 
-Parallel TrID parse/reduce uses Rayon with a capped global thread pool. Cap workers with `-w` / `--workers` (default 4) or `TOOL_MAX_WORKERS`; `RAYON_NUM_THREADS` is ignored.
+```powershell
+cargo run -p dhara_tool
+```
 
-Source is organized by purpose under `tooling/dhara_tool/src/` (`filedefs/`, `logging/`, `registry.rs`, `commands.rs`, etc.). The TUI and CLI registry call domain modules through `DharaStorageCapability`.
+## 🔧 Configuration & Environment Variables
 
-## Output layout
+Shared metadata: [dhara.config.toml][dhara-config] at the repo root.
+Publish secrets: `.env.local` (from [.env.example][env-example]).
 
-- `src/core/dhara_storage_dal/resources/` — embedded `filedefs.dat` built by defs commands
-- `tooling/output/` — NuGet packages and other operator artifacts
-- `tooling/logs/` — operator audit logs
-- `tooling/artifacts/` — gitignored staging for native staging, smoke builds, and local NuGet config during verification
+| Variable | Purpose |
+|----------|---------|
+| `CARGO_REGISTRY_TOKEN` | crates.io publish |
+| `NUGET_API_KEY` | NuGet.org publish |
+| `NUGET_SOURCE` | NuGet feed URL |
+| `TOOL_MAX_WORKERS` | Caps Rayon workers (`-w` / `--workers` wins) |
 
-The embedded runtime `filedefs.dat` is compiled into `dhara_storage_dal` via `include_bytes!`. Use `defs sync-embedded` to rebuild it from `tooling/dhara_tool/package/triddefs_xml.7z`. See [docs/filedefs-dat.md](../docs/filedefs-dat.md) for the DSFD on-disk format.
+`RAYON_NUM_THREADS` is **ignored** — use `-w` or `TOOL_MAX_WORKERS` instead.
+
+Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only file logs; `-t` / `--trace` for DEBUG file detail.
+
+## 🛠️ Usage Examples
+
+| Section | Commands |
+|---------|----------|
+| `config` | `show`, `sync`, `env init` |
+| `version` | `set`, `bump` |
+| `defs` | `pack`, `build-trid-xml`, `inspect`, `inspect-trid-xml`, `normalize`, `verify`, `sync-embedded` |
+| `verify` | `package` |
+| `package` | `pack`, `stage-native`, `publish` |
+| `release` | `run` |
+
+```powershell
+./tooling/scripts/verify-local.ps1
+cargo run -p dhara_tool -- config sync
+cargo run -p dhara_tool -- defs sync-embedded
+cargo run -p dhara_tool -- verify package
+cargo run -p dhara_tool -- release run --dry-run
+```
+
+**Troubleshooting**
+
+- Missing TrID input → place archives under [tooling/dhara_tool/package/][package-readme]; see [DSFD reference][filedefs-dat].
+- CD publish missing artifacts → merge commit SHA must match PR CI artifacts; see [CI/CD reference][ci-cd].
+- Sparse file logs → use `-t` / `--trace`; log path is DEBUG-only on session start.
+
+## ✅ Testing & Quality Assurance
+
+```powershell
+cargo test -p dhara_tool
+cargo clippy -p dhara_tool --all-targets -- -D warnings
+```
+
+Full workspace gate:
+
+```powershell
+./tooling/scripts/verify-local.ps1
+```
+
+Audit logs land in `tooling/logs/{date}_dhara_tool[_N].log`.
+
+## 🤝 Contributing & License
+
+Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
+
+[repo-root]: https://github.com/D-Naveenz/dhara_storage
+[verify-local]: ../../scripts/verify-local.ps1
+[dhara-config]: ../../dhara.config.toml
+[env-example]: ../../.env.example
+[ci-cd]: ../../docs/ci-cd-pipelines.md
+[logging]: ../../docs/logging.md
+[filedefs-dat]: ../../docs/filedefs-dat.md
+[package-readme]: package/README.md

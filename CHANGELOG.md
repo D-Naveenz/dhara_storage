@@ -4,6 +4,28 @@ All notable changes to Dhara Storage are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-06-30
+
+Compared to [v0.7.1](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.7.1).
+
+### Added
+
+- **Cross-platform native asset staging** — CI and release workflows build and stage native libraries for all five 64-bit RIDs (`win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`).
+- **Shell icon support** — OS shell icon RGBA pixels via `file_icon_provider`, exposed through file and directory information APIs and .NET bindings.
+- **Unified GitHub Actions pipeline** — single `.github/workflows/pipeline.yml` for PR checks, platform tests, publish readiness, and release; replaces separate CI and release workflows.
+- **Breaking changes policy** — `.cursor/rules/breaking-changes.mdc` documents pre-1.0 no-legacy, no-deprecation stance.
+- **Documentation overhaul** — package-scoped READMEs, `docs/README.md` reference index, and expanded ABI, DSFD, CI/CD, and logging docs.
+
+### Changed
+
+- **Typed native ABI only** — removed legacy JSON ABI functions, DTOs, and `_json_old` entry points from `dharastorage` and .NET bindings.
+- **CI script refactor** — GitHub Actions and local parity use standalone `tooling/scripts/` helpers; deprecated `verify ci`, `verify docs`, `release publish`, and `native merge` commands removed from `dhara_tool`.
+- **Version bump** — workspace, crates, NuGet package, embedded `filedefs.dat` (`packageVersion` 0.8.0, revision 1), and shared config synchronized to `0.8.0`.
+
+### Removed
+
+- **Legacy JSON ABI** — all deprecated JSON serialization paths and related tests.
+
 ## [0.7.1] — 2026-06-29
 
 Compared to [v0.7.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.7.0).
@@ -65,6 +87,7 @@ Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.
 
 Initial tagged release in this changelog series. See git history before `v0.6.0` for earlier changes.
 
+[0.8.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0

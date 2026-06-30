@@ -290,12 +290,12 @@ fn build_trid_xml_package_with_report_internal(
         "reduced TrID definitions package ready"
     );
 
-    let tool_version = crate::version();
-    let package_revision = next_package_revision_for_build(tool_version)
+    let packaging_version = crate::defs_package_version();
+    let package_revision = next_package_revision_for_build(packaging_version)
         .map_err(|message| BuilderError::Package { message })?;
 
     let package = DefinitionPackage {
-        package_version: tool_version.to_owned(),
+        package_version: packaging_version.to_owned(),
         definitions_release,
         package_revision,
         tags: VALIDATED_TAGS,

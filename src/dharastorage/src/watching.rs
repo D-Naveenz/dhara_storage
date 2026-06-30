@@ -7,10 +7,9 @@ use dhara_storage::{DirectoryStorage, StorageChangeEvent, StorageError, StorageW
 use crate::abi::{DharaStatus, NativeWatchHandle, with_watch_handle};
 use crate::errors::FfiFailure;
 use crate::marshal::{
-    execute_json, execute_result_handle, execute_unit, parse_path_arg, reset_buffer_out,
-    validate_buffer_out, write_error_only, write_error_payload,
+    execute_result_handle, execute_unit, parse_path_arg, reset_buffer_out, validate_buffer_out,
+    write_error_only, write_error_payload,
 };
-use crate::models::StorageChangeEventDto;
 use crate::typed::{NativeWatchEvent, watch_event_to_native};
 
 #[unsafe(no_mangle)]
@@ -71,31 +70,6 @@ pub unsafe extern "C" fn dhara_watch_create(
 }
 
 #[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_watch_try_recv_event export instead")]
-/// Attempts to receive the next watch event without blocking and returns JSON when one is available.
-///
-/// # Safety
-///
-/// `handle`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow
-/// the Dhara Storage FFI pointer contracts.
-pub unsafe extern "C" fn dhara_watch_try_recv_json_old(
-    handle: *mut NativeWatchHandle,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_watch_receive(
-        handle,
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        |watch| watch.try_recv(),
-    ))
-}
-
-#[unsafe(no_mangle)]
 /// Attempts to receive the next watch event without blocking and returns a typed event when available.
 ///
 /// # Safety
@@ -118,31 +92,6 @@ pub unsafe extern "C" fn dhara_watch_try_recv_event(
 }
 
 #[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_watch_recv_event export instead")]
-/// Blocks until the next watch event is available and returns it as JSON.
-///
-/// # Safety
-///
-/// `handle`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow
-/// the Dhara Storage FFI pointer contracts.
-pub unsafe extern "C" fn dhara_watch_recv_json_old(
-    handle: *mut NativeWatchHandle,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_watch_receive(
-        handle,
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        |watch| watch.recv().map(Some),
-    ))
-}
-
-#[unsafe(no_mangle)]
 /// Blocks until the next watch event is available and returns it as a typed event.
 ///
 /// # Safety
@@ -161,32 +110,6 @@ pub unsafe extern "C" fn dhara_watch_recv_event(
         out_error_ptr,
         out_error_len,
         |watch| watch.recv().map(Some),
-    ))
-}
-
-#[unsafe(no_mangle)]
-#[deprecated(note = "legacy JSON ABI; use the typed dhara_watch_recv_event_timeout export instead")]
-/// Waits up to `timeout_ms` for the next watch event and returns it as JSON when available.
-///
-/// # Safety
-///
-/// `handle`, `out_json_ptr`, `out_json_len`, `out_error_ptr`, and `out_error_len` must follow
-/// the Dhara Storage FFI pointer contracts.
-pub unsafe extern "C" fn dhara_watch_recv_json_timeout_old(
-    handle: *mut NativeWatchHandle,
-    timeout_ms: u64,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-) -> DharaStatus {
-    ffi_fn!(execute_watch_receive(
-        handle,
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        |watch| watch.recv_timeout(Duration::from_millis(timeout_ms)),
     ))
 }
 
@@ -252,38 +175,6 @@ pub unsafe extern "C" fn dhara_watch_free(handle: *mut NativeWatchHandle) {
     if let Ok(mut slot) = handle.handle.lock() {
         slot.take();
     }
-}
-
-unsafe fn execute_watch_receive(
-    handle: *mut NativeWatchHandle,
-    out_json_ptr: *mut *mut u8,
-    out_json_len: *mut usize,
-    out_error_ptr: *mut *mut u8,
-    out_error_len: *mut usize,
-    receive: impl FnOnce(
-        &dhara_storage::DirectoryWatchHandle,
-    ) -> Result<Option<StorageChangeEvent>, StorageError>,
-) -> DharaStatus {
-    execute_json(
-        out_json_ptr,
-        out_json_len,
-        out_error_ptr,
-        out_error_len,
-        || {
-            with_watch_handle(handle, |watch_handle| {
-                let slot = watch_handle
-                    .handle
-                    .lock()
-                    .unwrap_or_else(|p| p.into_inner());
-                let watch = slot
-                    .as_ref()
-                    .ok_or_else(|| FfiFailure::error("watch handle has already been stopped"))?;
-                Ok(receive(watch)
-                    .map_err(FfiFailure::from)?
-                    .map(StorageChangeEventDto::from))
-            })
-        },
-    )
 }
 
 unsafe fn execute_watch_receive_typed(

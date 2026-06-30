@@ -1,6 +1,6 @@
 ---
 description: Log level semantics (generic + Rust/tracing) and Dhara operator-log requirements
-alwaysApply: true
+alwaysApply: false
 ---
 
 # Logging
@@ -20,13 +20,13 @@ DEBUG           — engineer diagnostics; usually off in production
 TRACE           — line-by-line / per-item detail; highest volume
 ```
 
-| Pick this level when… | Example |
-|---|---|
-| ERROR | Module/command aborts; user-visible failure | `defs.build-trid-xml failed — archive tool missing` |
-| WARN | Completed with caveats | skipped step, verification mismatch |
-| INFO | One sentence a reader needs without DEBUG | session open/close, phase **finish**, aggregate stats |
-| DEBUG | Supports troubleshooting; safe to omit from default runs | phase **start**, paths, flags, per-item trace |
-| TRACE | Only if `--trace` / explicit verbose mode | per-definition reduce outcomes |
+| Pick this level when… | Example                                                  |
+| --------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
+| ERROR                 | Module/command aborts; user-visible failure              | `defs.build-trid-xml failed — archive tool missing`   |
+| WARN                  | Completed with caveats                                   | skipped step, verification mismatch                   |
+| INFO                  | One sentence a reader needs without DEBUG                | session open/close, phase **finish**, aggregate stats |
+| DEBUG                 | Supports troubleshooting; safe to omit from default runs | phase **start**, paths, flags, per-item trace         |
+| TRACE                 | Only if `--trace` / explicit verbose mode                | per-definition reduce outcomes                        |
 
 Do **not** emit DEBUG/TRACE content at INFO. Do **not** use INFO for progress counters when a phase-finish line or `--trace` detail is the right tier.
 
@@ -39,10 +39,10 @@ Use `tracing` macros with explicit targets. Audit/operator events: `target: "dha
 
 Console vs file thresholds (numeric `log` scale: Info=3, Warn=2, Debug=4):
 
-| Flag | Console | File |
-|---|---|---|
-| default | 3 (INFO) | 3 (INFO) |
-| `--min` / `-m` | 3 (INFO) | 2 (WARN) |
+| Flag             | Console  | File      |
+| ---------------- | -------- | --------- |
+| default          | 3 (INFO) | 3 (INFO)  |
+| `--min` / `-m`   | 3 (INFO) | 2 (WARN)  |
 | `--trace` / `-t` | 3 (INFO) | 4 (DEBUG) |
 
 Console stays INFO until the new TUI policy lands.
@@ -53,11 +53,11 @@ Logs are for **humans and agents**, not aggregators. Write plain sentences, one 
 
 ### Tiering (TrID and long modules)
 
-| Category | INFO | DEBUG |
-|---|---|---|
-| Performance | `phase {name} finished in {duration} — {summary}` | `phase {name} started` |
-| Reports | `TrID transform — …` once; module finish summary | per-definition reduce trace (`--trace` only) |
-| Environment | session `mode`, `workers`; module `started — {args}` | flags, log path, resolved paths |
+| Category    | INFO                                                 | DEBUG                                        |
+| ----------- | ---------------------------------------------------- | -------------------------------------------- |
+| Performance | `phase {name} finished in {duration} — {summary}`    | `phase {name} started`                       |
+| Reports     | `TrID transform — …` once; module finish summary     | per-definition reduce trace (`--trace` only) |
+| Environment | session `mode`, `workers`; module `started — {args}` | flags, log path, resolved paths              |
 
 ### Must do
 

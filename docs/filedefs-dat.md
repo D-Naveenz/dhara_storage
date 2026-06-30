@@ -82,7 +82,7 @@ Each `DefinitionRecord` contains:
 
 | Field | XML element | Meaning |
 |-------|-------------|---------|
-| `package_version` | `packageVersion` | `dhara_tool` semver used to build the file |
+| `package_version` | `packageVersion` | `dhara_storage_dal` semver (DSFD packaging authority) |
 | `definitions_release` | `definitionsRelease` | ISO `YYYY-MM-DD` date of the upstream dataset |
 
 The payload section does not use a FlatBuffers `file_identifier`. Section boundaries
@@ -100,7 +100,7 @@ The footer is a single-line XML document prefixed by a standard XML declaration.
 Example shape:
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.7.1</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
+<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.8.0</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
 ```
 
 ### Schema (XSD)
@@ -128,21 +128,25 @@ payload:
 
 ## `packageRevision` semantics
 
-`packageRevision` is a **per-tool-version build counter**, not a global lifetime
+`packageRevision` is a **per-packaging-version build counter**, not a global lifetime
 counter. `dhara_tool` assigns it when building from TrID sources.
 
-| Existing `filedefs.dat` | `packageVersion` vs current tool | Next revision |
+| Existing `filedefs.dat` | `packageVersion` vs current DAL | Next revision |
 |-------------------------|----------------------------------|---------------|
 | Missing or invalid | — | `1` |
-| Present | matches current tool version | `existing + 1` |
-| Present | differs from current tool version | `1` |
+| Present | matches current DAL version | `existing + 1` |
+| Present | differs from current DAL version | `1` |
 
-Example: three rebuilds at tool `0.6.0` produce revisions `1`, `2`, `3`. After a
-version bump to `0.7.1`, the next build starts again at `1`.
+`packageVersion` is provenance metadata only. A differing label alone does not mean the
+embedded payload is stale — `defs sync-embedded` compares definition content and
+`definitionsRelease`, not version strings.
+
+Example: three rebuilds at DAL `0.6.0` produce revisions `1`, `2`, `3`. After a DAL
+version bump to `0.8.0`, the next build starts again at `1`.
 
 At startup, `dhara_tool` reads the canonical output path, caches revision and version
 for logging and the TUI dashboard, and updates the cache after each successful write.
-See [`tooling/dhara_tool/src/ops/workspace.rs`](../tooling/dhara_tool/src/ops/workspace.rs).
+See [`tooling/dhara_tool/src/workspace.rs`](../tooling/dhara_tool/src/workspace.rs).
 
 ## `tags` field
 
@@ -206,8 +210,16 @@ validation and matching (`package_revision`, `tags`, records) stay in the binary
 payload. Fields that describe provenance and build context (`package_version`,
 `definitions_release`) live in XML where tooling and humans can read them directly.
 
-## Related documentation
+## Related docs
 
-- [Logging conventions](logging.md) — audit log format for `dhara_tool` builds
-- [`dhara_storage_dal` README](../src/core/dhara_storage_dal/README.md) — crate-local quick reference
-- [`tooling/dhara_tool/package/README.md`](../tooling/dhara_tool/package/README.md) — builder input assets
+- [Logging conventions][logging] — audit log format for `dhara_tool` builds
+- [dhara_storage_dal README][readme-dal] — crate-local quick reference
+- [dhara_tool package/ notes][package-readme] — builder input assets
+- [CI/CD pipelines][ci-cd] — defs build in release flow
+- [Docs index][docs-index]
+
+[logging]: logging.md
+[readme-dal]: ../src/core/dhara_storage_dal/README.md
+[package-readme]: ../tooling/dhara_tool/package/README.md
+[ci-cd]: ci-cd-pipelines.md
+[docs-index]: README.md

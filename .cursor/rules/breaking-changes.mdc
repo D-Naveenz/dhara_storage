@@ -1,0 +1,60 @@
+---
+description: Breaking changes are acceptable pre-1.0; no legacy paths, deprecations, or parallel V1/V2 APIs
+alwaysApply: false
+---
+
+# Breaking changes are acceptable
+
+Dhara Storage is **pre-1.0** and published, but the maintainer has **one primary consumer** (a C# MCP project). Adapting to new APIs is cheap. Do **not** default to backward-compatibility theater.
+
+**When it breaks, it should be broken.** One canonical API per concern — no half-migrations left in the tree.
+
+## Default stance
+
+- **Prefer the better design** even when it breaks Rust public API, C ABI, or C# bindings.
+- **Suggest breaking changes** when they simplify architecture, remove dead paths, or fix wrong abstractions — a little caution is fine; **avoiding** breakage by default is not.
+- You may change **APIs, dependencies, key types, FFI shapes, and critical functions** without asking first when the tradeoff is clear.
+- If the new code is clearly better, **replace the old code directly** in the same change (Rust, FFI, C#, tests, docs).
+
+## No legacy surface (this repo)
+
+Do **not** add or retain:
+
+- Parallel **V1 / V2** (or `Old` / `New`) types, exports, or mappers side by side
+- `#[deprecated]` re-exports, JSON “old” ABI paths, or compatibility wrappers
+- Type aliases kept “for migration” after call sites are updated
+- Version suffixes on the **current** canonical shape (e.g. rename `NativeFileInformationV2` → `NativeFileInformation` once V1 is gone)
+
+Keep old code **only** when it contains reusable logic not yet ported — then move that logic into the new path and **delete** the old path. Do not leave both entry points.
+
+## When to ask
+
+Pause when blast radius is **high** and unclear:
+
+- Removing public surface with no obvious replacement
+- Large dependency or native-OS requirement changes
+- CI/release changes you cannot fix in the same pass
+
+## Do not
+
+- Reject a refactor because the package is published or “consumers might exist.”
+- Split into phased “deprecate now, remove later” unless the user explicitly requests that workflow.
+
+## Examples
+
+```text
+# ✅ GOOD — one ABI, one name
+Delete legacy JSON exports; typed dhara_get_file_info is the only path.
+Rename NativeShellIconV2 → NativeShellIcon after dropping any V1 struct.
+
+# ✅ GOOD — direct replacement
+New ShellIcon RGBA model replaces Windows GDI icon code; no alias, no deprecated shim.
+
+# ❌ BAD — parallel versions
+NativeFileInformationV1 + V2 both mapped; old JSON export kept “for compatibility.”
+
+# ❌ BAD — soft break
+#[deprecated] old_fn that forwards to new_fn indefinitely.
+```
+
+After breaking work: update in-repo call sites, `dhara_tool` verify paths, binding tests, and README when behavior or packaging changes.

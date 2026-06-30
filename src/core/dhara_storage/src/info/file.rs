@@ -8,7 +8,8 @@ use crate::analysis::{AnalysisReport, ContentKind, DetectedDefinition, analyze_p
 use crate::error::StorageError;
 
 use super::common::{StorageMetadata, format_size};
-use super::windows::{WindowsShellDetails, WindowsShellIcon, load_shell_details, load_shell_icon};
+use super::shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon, load_shell_icon};
+use super::windows_shell::{ShellDetails, load_shell_details};
 
 /// Immutable file metadata with lazy, cached content analysis.
 #[derive(Debug)]
@@ -17,8 +18,8 @@ pub struct FileInfo {
     size: u64,
     filename_extension: Option<String>,
     analysis: OnceCell<AnalysisReport>,
-    shell_details: OnceCell<Option<WindowsShellDetails>>,
-    shell_icon: OnceCell<Option<WindowsShellIcon>>,
+    shell_details: OnceCell<Option<ShellDetails>>,
+    shell_icon: OnceCell<Option<ShellIcon>>,
 }
 
 impl FileInfo {
@@ -170,26 +171,31 @@ impl FileInfo {
     }
 
     /// Lazily load Windows shell display/type information when requested.
-    pub fn shell_details(&self) -> Option<&WindowsShellDetails> {
+    pub fn shell_details(&self) -> Option<&ShellDetails> {
         debug!(
             target: "dhara_storage::info::file",
             path = %self.path().display(),
-            "loading Windows shell details"
+            "loading shell details"
         );
         self.shell_details
             .get_or_init(|| load_shell_details(self.path()))
             .as_ref()
     }
 
-    /// Lazily load the Windows shell icon when requested.
-    pub fn icon(&self) -> Option<&WindowsShellIcon> {
+    /// Lazily load the OS shell icon at the default pixel size.
+    pub fn icon(&self) -> Option<&ShellIcon> {
         debug!(
             target: "dhara_storage::info::file",
             path = %self.path().display(),
-            "loading Windows shell icon"
+            "loading shell icon"
         );
         self.shell_icon
-            .get_or_init(|| load_shell_icon(self.path()))
+            .get_or_init(|| load_shell_icon(self.path(), DEFAULT_SHELL_ICON_SIZE))
             .as_ref()
+    }
+
+    /// Load the OS shell icon at the requested pixel size without caching.
+    pub fn load_icon_at(&self, size: u32) -> Option<ShellIcon> {
+        load_shell_icon(self.path(), size)
     }
 }

@@ -18,13 +18,19 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 
 ## Local Commands
 
-- Verify CI-equivalent checks: `cargo run -p dhara_tool -- verify ci`
+- Full local check (fmt, clippy, doc, tests, dotnet): `./tooling/scripts/verify-local.ps1` (or `.sh`)
 - Verify NuGet package shape: `cargo run -p dhara_tool -- verify package`
 - Sync shared config into manifests: `cargo run -p dhara_tool -- config sync`
+
+## CI/CD
+
+- Unified workflow: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
+- GitHub runs `cargo`/`dotnet` directly for quality and tests; `dhara_tool` handles native staging, `verify package`, and `release run` only
+- CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits so the merge commit SHA matches PR CI
 
 ## Local Guardrails
 
 - Keep `dhara_storage` Rust-native; solve .NET interop constraints in `dharastorage` and `src/bindings/Dhara.Storage`.
-- Treat Windows as the primary runtime and CI target unless a concrete portability goal says otherwise.
+- Treat Windows as the primary developer workstation; ship all five 64-bit RIDs via CI merge (`package stage-native` per OS + `tooling/scripts/merge-native`).
 - Repo code, manifests, tests, and workflow files win if a vault note drifts.
 - Do not add local private paths or personal vault locations to this file.

@@ -1,8 +1,5 @@
 using Dhara.Storage.Exceptions;
-using Dhara.Storage.Models.Analysis;
-using Dhara.Storage.Models.Information;
 using Dhara.Storage.Models.Progress;
-using Dhara.Storage.Models.Watching;
 using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 
@@ -14,15 +11,21 @@ internal static class NativeHelpers
 
     internal static void EnsureSupportedPlatform()
     {
-        if (OperatingSystem.IsWindows() &&
-            (RuntimeInformation.ProcessArchitecture == Architecture.X64 ||
-             RuntimeInformation.ProcessArchitecture == Architecture.Arm64))
+        var arch = RuntimeInformation.ProcessArchitecture;
+        var is64Bit = arch is Architecture.X64 or Architecture.Arm64;
+        if (!is64Bit)
+        {
+            throw new PlatformNotSupportedException(
+                $"Dhara.Storage requires a 64-bit process (x64 or arm64). Current architecture: {arch}.");
+        }
+
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux() || OperatingSystem.IsMacOS())
         {
             return;
         }
 
         throw new PlatformNotSupportedException(
-            $"Dhara.Storage supports Windows x64 and Windows arm64 only. Current platform: {RuntimeInformation.OSDescription}, architecture: {RuntimeInformation.ProcessArchitecture}.");
+            $"Dhara.Storage is not supported on this operating system. Current platform: {RuntimeInformation.OSDescription}, architecture: {arch}.");
     }
 
     internal static void ThrowIfFailed(NativeStatus status, nint errorPtr, nuint errorLen)
@@ -59,78 +62,6 @@ internal static class NativeHelpers
         }
     }
 
-    internal static AnalysisReport ToModel(this NativeAnalysisReportDto dto) =>
-        new(
-            dto.Matches.Select(ToModel).ToArray(),
-            dto.TopMimeType,
-            dto.TopDetectedExtension,
-            dto.ContentKind,
-            dto.BytesScanned,
-            dto.FileSize,
-            dto.SourceExtension);
-
-    internal static DetectedDefinition ToModel(this NativeDetectedDefinitionDto dto) =>
-        new(dto.FileTypeLabel, dto.MimeType, dto.Extensions, dto.Score, dto.Confidence);
-
-    internal static FileInformation ToModel(this NativeFileInformationDto dto)
-    {
-        var metadata = dto.Metadata;
-        return new FileInformation(
-            metadata.Path,
-            metadata.Name,
-            metadata.IsReadOnly,
-            metadata.IsHidden,
-            metadata.IsSystem,
-            metadata.IsTemporary,
-            metadata.IsSymbolicLink,
-            metadata.LinkTarget,
-            ToDateTimeOffset(metadata.CreatedAtUtcMs),
-            ToDateTimeOffset(metadata.ModifiedAtUtcMs),
-            ToDateTimeOffset(metadata.AccessedAtUtcMs),
-            dto.DisplayName,
-            dto.Size,
-            dto.FormattedSize,
-            dto.FilenameExtension,
-            dto.Analysis?.ToModel());
-    }
-
-    internal static DirectoryInformation ToModel(this NativeDirectoryInformationDto dto)
-    {
-        var metadata = dto.Metadata;
-        return new DirectoryInformation(
-            metadata.Path,
-            metadata.Name,
-            metadata.IsReadOnly,
-            metadata.IsHidden,
-            metadata.IsSystem,
-            metadata.IsTemporary,
-            metadata.IsSymbolicLink,
-            metadata.LinkTarget,
-            ToDateTimeOffset(metadata.CreatedAtUtcMs),
-            ToDateTimeOffset(metadata.ModifiedAtUtcMs),
-            ToDateTimeOffset(metadata.AccessedAtUtcMs),
-            dto.DisplayName,
-            dto.Summary is null
-                ? null
-                : new DirectorySummary(dto.Summary.TotalSize, dto.Summary.FileCount, dto.Summary.DirectoryCount, dto.Summary.FormattedSize));
-    }
-
-    internal static StorageEntry ToModel(this NativeStorageEntryDto dto) => new(dto.Kind, dto.Path, dto.Name);
-
-    internal static StorageChangedEventArgs ToModel(this NativeWatchEventDto dto) =>
-        new(
-            dto.Path,
-            dto.PreviousPath,
-            dto.ChangeType switch
-            {
-                "created" => StorageChangeType.Created,
-                "deleted" => StorageChangeType.Deleted,
-                "modified" => StorageChangeType.Modified,
-                "relocated" => StorageChangeType.Relocated,
-                _ => StorageChangeType.Modified,
-            },
-            DateTimeOffset.FromUnixTimeMilliseconds(dto.ObservedAtUtcMs));
-
     internal static StorageProgress ToModel(this NativeOperationSnapshot snapshot) =>
         new(
             snapshot.HasTotalBytes == 0 ? null : snapshot.TotalBytes,
@@ -150,7 +81,4 @@ internal static class NativeHelpers
             "ERROR" => LogLevel.Error,
             _ => LogLevel.Information,
         };
-
-    private static DateTimeOffset? ToDateTimeOffset(long? unixMilliseconds) =>
-        unixMilliseconds.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(unixMilliseconds.Value) : null;
 }

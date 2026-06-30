@@ -22,7 +22,7 @@ pub enum ContentKind {
     Unknown,
 }
 
-/// A ranked match produced by the legacy definitions package.
+/// A ranked match produced by the definitions package.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DetectedDefinition {
     /// Human-friendly file type label.
@@ -157,7 +157,7 @@ fn analyze_reader_internal(
             continue;
         }
 
-        ranked_matches.push(MatchedDefinition::from_legacy(definition, score));
+        ranked_matches.push(MatchedDefinition::from_definition(definition, score));
     }
 
     if ranked_matches.is_empty() {
@@ -225,7 +225,7 @@ struct MatchedDefinition {
 }
 
 impl MatchedDefinition {
-    fn from_legacy(definition: &DefinitionRecord, score: u64) -> Self {
+    fn from_definition(definition: &DefinitionRecord, score: u64) -> Self {
         Self {
             file_type_label: definition.file_type.clone(),
             mime_type: definition.mime_type.clone(),

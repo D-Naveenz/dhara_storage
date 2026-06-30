@@ -21,7 +21,7 @@ internal readonly struct NativeOptionalUtf8
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeStorageMetadataV2
+internal readonly struct NativeStorageMetadata
 {
     internal readonly NativeUtf8 Path;
     internal readonly NativeUtf8 Name;
@@ -40,7 +40,7 @@ internal readonly struct NativeStorageMetadataV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeDirectorySummaryV2
+internal readonly struct NativeDirectorySummary
 {
     internal readonly ulong TotalSize;
     internal readonly ulong FileCount;
@@ -49,7 +49,7 @@ internal readonly struct NativeDirectorySummaryV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeDetectedDefinitionV2
+internal readonly struct NativeDetectedDefinition
 {
     internal readonly NativeUtf8 FileTypeLabel;
     internal readonly NativeUtf8 MimeType;
@@ -60,7 +60,7 @@ internal readonly struct NativeDetectedDefinitionV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeAnalysisReportV2
+internal readonly struct NativeAnalysisReport
 {
     internal readonly nint MatchesPtr;
     internal readonly nuint MatchesLen;
@@ -73,27 +73,50 @@ internal readonly struct NativeAnalysisReportV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeFileInformationV2
+internal readonly struct NativeShellIcon
 {
-    internal readonly NativeStorageMetadataV2 Metadata;
+    internal readonly uint Width;
+    internal readonly uint Height;
+    internal readonly nint PixelsPtr;
+    internal readonly nuint PixelsLen;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeShellDetails
+{
+    internal readonly byte HasValue;
+    internal readonly NativeOptionalUtf8 DisplayName;
+    internal readonly NativeOptionalUtf8 TypeName;
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal readonly struct NativeFileInformation
+{
+    internal readonly NativeStorageMetadata Metadata;
     internal readonly NativeUtf8 DisplayName;
     internal readonly ulong Size;
     internal readonly NativeUtf8 FormattedSize;
     internal readonly NativeOptionalUtf8 FilenameExtension;
     internal readonly nint Analysis;
+    internal readonly byte HasIcon;
+    internal readonly NativeShellIcon Icon;
+    internal readonly NativeShellDetails ShellDetails;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeDirectoryInformationV2
+internal readonly struct NativeDirectoryInformation
 {
-    internal readonly NativeStorageMetadataV2 Metadata;
+    internal readonly NativeStorageMetadata Metadata;
     internal readonly NativeUtf8 DisplayName;
     internal readonly byte HasSummary;
-    internal readonly NativeDirectorySummaryV2 Summary;
+    internal readonly NativeDirectorySummary Summary;
+    internal readonly byte HasIcon;
+    internal readonly NativeShellIcon Icon;
+    internal readonly NativeShellDetails ShellDetails;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeStorageEntryV2
+internal readonly struct NativeStorageEntry
 {
     internal readonly uint Kind;
     internal readonly NativeUtf8 Path;
@@ -101,14 +124,14 @@ internal readonly struct NativeStorageEntryV2
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeStorageEntryListV2
+internal readonly struct NativeStorageEntryList
 {
     internal readonly nint EntriesPtr;
     internal readonly nuint EntriesLen;
 }
 
 [StructLayout(LayoutKind.Sequential)]
-internal readonly struct NativeWatchEventV2
+internal readonly struct NativeWatchEvent
 {
     internal readonly uint ChangeType;
     internal readonly NativeUtf8 Path;
@@ -120,8 +143,8 @@ internal static unsafe class NativeTyped
 {
     internal static AnalysisReport ToAnalysisReport(nint reportPtr)
     {
-        var report = Read<NativeAnalysisReportV2>(reportPtr);
-        var nativeMatches = ReadSpan<NativeDetectedDefinitionV2>(report.MatchesPtr, report.MatchesLen);
+        var report = Read<NativeAnalysisReport>(reportPtr);
+        var nativeMatches = ReadSpan<NativeDetectedDefinition>(report.MatchesPtr, report.MatchesLen);
         var matches = new DetectedDefinition[nativeMatches.Length];
         for (var i = 0; i < nativeMatches.Length; i++)
         {
@@ -140,7 +163,7 @@ internal static unsafe class NativeTyped
 
     internal static FileInformation ToFileInformation(nint infoPtr)
     {
-        var info = Read<NativeFileInformationV2>(infoPtr);
+        var info = Read<NativeFileInformation>(infoPtr);
         var metadata = info.Metadata;
         return new FileInformation(
             ToString(metadata.Path),
@@ -158,12 +181,14 @@ internal static unsafe class NativeTyped
             info.Size,
             ToString(info.FormattedSize),
             ToNullableString(info.FilenameExtension),
-            info.Analysis == 0 ? null : ToAnalysisReport(info.Analysis));
+            info.Analysis == 0 ? null : ToAnalysisReport(info.Analysis),
+            ToShellIcon(info.HasIcon, info.Icon),
+            ToShellDetails(info.ShellDetails));
     }
 
     internal static DirectoryInformation ToDirectoryInformation(nint infoPtr)
     {
-        var info = Read<NativeDirectoryInformationV2>(infoPtr);
+        var info = Read<NativeDirectoryInformation>(infoPtr);
         var metadata = info.Metadata;
         return new DirectoryInformation(
             ToString(metadata.Path),
@@ -184,13 +209,15 @@ internal static unsafe class NativeTyped
                     info.Summary.TotalSize,
                     info.Summary.FileCount,
                     info.Summary.DirectoryCount,
-                    ToString(info.Summary.FormattedSize)));
+                    ToString(info.Summary.FormattedSize)),
+            ToShellIcon(info.HasIcon, info.Icon),
+            ToShellDetails(info.ShellDetails));
     }
 
     internal static IReadOnlyList<StorageEntry> ToStorageEntries(nint entriesPtr)
     {
-        var list = Read<NativeStorageEntryListV2>(entriesPtr);
-        var nativeEntries = ReadSpan<NativeStorageEntryV2>(list.EntriesPtr, list.EntriesLen);
+        var list = Read<NativeStorageEntryList>(entriesPtr);
+        var nativeEntries = ReadSpan<NativeStorageEntry>(list.EntriesPtr, list.EntriesLen);
         var entries = new StorageEntry[nativeEntries.Length];
         for (var i = 0; i < nativeEntries.Length; i++)
         {
@@ -203,7 +230,7 @@ internal static unsafe class NativeTyped
 
     internal static StorageChangedEventArgs ToWatchEvent(nint eventPtr)
     {
-        var nativeEvent = Read<NativeWatchEventV2>(eventPtr);
+        var nativeEvent = Read<NativeWatchEvent>(eventPtr);
         return new StorageChangedEventArgs(
             ToString(nativeEvent.Path),
             ToNullableString(nativeEvent.PreviousPath),
@@ -211,7 +238,47 @@ internal static unsafe class NativeTyped
             DateTimeOffset.FromUnixTimeMilliseconds(checked((long)nativeEvent.ObservedAtUtcMs)));
     }
 
-    private static DetectedDefinition ToDetectedDefinition(NativeDetectedDefinitionV2 definition)
+    private static ShellIcon? ToShellIcon(byte hasIcon, NativeShellIcon icon)
+    {
+        if (hasIcon == 0 || icon.PixelsPtr == 0 || icon.PixelsLen == 0)
+        {
+            return null;
+        }
+
+        var pixels = ReadBytes(icon.PixelsPtr, icon.PixelsLen);
+        return new ShellIcon(checked((int)icon.Width), checked((int)icon.Height), pixels);
+    }
+
+    private static ShellDetails? ToShellDetails(NativeShellDetails details)
+    {
+        if (details.HasValue == 0)
+        {
+            return null;
+        }
+
+        return new ShellDetails(
+            ToNullableString(details.DisplayName),
+            ToNullableString(details.TypeName));
+    }
+
+    private static byte[] ReadBytes(nint ptr, nuint len)
+    {
+        if (len == 0)
+        {
+            return [];
+        }
+
+        if (ptr == 0)
+        {
+            throw new InvalidOperationException("Native typed payload byte pointer was null.");
+        }
+
+        var bytes = new byte[checked((int)len)];
+        Marshal.Copy(ptr, bytes, 0, bytes.Length);
+        return bytes;
+    }
+
+    private static DetectedDefinition ToDetectedDefinition(NativeDetectedDefinition definition)
     {
         var nativeExtensions = ReadSpan<NativeUtf8>(definition.ExtensionsPtr, definition.ExtensionsLen);
         var extensions = new string[nativeExtensions.Length];
