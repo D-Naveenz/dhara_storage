@@ -10,7 +10,8 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 
 - **Config sync** — propagates [dhara.config.toml][dhara-config] into manifests
 - **Definitions pipeline** — pack, build TrID XML, inspect, verify, sync embedded `filedefs.dat`
-- **Native staging** — per-OS `runtimes/{rid}/native` trees for NuGet
+- **Quality gates** — `quality fmt`, `clippy`, `doc`, `test-rust`, `test-dotnet`, `run`
+- **Native merge** — combine per-OS `runtimes/**` trees before pack
 - **Package verify** — checks merged native layout before publish
 - **Release orchestration** — crates.io + NuGet publish with dry-run support
 - **Interactive TUI** — launch without a subcommand in a real terminal
@@ -26,12 +27,12 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 
 ```
 dhara_tool/src/
-├── commands/        # config, defs, verify, package, release, version
+├── commands/        # config, defs, quality, native, verify, package, release, version
 ├── tui/             # interactive mode
 └── logging/         # audit log setup
 
 tooling/
-├── scripts/         # CI wrappers (stage-native, merge, verify-package)
+├── scripts/         # verify-local wrapper → cargo run quality run
 ├── output/          # NuGet packages and operator artifacts
 ├── logs/            # audit logs ({date}_dhara_tool*.log)
 └── artifacts/       # gitignored native staging scratch
@@ -78,15 +79,20 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 | `config` | `show`, `sync`, `env init` |
 | `version` | `set`, `bump` |
 | `defs` | `pack`, `build-trid-xml`, `inspect`, `inspect-trid-xml`, `normalize`, `verify`, `sync-embedded` |
+| `quality` | `fmt`, `clippy`, `doc`, `test-rust`, `test-dotnet`, `run` |
+| `native` | `merge` |
 | `verify` | `package` |
-| `package` | `pack`, `stage-native`, `publish` |
+| `package` | `pack`, `stage-native` (`--msvc-env` on Windows), `publish` |
 | `release` | `run` |
 
+**Tool versioning:** bump `version` in this crate's `Cargo.toml` for any tool change; run `config sync` to update `[tool].version` in `dhara.config.toml`. CI caches binaries by that version.
+
 ```powershell
-./tooling/scripts/verify-local.ps1
+cargo run -p dhara_tool -- quality run
 cargo run -p dhara_tool -- config sync
-cargo run -p dhara_tool -- defs sync-embedded
-cargo run -p dhara_tool -- verify package
+cargo run -p dhara_tool -- package stage-native --msvc-env
+cargo run -p dhara_tool -- native merge --output tooling/artifacts/native-stage --input ...
+cargo run -p dhara_tool -- verify package --native-stage tooling/artifacts/native-stage
 cargo run -p dhara_tool -- release run --dry-run
 ```
 

@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use clap::{ArgAction, Parser, ValueEnum};
 
 use crate::command::{CommandResult, ToolContext};
@@ -48,6 +48,30 @@ struct VersionBumpArgs {
 struct StageNativeArgs {
     #[arg(long, default_value = "Release")]
     configuration: String,
+    #[arg(long, action = ArgAction::SetTrue)]
+    msvc_env: bool,
+}
+
+#[derive(Debug, Parser)]
+struct NativeMergeArgs {
+    #[arg(long)]
+    output: PathBuf,
+    #[arg(long)]
+    input: Vec<PathBuf>,
+}
+
+#[derive(Debug, Parser)]
+struct QualityFmtArgs {
+    #[arg(long, action = ArgAction::SetTrue)]
+    check: bool,
+}
+
+#[derive(Debug, Parser)]
+struct QualityRunArgs {
+    #[arg(long, action = ArgAction::SetTrue)]
+    skip_docs: bool,
+    #[arg(long, action = ArgAction::SetTrue)]
+    skip_dotnet: bool,
 }
 
 #[derive(Debug, Parser)]
@@ -363,6 +387,25 @@ pub(crate) fn package_stage_native_command(
     let Some(args) = parse_args::<StageNativeArgs>("package stage-native", args)? else {
         return Ok(CommandResult::success());
     };
+
+    #[cfg(windows)]
+    if args.msvc_env {
+        let exe =
+            std::env::current_exe().context("failed to resolve dhara_tool executable path")?;
+        let mut command = format!("\"{}\" package stage-native", exe.display());
+        if args.configuration != "Release" {
+            command.push_str(&format!(" --configuration {}", args.configuration));
+        }
+        crate::msvc::run_with_msvc_env(&command)?;
+        return Ok(CommandResult::with_message(
+            "Staged host native assets under MSVC environment.",
+        ));
+    }
+
+    if args.msvc_env {
+        bail!("--msvc-env is only supported on Windows");
+    }
+
     let config = current_config(context)?;
     stage_native_for_host(
         &context.repo_root,
@@ -378,6 +421,92 @@ pub(crate) fn package_stage_native_command(
             prepacked_nuget_override: None,
         },
     )
+}
+
+pub(crate) fn native_merge_command(
+    _context: &ToolContext,
+    args: &[String],
+) -> Result<CommandResult> {
+    let Some(args) = parse_args::<NativeMergeArgs>("native merge", args)? else {
+        return Ok(CommandResult::success());
+    };
+    if args.input.is_empty() {
+        bail!("native merge requires at least one --input path");
+    }
+    crate::native_merge::merge_native_stages(&args.output, &args.input)?;
+    Ok(CommandResult::with_message(format!(
+        "Merged native stages into {}.",
+        args.output.display()
+    )))
+}
+
+pub(crate) fn quality_fmt_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
+    let Some(args) = parse_args::<QualityFmtArgs>("quality fmt", args)? else {
+        return Ok(CommandResult::success());
+    };
+    crate::quality::run_fmt(&context.repo_root, args.check)?;
+    Ok(CommandResult::with_message(if args.check {
+        "Formatting check passed."
+    } else {
+        "Formatted workspace crates."
+    }))
+}
+
+pub(crate) fn quality_clippy_command(
+    context: &ToolContext,
+    args: &[String],
+) -> Result<CommandResult> {
+    if parse_args::<NoArgs>("quality clippy", args)?.is_none() {
+        return Ok(CommandResult::success());
+    }
+    crate::quality::run_clippy(&context.repo_root)?;
+    Ok(CommandResult::with_message("Clippy checks passed."))
+}
+
+pub(crate) fn quality_doc_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
+    if parse_args::<NoArgs>("quality doc", args)?.is_none() {
+        return Ok(CommandResult::success());
+    }
+    crate::quality::run_doc(&context.repo_root)?;
+    Ok(CommandResult::with_message("Documentation build passed."))
+}
+
+pub(crate) fn quality_test_rust_command(
+    context: &ToolContext,
+    args: &[String],
+) -> Result<CommandResult> {
+    if parse_args::<NoArgs>("quality test-rust", args)?.is_none() {
+        return Ok(CommandResult::success());
+    }
+    crate::quality::run_test_rust(&context.repo_root)?;
+    Ok(CommandResult::with_message("Rust tests passed."))
+}
+
+pub(crate) fn quality_test_dotnet_command(
+    context: &ToolContext,
+    args: &[String],
+) -> Result<CommandResult> {
+    if parse_args::<NoArgs>("quality test-dotnet", args)?.is_none() {
+        return Ok(CommandResult::success());
+    }
+    let config = current_config(context)?;
+    crate::quality::ensure_dotnet_available()?;
+    crate::quality::run_test_dotnet(&context.repo_root, &config)?;
+    Ok(CommandResult::with_message(".NET tests passed."))
+}
+
+pub(crate) fn quality_run_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
+    let Some(args) = parse_args::<QualityRunArgs>("quality run", args)? else {
+        return Ok(CommandResult::success());
+    };
+    let config = current_config(context)?;
+    crate::quality::run_all(
+        &context.repo_root,
+        &config,
+        args.skip_docs,
+        args.skip_dotnet,
+    )?;
+    Ok(CommandResult::with_message("Local CI checks passed."))
 }
 
 pub(crate) fn package_publish_command(
@@ -396,6 +525,30 @@ pub(crate) fn package_publish_command(
 }
 
 pub(crate) fn release_run_command(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
+    #[cfg(windows)]
+    if std::env::var_os("DHARA_TOOL_INSIDE_MSVC").is_none() {
+        let exe =
+            std::env::current_exe().context("failed to resolve dhara_tool executable path")?;
+        let mut command = format!(
+            "set DHARA_TOOL_INSIDE_MSVC=1&& \"{}\" release run",
+            exe.display()
+        );
+        for arg in args {
+            command.push(' ');
+            if arg.contains(' ') {
+                command.push('"');
+                command.push_str(arg);
+                command.push('"');
+            } else {
+                command.push_str(arg);
+            }
+        }
+        crate::msvc::run_with_msvc_env(&command)?;
+        return Ok(CommandResult::with_message(
+            "Release flow completed under MSVC environment.",
+        ));
+    }
+
     let Some(args) = parse_args::<ReleaseRunArgs>("release run", args)? else {
         return Ok(CommandResult::success());
     };

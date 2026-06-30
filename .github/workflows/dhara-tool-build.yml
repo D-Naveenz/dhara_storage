@@ -1,0 +1,104 @@
+name: dhara-tool-build
+
+on:
+  push:
+    branches: [development, main]
+    paths:
+      - tooling/dhara_tool/**
+      - Cargo.toml
+      - .github/workflows/dhara-tool-build.yml
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Rebuild even if cache exists
+        required: true
+        default: false
+        type: boolean
+
+env:
+  CARGO_TERM_COLOR: always
+
+permissions:
+  contents: read
+
+jobs:
+  build-tool:
+    name: build dhara_tool (${{ matrix.os-arch }})
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            os-arch: windows-x64
+            binary: target/dist/dhara_tool.exe
+          - runner: ubuntu-latest
+            os-arch: linux-x64
+            binary: target/dist/dhara_tool
+          - runner: ubuntu-24.04-arm
+            os-arch: linux-arm64
+            binary: target/dist/dhara_tool
+          - runner: macos-14
+            os-arch: osx-arm64
+            binary: target/dist/dhara_tool
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Read tool version
+        id: tool-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(grep -E '^version\s*=' tooling/dhara_tool/Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore dhara_tool cache
+        id: tool-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: target/dist
+          key: dhara-tool-${{ steps.tool-version.outputs.version }}-${{ matrix.os-arch }}
+          restore-keys: |
+            dhara-tool-${{ steps.tool-version.outputs.version }}-
+
+      - name: Skip build when cache is warm
+        if: steps.tool-cache.outputs.cache-hit == 'true' && (github.event_name != 'workflow_dispatch' || inputs.force != true)
+        shell: bash
+        run: |
+          echo "Using cached dhara_tool v${{ steps.tool-version.outputs.version }} for ${{ matrix.os-arch }}."
+          "${{ matrix.binary }}" --version
+
+      - name: Install Rust stable
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo dependencies
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test dhara_tool
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
+        run: cargo test -p dhara_tool
+
+      - name: Build dhara_tool (dist profile)
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
+        run: cargo build -p dhara_tool --profile dist
+
+      - name: Smoke test dist binary
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${{ matrix.binary }}" --version
+          test "$("${{ matrix.binary }}" --version)" = "${{ steps.tool-version.outputs.version }}"
+
+      - name: Save dhara_tool cache
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
+        uses: actions/cache/save@v4
+        with:
+          path: target/dist
+          key: dhara-tool-${{ steps.tool-version.outputs.version }}-${{ matrix.os-arch }}

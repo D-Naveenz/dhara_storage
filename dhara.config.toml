@@ -1,6 +1,9 @@
 [versions]
 workspace = "0.8.0"
 
+[tool]
+version = "0.8.1"
+
 [nuget]
 package_id = "Dhara.Storage"
 source = "https://api.nuget.org/v3/index.json"

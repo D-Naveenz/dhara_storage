@@ -4,6 +4,23 @@ All notable changes to Dhara Storage are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Granular `dhara_tool` CI commands** — `quality *`, `native merge`, and `package stage-native --msvc-env` replace removed shell wrappers.
+- **`dhara-tool-build` workflow** — version-keyed Actions cache builds `profile.dist` binaries per OS; pipeline jobs restore cached tools instead of compiling each run.
+- **Independent tool versioning** — `tooling/dhara_tool/Cargo.toml` owns tool semver; `[tool].version` in `dhara.config.toml` pins CI cache lookups (`config sync` keeps them aligned).
+
+### Changed
+
+- **Build profiles** — removed `[profile.ci]`; operator CLI uses `[profile.dist]` (optimized, rare rebuilds on tool version bump).
+- **Pipeline** — PR/CD jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` forwards to `cargo run -p dhara_tool -- quality run`.
+
+### Removed
+
+- **Staging/release shell scripts** — `merge-native`, `stage-native-*`, `verify-package`, and `release-run-windows` scripts deleted in favor of `dhara_tool` commands.
+
 ## [0.8.0] — 2026-06-30
 
 Compared to [v0.7.1](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.7.1).

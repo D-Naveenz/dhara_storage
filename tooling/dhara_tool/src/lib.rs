@@ -3,10 +3,13 @@ pub mod command;
 pub mod commands;
 pub mod filedefs;
 pub mod logging;
+pub mod msvc;
+pub mod native_merge;
 pub mod native_rids;
 pub mod nuget;
 pub mod output;
 pub mod paths;
+pub mod quality;
 pub mod registry;
 pub mod release;
 pub mod repo_config;
@@ -41,9 +44,10 @@ pub use registry::DharaStorageCapability;
 pub use release::{ReleaseOptions, run as run_release};
 pub use repo_config::{
     CONFIG_PATH, CiConfig, DharaRepoConfig, ENV_EXAMPLE_PATH, ENV_LOCAL_PATH, NuGetConfig,
-    PublishConfig, ROOT_CARGO_TOML_PATH, ShowOutput, TargetsConfig, VersionConfig, VersionPart,
-    bump_version, init_env, load_config, load_env, parse_env_content, set_version, show, sync,
-    sync_cargo_toml, sync_csproj, validate_config, verify_release,
+    PublishConfig, ROOT_CARGO_TOML_PATH, ShowOutput, TOOL_CARGO_TOML_PATH, TargetsConfig,
+    ToolConfig, VersionConfig, VersionPart, bump_version, init_env, load_config, load_env,
+    parse_env_content, read_tool_crate_version, set_version, show, sync, sync_cargo_toml,
+    sync_csproj, validate_config, verify_release,
 };
 pub use subprocess::{
     inspect_package_entries, run_command, run_command_expect_failure, run_command_with_env,

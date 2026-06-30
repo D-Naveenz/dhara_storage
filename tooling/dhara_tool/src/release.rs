@@ -268,13 +268,17 @@ mod tests {
 
     use super::*;
     use crate::{
-        CiConfig, DharaRepoConfig, NuGetConfig, PublishConfig, TargetsConfig, VersionConfig,
+        CiConfig, DharaRepoConfig, NuGetConfig, PublishConfig, TargetsConfig, ToolConfig,
+        VersionConfig,
     };
 
     fn sample_config() -> DharaRepoConfig {
         DharaRepoConfig {
             versions: VersionConfig {
                 workspace: "0.5.0".to_owned(),
+            },
+            tool: ToolConfig {
+                version: "0.8.1".to_owned(),
             },
             nuget: NuGetConfig {
                 package_id: "Dhara.Storage".to_owned(),

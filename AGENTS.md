@@ -18,19 +18,21 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 
 ## Local Commands
 
-- Full local check (fmt, clippy, doc, tests, dotnet): `./tooling/scripts/verify-local.ps1` (or `.sh`)
+- Full local check: `cargo run -p dhara_tool -- quality run` or `./tooling/scripts/verify-local.ps1`
 - Verify NuGet package shape: `cargo run -p dhara_tool -- verify package`
 - Sync shared config into manifests: `cargo run -p dhara_tool -- config sync`
 
 ## CI/CD
 
-- Unified workflow: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
-- GitHub runs `cargo`/`dotnet` directly for quality and tests; `dhara_tool` handles native staging, `verify package`, and `release run` only
-- CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits (not squash) so CD can resolve the PR branch tip (`HEAD^2`) for artifact lookup
+- PR/release pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml)
+- Tool cache build: [`.github/workflows/dhara-tool-build.yml`](.github/workflows/dhara-tool-build.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
+- Pipeline jobs restore cached `dhara_tool` (`target/dist/`) by `[tool].version`; they do not compile the tool per job.
+- **Tool version bump required** for any `tooling/dhara_tool/**` change (cache is version-keyed).
+- CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits (not squash) so CD can resolve the PR branch tip (`HEAD^2`).
 
 ## Local Guardrails
 
 - Keep `dhara_storage` Rust-native; solve .NET interop constraints in `dharastorage` and `src/bindings/Dhara.Storage`.
-- Treat Windows as the primary developer workstation; ship all five 64-bit RIDs via CI merge (`package stage-native` per OS + `tooling/scripts/merge-native`).
+- Treat Windows as the primary developer workstation; ship all five 64-bit RIDs via CI merge (`package stage-native` per OS + `native merge`).
 - Repo code, manifests, tests, and workflow files win if a vault note drifts.
 - Do not add local private paths or personal vault locations to this file.

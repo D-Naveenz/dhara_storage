@@ -1,0 +1,38 @@
+name: Restore dhara_tool
+description: Restore a versioned dhara_tool dist binary from Actions cache
+
+inputs:
+  tool-version:
+    description: Pinned dhara_tool version from dhara.config.toml
+    required: true
+  os-arch:
+    description: Cache suffix for the runner OS/arch (e.g. windows-x64)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Restore dhara_tool cache
+      id: tool-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: target/dist
+        key: dhara-tool-${{ inputs.tool-version }}-${{ inputs.os-arch }}
+        restore-keys: |
+          dhara-tool-${{ inputs.tool-version }}-
+
+    - name: Require dhara_tool binary
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          bin="target/dist/dhara_tool.exe"
+        else
+          bin="target/dist/dhara_tool"
+        fi
+        if [ ! -f "$bin" ]; then
+          echo "::error::dhara_tool v${{ inputs.tool-version }} (${{ inputs.os-arch }}) is not cached. Push tooling/dhara_tool changes to development (bump tool version) and wait for dhara-tool-build, or run that workflow with force=true."
+          exit 1
+        fi
+        chmod +x "$bin" 2>/dev/null || true
+        "$bin" --version

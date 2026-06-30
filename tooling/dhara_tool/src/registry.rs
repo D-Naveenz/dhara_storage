@@ -9,7 +9,9 @@ use crate::command::{
 use crate::commands::{
     config_env_init, config_show, config_sync, defs_build_trid_xml, defs_inspect,
     defs_inspect_trid_xml, defs_normalize, defs_pack, defs_sync_embedded, defs_verify,
-    package_pack_command, package_publish_command, package_stage_native_command,
+    native_merge_command, package_pack_command, package_publish_command,
+    package_stage_native_command, quality_clippy_command, quality_doc_command, quality_fmt_command,
+    quality_run_command, quality_test_dotnet_command, quality_test_rust_command,
     release_run_command, verify_package_command, version_bump, version_set,
 };
 const VERSION_PARTS: &[&str] = &["major", "minor", "patch"];
@@ -65,6 +67,16 @@ impl DharaStorageCapability {
                 name: "defs",
                 prompt: "dhara:defs> ",
                 summary: "Definitions package commands",
+            },
+            SectionSpec {
+                name: "quality",
+                prompt: "dhara:quality> ",
+                summary: "Repository quality gate commands",
+            },
+            SectionSpec {
+                name: "native",
+                prompt: "dhara:native> ",
+                summary: "Native asset staging helpers",
             },
             SectionSpec {
                 name: "verify",
@@ -183,10 +195,66 @@ impl DharaStorageCapability {
                 defs_sync_embedded,
             ),
             command(
+                "quality.fmt",
+                &["quality", "fmt"],
+                "Run rustfmt on workspace crates",
+                "[--check]",
+                "quality",
+                quality_fmt_command,
+            ),
+            command(
+                "quality.clippy",
+                &["quality", "clippy"],
+                "Run clippy on workspace crates",
+                "",
+                "quality",
+                quality_clippy_command,
+            ),
+            command(
+                "quality.doc",
+                &["quality", "doc"],
+                "Build Rust API documentation",
+                "",
+                "quality",
+                quality_doc_command,
+            ),
+            command(
+                "quality.test-rust",
+                &["quality", "test-rust"],
+                "Run Rust crate tests",
+                "",
+                "quality",
+                quality_test_rust_command,
+            ),
+            command(
+                "quality.test-dotnet",
+                &["quality", "test-dotnet"],
+                "Run .NET binding tests",
+                "",
+                "quality",
+                quality_test_dotnet_command,
+            ),
+            command(
+                "quality.run",
+                &["quality", "run"],
+                "Run local CI parity checks",
+                "[--skip-docs] [--skip-dotnet]",
+                "quality",
+                quality_run_command,
+            ),
+            command(
+                "native.merge",
+                &["native", "merge"],
+                "Merge per-OS native stage trees",
+                "--output <path> --input <path>...",
+                "native",
+                native_merge_command,
+            ),
+            command(
                 "verify.package",
                 &["verify", "package"],
                 "Pack and verify the NuGet package",
-                "[--configuration <name>] [--version <semver>]",
+                "[--configuration <name>] [--version <semver>] [--native-stage <path>]",
                 "verify",
                 verify_package_command,
             ),
@@ -202,7 +270,7 @@ impl DharaStorageCapability {
                 "package.stage-native",
                 &["package", "stage-native"],
                 "Stage host-buildable native libraries",
-                "[--configuration <name>]",
+                "[--configuration <name>] [--msvc-env]",
                 "package",
                 package_stage_native_command,
             ),
@@ -218,7 +286,7 @@ impl DharaStorageCapability {
                 "release.run",
                 &["release", "run"],
                 "Run the Cargo-first release workflow",
-                "[--configuration <name>] [--source <url>] [--api-key-env <name>] [--dry-run] [--skip-cargo] [--skip-nuget]",
+                "[--configuration <name>] [--source <url>] [--api-key-env <name>] [--dry-run] [--skip-cargo] [--skip-nuget] [--native-stage <path>] [--prepacked-nuget <path>] [--verify-package]",
                 "release",
                 release_run_command,
             ),
@@ -611,7 +679,9 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             sections,
-            vec!["config", "defs", "package", "release", "verify", "version"]
+            vec![
+                "config", "defs", "native", "package", "quality", "release", "verify", "version"
+            ]
         );
 
         let commands = registry

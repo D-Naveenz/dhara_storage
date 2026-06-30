@@ -43,7 +43,7 @@ Build from the workspace root:
 cargo build -p dharastorage --release
 ```
 
-Multi-RID packaging uses [dhara_tool `package stage-native`][repo-tool] and CI merge scripts — see [CI/CD reference][ci-cd].
+Multi-RID packaging uses [dhara_tool `package stage-native`][repo-tool] and [`native merge`][repo-tool] in CI — see [CI/CD reference][ci-cd].
 
 ## 🔧 Configuration & Environment Variables
 

@@ -58,19 +58,28 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage -p dhara_tool --check
-
-      - name: Clippy (dhara_storage)
-        run: cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
-
-      - name: Clippy (other crates)
-        run: cargo clippy -p dhara_storage_dal -p dharastorage -p dhara_tool --all-targets -- -D warnings
-
-      - name: Rustdoc
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
         run: |
-          cargo doc -p dhara_storage --no-deps --all-features
-          cargo doc -p dhara_storage_dal -p dharastorage -p dhara_tool --no-deps
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: windows-x64
+
+      - name: Quality checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool.exe
+          "$tool" quality fmt --check
+          "$tool" quality clippy
+          "$tool" quality doc
 
   platform-windows:
     name: platform (windows)
@@ -97,21 +106,28 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
         run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
-      - name: .NET tests
-        run: dotnet test src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: windows-x64
 
-      - name: Build dhara_tool (ci profile)
-        run: cargo build -p dhara_tool --profile ci
-
-      - name: Stage native assets
-        shell: pwsh
-        run: ./tooling/scripts/stage-native-windows.ps1 -ToolPath target/ci/dhara_tool.exe
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool.exe
+          "$tool" quality test-rust
+          "$tool" quality test-dotnet
+          "$tool" package stage-native --msvc-env
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -143,14 +159,27 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
         run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
-      - name: Stage native assets
-        run: ./tooling/scripts/stage-native-linux.sh
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: linux-x64
+
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" quality test-rust
+          "$tool" package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -182,14 +211,27 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
         run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
-      - name: Stage native assets
-        run: ./tooling/scripts/stage-native-linux.sh
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: linux-arm64
+
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" quality test-rust
+          "$tool" package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -216,14 +258,27 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
         run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
-      - name: Stage native assets
-        run: ./tooling/scripts/stage-native-macos.sh
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: osx-arm64
+
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" quality test-rust
+          "$tool" package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -255,6 +310,20 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: windows-x64
+
       - name: Download native stages
         uses: actions/download-artifact@v4
         with:
@@ -263,20 +332,22 @@ jobs:
           merge-multiple: false
 
       - name: Merge native stages
-        shell: pwsh
+        shell: bash
         run: |
-          ./tooling/scripts/merge-native.ps1 `
-            -Output tooling/artifacts/native-stage `
-            -StagePaths @(
-              'tooling/artifacts/native-inputs/native-stage-windows',
-              'tooling/artifacts/native-inputs/native-stage-linux',
-              'tooling/artifacts/native-inputs/native-stage-linux-arm64',
-              'tooling/artifacts/native-inputs/native-stage-macos'
-            )
+          set -euo pipefail
+          tool=target/dist/dhara_tool.exe
+          "$tool" native merge \
+            --output tooling/artifacts/native-stage \
+            --input tooling/artifacts/native-inputs/native-stage-windows \
+            --input tooling/artifacts/native-inputs/native-stage-linux \
+            --input tooling/artifacts/native-inputs/native-stage-linux-arm64 \
+            --input tooling/artifacts/native-inputs/native-stage-macos
 
       - name: Verify package
-        shell: pwsh
-        run: ./tooling/scripts/verify-package.ps1 -NativeStage tooling/artifacts/native-stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          target/dist/dhara_tool.exe verify package --native-stage tooling/artifacts/native-stage
 
       - name: Write release metadata
         shell: pwsh
@@ -364,6 +435,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Read pinned tool version
+        id: tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          tool-version: ${{ steps.tool.outputs.version }}
+          os-arch: windows-x64
+
       - name: Resolve PR CI artifact commit
         id: artifact-commit
         shell: bash
@@ -430,21 +515,21 @@ jobs:
           "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
 
       - name: Publish DAL, runtime, and NuGet
-        shell: pwsh
+        shell: bash
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          $scriptArgs = @{
-            PrepackedNuget = '${{ steps.nupkg.outputs.path }}'
-          }
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ inputs.dry_run }}" -eq "true") { $scriptArgs.DryRun = $true }
-            if ("${{ inputs.publish_cargo }}" -ne "true") { $scriptArgs.SkipCargo = $true }
-            if ("${{ inputs.publish_nuget }}" -ne "true") { $scriptArgs.SkipNuget = $true }
-            if ("${{ inputs.verify_package }}" -eq "true") { $scriptArgs.VerifyPackage = $true }
-          }
-          ./tooling/scripts/release-run-windows.ps1 @scriptArgs
+          set -euo pipefail
+          tool=target/dist/dhara_tool.exe
+          args=(release run --prepacked-nuget "${{ steps.nupkg.outputs.path }}")
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ inputs.dry_run }}" = "true" ]; then args+=(--dry-run); fi
+            if [ "${{ inputs.publish_cargo }}" != "true" ]; then args+=(--skip-cargo); fi
+            if [ "${{ inputs.publish_nuget }}" != "true" ]; then args+=(--skip-nuget); fi
+            if [ "${{ inputs.verify_package }}" = "true" ]; then args+=(--verify-package); fi
+          fi
+          "$tool" "${args[@]}"
 
       - name: Upload NuGet artifacts
         if: always()

@@ -25,9 +25,11 @@ lto = true          # Enables Link-time Optimization.
 opt-level = "s"     # Prioritizes small binary size. Use `3` if you prefer speed.
 strip = true        # Ensures debug symbols are removed.
 
-[profile.ci]
+# Operator CLI — built rarely (version-bump / cache miss) via dhara-tool-build.yml
+[profile.dist]
 inherits = "release"
-lto = false
-codegen-units = 16
 opt-level = 3
-strip = true
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

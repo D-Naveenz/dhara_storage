@@ -14,10 +14,12 @@ pub const CONFIG_PATH: &str = "dhara.config.toml";
 pub const ENV_EXAMPLE_PATH: &str = ".env.example";
 pub const ENV_LOCAL_PATH: &str = ".env.local";
 pub const ROOT_CARGO_TOML_PATH: &str = "Cargo.toml";
+pub const TOOL_CARGO_TOML_PATH: &str = "tooling/dhara_tool/Cargo.toml";
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DharaRepoConfig {
     pub versions: VersionConfig,
+    pub tool: ToolConfig,
     pub nuget: NuGetConfig,
     pub ci: CiConfig,
     pub publish: PublishConfig,
@@ -28,6 +30,11 @@ pub struct DharaRepoConfig {
 pub struct VersionConfig {
     #[serde(alias = "rust_workspace", alias = "nuget_package")]
     pub workspace: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ToolConfig {
+    pub version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -124,8 +131,14 @@ pub fn verify_release(repo_root: &Path) -> Result<()> {
 }
 
 pub fn sync(repo_root: &Path) -> Result<()> {
-    let config = load_config(repo_root)?;
+    let tool_version = read_tool_crate_version(repo_root)?;
+    let mut config = load_config(repo_root)?;
     validate_config(repo_root, &config)?;
+
+    if config.tool.version != tool_version {
+        config.tool.version = tool_version.clone();
+        write_config(repo_root, &config)?;
+    }
 
     let cargo_path = repo_root.join(ROOT_CARGO_TOML_PATH);
     let cargo_content = fs::read_to_string(&cargo_path)
@@ -191,6 +204,20 @@ pub fn sync_cargo_toml(content: &str, version: &str) -> Result<String> {
     document["workspace"]["dependencies"]["dhara_storage_dal"]["version"] = value(version);
     document["workspace"]["dependencies"]["dhara_storage"]["version"] = value(version);
     Ok(document.to_string())
+}
+
+pub fn read_tool_crate_version(repo_root: &Path) -> Result<String> {
+    let path = repo_root.join(TOOL_CARGO_TOML_PATH);
+    let content =
+        fs::read_to_string(&path).with_context(|| format!("failed to read {}", path.display()))?;
+    let document = content
+        .parse::<DocumentMut>()
+        .with_context(|| format!("failed to parse {}", path.display()))?;
+    let version = document["package"]["version"]
+        .as_str()
+        .with_context(|| format!("{} is missing package.version", path.display()))?;
+    Version::parse(version).with_context(|| format!("invalid tool semver: {version}"))?;
+    Ok(version.to_owned())
 }
 
 pub fn sync_csproj(content: &str, config: &DharaRepoConfig) -> Result<String> {
@@ -297,6 +324,16 @@ fn masked_env(values: BTreeMap<String, String>) -> BTreeMap<String, String> {
 pub fn validate_config(repo_root: &Path, config: &DharaRepoConfig) -> Result<()> {
     Version::parse(&config.versions.workspace)
         .with_context(|| format!("invalid workspace version: {}", config.versions.workspace))?;
+    Version::parse(&config.tool.version)
+        .with_context(|| format!("invalid tool version: {}", config.tool.version))?;
+    let manifest_tool_version = read_tool_crate_version(repo_root)?;
+    if config.tool.version != manifest_tool_version {
+        bail!(
+            "dhara.config.toml [tool].version ({}) does not match {} ({manifest_tool_version}); run `dhara_tool config sync`",
+            config.tool.version,
+            TOOL_CARGO_TOML_PATH
+        );
+    }
 
     if config.nuget.package_id.trim().is_empty() {
         bail!("nuget.package_id must not be empty");
@@ -604,6 +641,9 @@ mod tests {
             versions: VersionConfig {
                 workspace: "0.2.0".to_owned(),
             },
+            tool: ToolConfig {
+                version: "0.8.1".to_owned(),
+            },
             nuget: NuGetConfig {
                 package_id: "Dhara.Storage".to_owned(),
                 source: "https://api.nuget.org/v3/index.json".to_owned(),
@@ -649,6 +689,12 @@ mod tests {
         fs::create_dir_all(repo_root.join("src/bindings/Dhara.Storage.ConsumerSmoke")).unwrap();
         fs::write(repo_root.join(CONFIG_PATH), "placeholder").unwrap();
         fs::write(repo_root.join(ROOT_CARGO_TOML_PATH), "[workspace]\n").unwrap();
+        fs::create_dir_all(repo_root.join("tooling/dhara_tool")).unwrap();
+        fs::write(
+            repo_root.join(TOOL_CARGO_TOML_PATH),
+            "[package]\nversion = \"0.8.1\"\n",
+        )
+        .unwrap();
         fs::write(repo_root.join(ENV_EXAMPLE_PATH), "NUGET_API_KEY=\n").unwrap();
         fs::write(
             repo_root.join("src/bindings/Dhara.Storage/Dhara.Storage.csproj"),
