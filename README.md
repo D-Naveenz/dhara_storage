@@ -38,7 +38,7 @@ dhara_storage/
 │   └── bindings/Dhara.Storage/  # NuGet package source
 ├── tooling/
 │   ├── dhara_tool/              # Operator CLI
-│   ├── scripts/                 # verify-local wrapper → dhara_tool quality run
+│   ├── scripts/                 # ensure-dhara-tool-dist, verify-local (dist quality run)
 │   └── output/                  # staged packages (gitignored)
 ├── docs/                        # technical reference
 ├── dhara.config.toml            # shared version + publish metadata

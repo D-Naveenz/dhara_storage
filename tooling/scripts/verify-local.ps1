@@ -8,11 +8,17 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 
+& (Join-Path $PSScriptRoot "ensure-dhara-tool-dist.ps1")
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+$bin = Join-Path $repoRoot "target\dist\dhara_tool.exe"
 $args = @("quality", "run")
 if ($SkipDocs) { $args += "--skip-docs" }
 if ($SkipDotnet) { $args += "--skip-dotnet" }
 
-cargo run -p dhara_tool -- @args
+& $bin @args
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

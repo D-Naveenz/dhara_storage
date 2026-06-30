@@ -1,57 +1,73 @@
 {
-  // Use IntelliSense to learn about possible attributes.
-  // Hover to view descriptions of existing attributes.
-  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
   "version": "0.2.0",
+  "inputs": [
+    {
+      "id": "dharaToolArgs",
+      "type": "promptString",
+      "description": "dhara_tool CLI args after '--' (empty for TUI / no subcommand)",
+      "default": ""
+    }
+  ],
   "configurations": [
     {
-      "name": "Debug unit tests in library 'rheo_storage_lib'",
+      "name": "Debug dhara_tool (dev)",
       "type": "lldb",
       "request": "launch",
-      "cargo": {
-        "args": ["test", "--package=rheo_storage_lib"]
-      }
-    },
-    {
-      "name": "Debug integration test 'analysis'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": ["test", "--test=analysis", "--package=rheo_storage_lib"]
-      }
-    },
-    {
-      "name": "Debug integration test 'operations'",
-      "type": "lldb",
-      "request": "launch",
-      "cargo": {
-        "args": ["test", "--test=operations", "--package=rheo_storage_lib"]
-      }
-    },
-    {
-      "name": "Debug executable 'rheo_storage_def_builder'",
-      "type": "lldb",
-      "request": "launch",
+      "cwd": "${workspaceFolder}",
       "cargo": {
         "args": [
           "run",
-          "--bin=rheo_storage_def_builder",
-          "--package=rheo_storage_def_builder"
-        ]
+          "-p",
+          "dhara_tool",
+          "--"
+        ],
+        "filter": {
+          "name": "dhara_tool",
+          "kind": "bin"
+        }
       },
       "args": []
     },
     {
-      "name": "Debug unit tests in executable 'rheo_storage_def_builder'",
+      "name": "Debug dhara_tool tests",
       "type": "lldb",
       "request": "launch",
+      "cwd": "${workspaceFolder}",
       "cargo": {
-        "args": [
-          "test",
-          "--bin=rheo_storage_def_builder",
-          "--package=rheo_storage_def_builder"
-        ]
+        "args": ["test", "-p", "dhara_tool", "--no-run"],
+        "filter": {
+          "name": "dhara_tool",
+          "kind": "bin"
+        }
+      },
+      "args": []
+    },
+    {
+      "name": "Run dhara_tool (dist)",
+      "type": "lldb",
+      "request": "launch",
+      "preLaunchTask": "dhara-tool: ensure dist",
+      "cwd": "${workspaceFolder}",
+      "windows": {
+        "program": "${workspaceFolder}/target/dist/dhara_tool.exe"
+      },
+      "linux": {
+        "program": "${workspaceFolder}/target/dist/dhara_tool"
+      },
+      "osx": {
+        "program": "${workspaceFolder}/target/dist/dhara_tool"
       }
+    },
+    {
+      "name": "Debug .NET tests",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "dotnet: build tests",
+      "program": "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/bin/Debug/net10.0/Dhara.Storage.Tests.dll",
+      "args": [],
+      "cwd": "${workspaceFolder}",
+      "console": "internalConsole",
+      "stopAtEntry": false
     }
   ]
 }

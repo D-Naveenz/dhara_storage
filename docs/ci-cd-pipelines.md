@@ -107,11 +107,14 @@ Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact.
    - On cache hit → exit (no compile).
    - On miss → `cargo build -p dhara_tool --profile dist`, smoke `--version`, save cache.
 
+**Local parity:** [`ensure-dhara-tool-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] use the same version gate (`Cargo.toml` vs `target/dist/dhara_tool --version`). Rebuild only on missing binary or version mismatch; `-Force` / `--force` for manual refresh.
+
 ## Scripts
 
 | Script | Role |
 |--------|------|
-| [verify-local.ps1][verify-local-ps1] / [`.sh`][verify-local-sh] | Thin wrapper → `cargo run -p dhara_tool -- quality run` |
+| [ensure-dhara-tool-dist.ps1][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] | Version-gated `profile.dist` build → `target/dist/` |
+| [verify-local.ps1][verify-local-ps1] / [`.sh`][verify-local-sh] | `ensure-dhara-tool-dist` → `target/dist/dhara_tool quality run` |
 
 ## Related docs
 
@@ -125,6 +128,8 @@ Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact.
 [workspace-cargo]: ../Cargo.toml
 [verify-local-ps1]: ../tooling/scripts/verify-local.ps1
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
+[ensure-dist-ps1]: ../tooling/scripts/ensure-dhara-tool-dist.ps1
+[ensure-dist-sh]: ../tooling/scripts/ensure-dhara-tool-dist.sh
 [logging]: logging.md
 [native-packaging]: native-packaging.md
 [readme-tool]: ../tooling/dhara_tool/README.md

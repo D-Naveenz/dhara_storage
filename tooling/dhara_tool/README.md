@@ -32,7 +32,7 @@ dhara_tool/src/
 └── logging/         # audit log setup
 
 tooling/
-├── scripts/         # verify-local wrapper → cargo run quality run
+├── scripts/         # ensure-dhara-tool-dist, verify-local → dist quality run
 ├── output/          # NuGet packages and operator artifacts
 ├── logs/            # audit logs ({date}_dhara_tool*.log)
 └── artifacts/       # gitignored native staging scratch
@@ -87,8 +87,11 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 
 **Tool versioning:** bump `version` in this crate's `Cargo.toml` for any tool change; run `config sync` to update `[tool].version` in `dhara.config.toml`. CI caches binaries by that version.
 
+**Dist vs dev:** production-shaped binary lives at `target/dist/dhara_tool` (`[profile.dist]`). [`ensure-dhara-tool-dist`][ensure-dist-ps1] rebuilds only when the binary is missing or `--version` ≠ manifest. Use `cargo run -p dhara_tool` for day-to-day tool edits without invalidating dist.
+
 ```powershell
-cargo run -p dhara_tool -- quality run
+./tooling/scripts/ensure-dhara-tool-dist.ps1
+./tooling/scripts/verify-local.ps1
 cargo run -p dhara_tool -- config sync
 cargo run -p dhara_tool -- package stage-native --msvc-env
 cargo run -p dhara_tool -- native merge --output tooling/artifacts/native-stage --input ...
@@ -111,10 +114,19 @@ cargo clippy -p dhara_tool --all-targets -- -D warnings
 
 CI runs `cargo test -p dhara_tool` once on Linux in [dhara-tool-build][tool-build-yml]; matrix legs only compile `profile.dist` per OS. Platform-specific paths (MSVC re-exec, native merge) are exercised by [pipeline][ci-cd] jobs.
 
+**VS Code:** tasks under `dhara-tool:` — `ensure dist`, `watch dev` (`cargo watch`, dev profile), `quality run (dist)`. Launch **Debug dhara_tool (dev)** for `cargo run`; **Run dhara_tool (dist)** ensures dist first. Requires [CodeLLDB][codelldb]; `cargo-watch` for the watch task.
+
 Full workspace gate:
 
 ```powershell
 ./tooling/scripts/verify-local.ps1
+```
+
+Active tool iteration (does not rebuild dist):
+
+```powershell
+cargo test -p dhara_tool
+cargo run -p dhara_tool --
 ```
 
 Audit logs land in `tooling/logs/{date}_dhara_tool[_N].log`.
@@ -129,6 +141,8 @@ Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
 [env-example]: ../../.env.example
 [ci-cd]: ../../docs/ci-cd-pipelines.md
 [tool-build-yml]: ../../.github/workflows/dhara-tool-build.yml
+[ensure-dist-ps1]: ../../scripts/ensure-dhara-tool-dist.ps1
+[codelldb]: https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb
 [logging]: ../../docs/logging.md
 [filedefs-dat]: ../../docs/filedefs-dat.md
 [package-readme]: package/README.md

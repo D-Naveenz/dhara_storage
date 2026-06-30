@@ -1,41 +1,120 @@
 {
-    "version": "2.0.0",
-    "tasks": [
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "dhara-tool: ensure dist",
+      "type": "shell",
+      "windows": {
+        "command": "powershell",
+        "args": [
+          "-NoProfile",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          "${workspaceFolder}/tooling/scripts/ensure-dhara-tool-dist.ps1"
+        ]
+      },
+      "linux": {
+        "command": "${workspaceFolder}/tooling/scripts/ensure-dhara-tool-dist.sh"
+      },
+      "osx": {
+        "command": "${workspaceFolder}/tooling/scripts/ensure-dhara-tool-dist.sh"
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dhara-tool: watch dev",
+      "type": "shell",
+      "command": "cargo watch -p dhara_tool -x \"run -p dhara_tool --\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": [
         {
-            "label": "build",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "build",
-                "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary;ForceNoAlign"
-            ],
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "publish",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "publish",
-                "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj",
-                "/property:GenerateFullPaths=true",
-                "/consoleloggerparameters:NoSummary;ForceNoAlign"
-            ],
-            "problemMatcher": "$msCompile"
-        },
-        {
-            "label": "watch",
-            "command": "dotnet",
-            "type": "process",
-            "args": [
-                "watch",
-                "run",
-                "--project",
-                "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
-            ],
-            "problemMatcher": "$msCompile"
+          "owner": "rustc",
+          "fileLocation": ["relative", "${workspaceFolder}"],
+          "pattern": {
+            "regexp": "^(error|warning)(\\[\\w+\\])?:\\s+(.*)$",
+            "severity": 1,
+            "message": 3
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^\\s*Compiling",
+            "endsPattern": "^\\s*(Finished|error:)"
+          }
         }
-    ]
+      ],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dhara-tool: test",
+      "type": "cargo",
+      "command": "test",
+      "args": ["-p", "dhara_tool"],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": ["$rustc"]
+    },
+    {
+      "label": "dhara-tool: quality run (dist)",
+      "dependsOn": ["dhara-tool: ensure dist"],
+      "type": "shell",
+      "windows": {
+        "command": "${workspaceFolder}/target/dist/dhara_tool.exe",
+        "args": ["quality", "run"]
+      },
+      "linux": {
+        "command": "${workspaceFolder}/target/dist/dhara_tool",
+        "args": ["quality", "run"]
+      },
+      "osx": {
+        "command": "${workspaceFolder}/target/dist/dhara_tool",
+        "args": ["quality", "run"]
+      },
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "dotnet: build tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj",
+        "/property:GenerateFullPaths=true",
+        "/consoleloggerparameters:NoSummary;ForceNoAlign"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "dotnet: watch tests",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "watch",
+        "test",
+        "--project",
+        "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": "$msCompile"
+    }
+  ]
 }

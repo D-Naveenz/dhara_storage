@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$repo_root"
 
+"$(dirname "$0")/ensure-dhara-tool-dist.sh"
+
+bin="$repo_root/target/dist/dhara_tool"
 args=(quality run)
 for arg in "$@"; do
   case "$arg" in
@@ -13,4 +16,4 @@ for arg in "$@"; do
   esac
 done
 
-exec cargo run -p dhara_tool -- "${args[@]}"
+exec "$bin" "${args[@]}"

@@ -11,11 +11,12 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Granular `dhara_tool` CI commands** — `quality *`, `native merge`, and `package stage-native --msvc-env` replace removed shell wrappers.
 - **`dhara-tool-build` workflow** — version-keyed Actions cache builds `profile.dist` binaries per OS; pipeline jobs restore cached tools instead of compiling each run.
 - **Independent tool versioning** — `tooling/dhara_tool/Cargo.toml` owns tool semver; `[tool].version` in `dhara.config.toml` pins CI cache lookups (`config sync` keeps them aligned).
+- **Local dist ensure scripts** — `ensure-dhara-tool-dist` builds `profile.dist` to `target/dist/` only when the binary is missing or `--version` ≠ manifest; VS Code tasks/launch split dev (`cargo run`) vs dist.
 
 ### Changed
 
 - **Build profiles** — removed `[profile.ci]`; operator CLI uses `[profile.dist]` (optimized, rare rebuilds on tool version bump).
-- **Pipeline** — PR/CD jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` forwards to `cargo run -p dhara_tool -- quality run`.
+- **Pipeline** — PR/CD jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` ensures dist then runs `quality run` (CI parity).
 - **`dhara-tool-build`** — `cargo test -p dhara_tool` runs once on Linux; matrix legs only compile `profile.dist` per OS (binaries are not portable).
 
 ### Removed
