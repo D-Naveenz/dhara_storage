@@ -109,6 +109,8 @@ cargo test -p dhara_tool
 cargo clippy -p dhara_tool --all-targets -- -D warnings
 ```
 
+CI runs `cargo test -p dhara_tool` once on Linux in [dhara-tool-build][tool-build-yml]; matrix legs only compile `profile.dist` per OS. Platform-specific paths (MSVC re-exec, native merge) are exercised by [pipeline][ci-cd] jobs.
+
 Full workspace gate:
 
 ```powershell
@@ -126,6 +128,7 @@ Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
 [dhara-config]: ../../dhara.config.toml
 [env-example]: ../../.env.example
 [ci-cd]: ../../docs/ci-cd-pipelines.md
+[tool-build-yml]: ../../.github/workflows/dhara-tool-build.yml
 [logging]: ../../docs/logging.md
 [filedefs-dat]: ../../docs/filedefs-dat.md
 [package-readme]: package/README.md

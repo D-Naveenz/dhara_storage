@@ -16,6 +16,7 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 - **Build profiles** — removed `[profile.ci]`; operator CLI uses `[profile.dist]` (optimized, rare rebuilds on tool version bump).
 - **Pipeline** — PR/CD jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` forwards to `cargo run -p dhara_tool -- quality run`.
+- **`dhara-tool-build`** — `cargo test -p dhara_tool` runs once on Linux; matrix legs only compile `profile.dist` per OS (binaries are not portable).
 
 ### Removed
 

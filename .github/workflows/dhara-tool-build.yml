@@ -22,8 +22,27 @@ permissions:
   contents: read
 
 jobs:
+  test-tool:
+    name: test dhara_tool
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Test dhara_tool
+        run: cargo test -p dhara_tool
+
   build-tool:
     name: build dhara_tool (${{ matrix.os-arch }})
+    needs: test-tool
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -79,10 +98,6 @@ jobs:
       - name: Cache Cargo dependencies
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
         uses: Swatinem/rust-cache@v2
-
-      - name: Test dhara_tool
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
-        run: cargo test -p dhara_tool
 
       - name: Build dhara_tool (dist profile)
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)

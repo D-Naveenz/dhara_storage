@@ -9,8 +9,8 @@ Human-readable map of the [pipeline workflow][pipeline-yml], [dhara-tool-build w
 | [pipeline.yml][pipeline-yml] | `pull_request` | `quality`, `platform-*`, `publish-readiness` |
 | [pipeline.yml][pipeline-yml] | `push` to `main` (non-docs) | `push-changes`, `publish` |
 | [pipeline.yml][pipeline-yml] | `workflow_dispatch` | `publish` |
-| [dhara-tool-build.yml][tool-build-yml] | `push` to `development` / `main` (tool paths) | `build-tool` matrix |
-| [dhara-tool-build.yml][tool-build-yml] | `workflow_dispatch` (`force`) | `build-tool` matrix |
+| [dhara-tool-build.yml][tool-build-yml] | `push` to `development` / `main` (tool paths) | `test-tool`, `build-tool` matrix |
+| [dhara-tool-build.yml][tool-build-yml] | `workflow_dispatch` (`force`) | `test-tool`, `build-tool` matrix |
 
 **Concurrency:** PR pipeline runs cancel in-progress; `push` to `main` does not.
 
@@ -19,9 +19,10 @@ Human-readable map of the [pipeline workflow][pipeline-yml], [dhara-tool-build w
 ```mermaid
 flowchart TB
   subgraph tool_build ["dhara-tool-build.yml"]
+    TT[test_tool once on linux]
     TB[build_tool matrix per OS]
     CACHE[Actions cache by tool version]
-    TB --> CACHE
+    TT --> TB --> CACHE
   end
 
   subgraph pr ["pipeline.yml pull_request"]
@@ -100,11 +101,11 @@ Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact.
 
 ## `dhara-tool-build` workflow
 
-Per matrix leg (windows-x64, linux-x64, linux-arm64, osx-arm64):
-
-1. Restore cache for `dhara-tool-{version}-{os-arch}`.
-2. On cache hit → exit (no test, no compile).
-3. On miss → `cargo test -p dhara_tool`, then `cargo build -p dhara_tool --profile dist`, save cache.
+1. **`test-tool`** (ubuntu-latest) — `cargo test -p dhara_tool` once. Platform-specific behavior (path resolution, MSVC re-exec) is covered by pipeline jobs on real runners, not duplicated here.
+2. **`build-tool` matrix** (windows-x64, linux-x64, linux-arm64, osx-arm64), after tests pass:
+   - Restore cache for `dhara-tool-{version}-{os-arch}`.
+   - On cache hit → exit (no compile).
+   - On miss → `cargo build -p dhara_tool --profile dist`, smoke `--version`, save cache.
 
 ## Scripts
 
