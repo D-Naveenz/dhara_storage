@@ -18,20 +18,30 @@ pub fn package_native_path(rid: &str) -> Result<String> {
     ))
 }
 
-/// RIDs that can be built on the current host OS without cross-compilation.
+/// RIDs that can be built on the current host OS and CPU without cross-compilation.
 pub fn buildable_runtimes_on_host(all_runtimes: &[String]) -> Vec<String> {
     let host_os = std::env::consts::OS;
+    let host_arch = std::env::consts::ARCH;
     all_runtimes
         .iter()
-        .filter(|rid| is_rid_buildable_on_host(rid, host_os))
+        .filter(|rid| is_rid_buildable_on_host(rid, host_os, host_arch))
         .cloned()
         .collect()
 }
 
-fn is_rid_buildable_on_host(rid: &str, host_os: &str) -> bool {
+fn is_rid_buildable_on_host(rid: &str, host_os: &str, host_arch: &str) -> bool {
     match host_os {
-        "windows" => matches!(rid, "win-x64" | "win-arm64"),
-        "linux" => matches!(rid, "linux-x64" | "linux-arm64"),
+        "windows" => match host_arch {
+            // MSVC can cross-compile ARM64 from an x64 host.
+            "x86_64" => matches!(rid, "win-x64" | "win-arm64"),
+            "aarch64" => rid == "win-arm64",
+            _ => false,
+        },
+        "linux" => match host_arch {
+            "x86_64" => rid == "linux-x64",
+            "aarch64" => rid == "linux-arm64",
+            _ => false,
+        },
         "macos" => rid == "osx-arm64",
         _ => false,
     }
@@ -77,5 +87,14 @@ mod tests {
             package_native_path("osx-arm64").unwrap(),
             "runtimes/osx-arm64/native/libdharastorage.dylib"
         );
+    }
+
+    #[test]
+    fn buildable_runtimes_respect_host_arch_on_linux() {
+        assert!(is_rid_buildable_on_host("linux-x64", "linux", "x86_64"));
+        assert!(!is_rid_buildable_on_host("linux-arm64", "linux", "x86_64"));
+        assert!(is_rid_buildable_on_host("linux-arm64", "linux", "aarch64"));
+        assert!(!is_rid_buildable_on_host("linux-x64", "linux", "aarch64"));
+        assert!(!is_rid_buildable_on_host("win-x64", "linux", "x86_64"));
     }
 }
