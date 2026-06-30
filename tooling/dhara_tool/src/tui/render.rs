@@ -105,19 +105,24 @@ fn render_dashboard(
     state: &AppState,
     registry: &CommandRegistry,
 ) {
-    let quick_actions = ["verify package", "config show", "version bump", "release run"]
-        .iter()
-        .enumerate()
-        .map(|(index, label)| {
-            let prefix = if index == state.selected_quick_action {
-                ">"
-            } else {
-                " "
-            };
-            format!("{prefix} {label}")
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
+    let quick_actions = [
+        "verify package",
+        "config show",
+        "version bump",
+        "release run",
+    ]
+    .iter()
+    .enumerate()
+    .map(|(index, label)| {
+        let prefix = if index == state.selected_quick_action {
+            ">"
+        } else {
+            " "
+        };
+        format!("{prefix} {label}")
+    })
+    .collect::<Vec<_>>()
+    .join("\n");
     let tool_version = crate::version();
     let packaging_version = crate::defs_package_version();
     let next_revision = state

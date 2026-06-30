@@ -124,7 +124,10 @@ pub fn workspace_snapshot(context: &ToolContext) -> WorkspaceSnapshot {
 }
 
 /// Allocate the next package revision for a build at `packaging_version`.
-pub fn next_package_revision(context: &ToolContext, packaging_version: &str) -> Result<u16, String> {
+pub fn next_package_revision(
+    context: &ToolContext,
+    packaging_version: &str,
+) -> Result<u16, String> {
     let snapshot = ensure_workspace_state(context);
     snapshot.next_package_revision(packaging_version)
 }
