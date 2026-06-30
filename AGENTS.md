@@ -29,6 +29,7 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 - PR/release pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml)
 - Tool cache build: [`.github/workflows/dhara-tool-build.yml`](.github/workflows/dhara-tool-build.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - Pipeline jobs restore cached `dhara_tool` (`target/dist/`) by `[tool].version`; they do not compile the tool per job.
+- **Linux-primary orchestration:** `quality`, `publish-readiness`, and CD `publish` use `ubuntu-latest` + `linux-x64` tool cache; only `platform-windows` stays on Windows for MSVC `stage-native`.
 - **Tool version bump required** for any `tooling/dhara_tool/**` change (cache is version-keyed).
 - CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits (not squash) so CD can resolve the PR branch tip (`HEAD^2`).
 

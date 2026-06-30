@@ -29,7 +29,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  DOTNET_CLI_HOME: ${{ github.workspace }}\.dotnet
+  DOTNET_CLI_HOME: ${{ github.workspace }}/.dotnet
 
 permissions:
   contents: write
@@ -40,9 +40,9 @@ concurrency:
 
 jobs:
   quality:
-    name: code quality (windows)
+    name: code quality (linux)
     if: github.event_name == 'pull_request'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -70,13 +70,13 @@ jobs:
         uses: ./.github/actions/restore-dhara-tool
         with:
           tool-version: ${{ steps.tool.outputs.version }}
-          os-arch: windows-x64
+          os-arch: linux-x64
 
       - name: Quality checks
         shell: bash
         run: |
           set -euo pipefail
-          tool=target/dist/dhara_tool.exe
+          tool=target/dist/dhara_tool
           "$tool" quality fmt --check
           "$tool" quality clippy
           "$tool" quality doc
@@ -287,10 +287,10 @@ jobs:
           path: tooling/artifacts/native-stage
 
   publish-readiness:
-    name: NuGet publish readiness (windows)
+    name: NuGet publish readiness (linux)
     if: github.event_name == 'pull_request'
     needs: [platform-windows, platform-linux, platform-linux-arm64, platform-macos]
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -322,7 +322,7 @@ jobs:
         uses: ./.github/actions/restore-dhara-tool
         with:
           tool-version: ${{ steps.tool.outputs.version }}
-          os-arch: windows-x64
+          os-arch: linux-x64
 
       - name: Download native stages
         uses: actions/download-artifact@v4
@@ -335,7 +335,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tool=target/dist/dhara_tool.exe
+          tool=target/dist/dhara_tool
           "$tool" native merge \
             --output tooling/artifacts/native-stage \
             --input tooling/artifacts/native-inputs/native-stage-windows \
@@ -347,13 +347,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool.exe verify package --native-stage tooling/artifacts/native-stage
+          target/dist/dhara_tool verify package --native-stage tooling/artifacts/native-stage
 
       - name: Write release metadata
-        shell: pwsh
+        shell: bash
         run: |
-          $version = (Select-String -Path dhara.config.toml -Pattern '^\s*workspace\s*=\s*"(.+)"' | ForEach-Object { $_.Matches[0].Groups[1].Value })
-          @{ version = $version; commit = "${{ github.sha }}" } | ConvertTo-Json | Set-Content tooling/artifacts/release-metadata.json
+          set -euo pipefail
+          version=$(grep -E '^\s*workspace\s*=' dhara.config.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          printf '{"version":"%s","commit":"%s"}\n' "$version" "${{ github.sha }}" > tooling/artifacts/release-metadata.json
 
       - name: Upload release native stage
         uses: actions/upload-artifact@v4
@@ -397,14 +398,14 @@ jobs:
               - '!docs/**'
 
   publish:
-    name: release (windows)
+    name: release (linux)
     needs: [push-changes]
     if: >
       always() && (
         github.event_name == 'workflow_dispatch' ||
         (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.push-changes.outputs.code == 'true')
       )
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     environment: nuget-production
     steps:
       - name: Checkout
@@ -447,7 +448,7 @@ jobs:
         uses: ./.github/actions/restore-dhara-tool
         with:
           tool-version: ${{ steps.tool.outputs.version }}
-          os-arch: windows-x64
+          os-arch: linux-x64
 
       - name: Resolve PR CI artifact commit
         id: artifact-commit
@@ -495,24 +496,26 @@ jobs:
           path: tooling/output/nuget
 
       - name: Require PR CI artifacts
-        shell: pwsh
+        shell: bash
         run: |
-          $hasNative = Test-Path tooling/artifacts/native-stage/runtimes
-          $nupkg = Get-ChildItem -Path tooling/output/nuget -Filter *.nupkg -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($hasNative -and $nupkg) {
+          set -euo pipefail
+          if [ -d tooling/artifacts/native-stage/runtimes ] && compgen -G "tooling/output/nuget/*.nupkg" > /dev/null; then
             exit 0
-          }
-          Write-Error "No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure publish-readiness succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
+          fi
+          echo "::error::No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure publish-readiness succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
+          exit 1
 
       - name: Resolve pre-packed NuGet path
         id: nupkg
-        shell: pwsh
+        shell: bash
         run: |
-          $package = Get-ChildItem -Path tooling/output/nuget -Filter *.nupkg | Select-Object -First 1
-          if (-not $package) {
-            Write-Error "NuGet package artifact was not downloaded."
-          }
-          "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
+          set -euo pipefail
+          package=$(find tooling/output/nuget -maxdepth 1 -name '*.nupkg' -print -quit)
+          if [ -z "$package" ]; then
+            echo "::error::NuGet package artifact was not downloaded."
+            exit 1
+          fi
+          echo "path=${package}" >> "${GITHUB_OUTPUT}"
 
       - name: Publish DAL, runtime, and NuGet
         shell: bash
@@ -521,7 +524,7 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          tool=target/dist/dhara_tool.exe
+          tool=target/dist/dhara_tool
           args=(release run --prepacked-nuget "${{ steps.nupkg.outputs.path }}")
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             if [ "${{ inputs.dry_run }}" = "true" ]; then args+=(--dry-run); fi

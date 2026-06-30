@@ -27,12 +27,12 @@ flowchart TB
 
   subgraph pr ["pipeline.yml pull_request"]
     RST[restore cached dhara_tool]
-    Q[quality]
+    Q[quality linux]
     PW[platform windows]
     PL[platform linux x64]
     PLA[platform linux arm64]
     PM[platform macos]
-    PR[publish_readiness]
+    PR[publish_readiness linux]
     CACHE --> RST
     RST --> Q & PW & PL & PLA & PM & PR
     Q --> PW & PL & PLA & PM --> PR
@@ -40,7 +40,7 @@ flowchart TB
   end
 
   subgraph cd ["push main or dispatch"]
-    PUB[publish release run]
+    PUB[publish release run linux]
     ART --> PUB
   end
 ```
@@ -56,20 +56,20 @@ flowchart TB
 
 | Work | Runner |
 |------|--------|
-| `quality fmt/clippy/doc` | Cached `dhara_tool` (`quality` job) |
-| `quality test-rust` / `test-dotnet` | Cached `dhara_tool` (`platform-*`) |
-| `package stage-native` | Cached `dhara_tool` (`--msvc-env` on Windows) |
-| `native merge` | Cached `dhara_tool` (`publish-readiness`) |
-| `verify package` / `release run` | Cached `dhara_tool` |
+| `quality fmt/clippy/doc` | `ubuntu-latest` + `linux-x64` cached `dhara_tool` |
+| `quality test-rust` / `test-dotnet` | Cached `dhara_tool` (`platform-*`; `test-dotnet` Windows only) |
+| `package stage-native` | Per-OS runner (`--msvc-env` on `platform-windows` only) |
+| `native merge` / `verify package` | `ubuntu-latest` + `linux-x64` cached `dhara_tool` (`publish-readiness`) |
+| `release run` (CD) | `ubuntu-latest` + `linux-x64` cached `dhara_tool` |
 | `dharastorage` native compiles | Inside `package stage-native` (per OS, not cached) |
 
 Local developers: `cargo run -p dhara_tool -- quality run` or [verify-local][verify-local-ps1] (forwards to `cargo run`).
 
 ## PR jobs
 
-### `quality` (windows)
+### `quality` (linux)
 
-Restores `dhara-tool-{version}-windows-x64`, then:
+Restores `dhara-tool-{version}-linux-x64` on `ubuntu-latest`, then:
 
 - `dhara_tool quality fmt --check`
 - `dhara_tool quality clippy`
@@ -85,7 +85,9 @@ Restores matching OS cache key, then:
 
 Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact.
 
-### `publish-readiness` (windows)
+### `publish-readiness` (linux)
+
+On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 
 1. Download per-OS native artifacts (`native-stage-*`)
 2. `dhara_tool native merge --output … --input …` (four inputs)
@@ -96,8 +98,8 @@ Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact.
 
 1. Resolve artifact commit (`HEAD^2` for merge commits; `event.before^2` for direct main hotfixes) — see [native packaging][native-packaging].
 2. Download PR CI artifacts for that commit.
-3. Restore cached Windows `dhara_tool`.
-4. `dhara_tool release run --prepacked-nuget …` (MSVC re-exec on Windows; no rebuild / re-verify).
+3. Restore cached `linux-x64` `dhara_tool` on `ubuntu-latest`.
+4. `dhara_tool release run --prepacked-nuget …` (no native rebuild / re-verify).
 
 ## `dhara-tool-build` workflow
 
