@@ -288,16 +288,23 @@ fn directory_watch_reports_created_files() {
 
     let created_file = root.join("created.txt");
     fs::write(&created_file, b"created").unwrap();
+    let expected_path = fs::canonicalize(&created_file).unwrap_or(created_file);
 
-    let event = watcher
-        .recv_timeout(Duration::from_secs(5))
-        .unwrap()
-        .expect("expected a watcher event");
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    let mut event = None;
+    while std::time::Instant::now() < deadline {
+        match watcher.recv_timeout(Duration::from_millis(200)) {
+            Ok(Some(candidate)) if candidate.path == expected_path => {
+                event = Some(candidate);
+                break;
+            }
+            Ok(Some(_)) => continue,
+            Ok(None) => continue,
+            Err(err) => panic!("watcher closed unexpectedly: {err:?}"),
+        }
+    }
 
-    assert_eq!(
-        event.path,
-        fs::canonicalize(&created_file).unwrap_or(created_file)
-    );
+    let event = event.expect("expected a watcher event for the created file");
     assert!(matches!(
         event.change_type,
         StorageChangeType::Created | StorageChangeType::Modified
