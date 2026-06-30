@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
+use crate::activation::run_activation;
 use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
 use crate::paths::{is_repo_root, resolve_tool_root};
 use crate::tui::{can_launch, run_tui};
@@ -46,7 +47,7 @@ pub fn run() -> Result<()> {
     let effective_workers = crate::workers::init_global_thread_pool(cli.workers)?;
 
     let context = ToolContext {
-        repo_root,
+        repo_root: repo_root.clone(),
         tool_root,
         run_mode,
         min: cli.min,
@@ -57,10 +58,13 @@ pub fn run() -> Result<()> {
         logs_dir: cli.logs_dir,
     };
 
+    let pending_activation =
+        run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
+
     ensure_workspace_state(&context);
 
     match determine_launch_mode(!cli.command.is_empty(), can_launch()) {
-        LaunchMode::InteractiveTui => run_tui(&registry, &context)?,
+        LaunchMode::InteractiveTui => run_tui(&registry, &context, pending_activation)?,
         LaunchMode::PlainHelp => print!("{}", help_text(&registry)),
         LaunchMode::DirectCommand => {
             let command_id = registry
@@ -187,6 +191,7 @@ struct RootArgs {
     logs_dir: Option<PathBuf>,
     show_help: bool,
     show_version: bool,
+    yes: bool,
     command: Vec<String>,
 }
 
@@ -201,6 +206,7 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
         logs_dir: None,
         show_help: false,
         show_version: false,
+        yes: false,
         command: Vec::new(),
     };
 
@@ -222,6 +228,10 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
             }
             "-t" | "--trace" => {
                 parsed.trace = true;
+                index += 1;
+            }
+            "-y" | "--yes" => {
+                parsed.yes = true;
                 index += 1;
             }
             "-w" | "--workers" => {
@@ -306,6 +316,7 @@ fn help_text(registry: &CommandRegistry) -> String {
            -m, --min         file log WARN only (console stays INFO)\n\
            -t, --trace       file log DEBUG (console stays INFO)\n\
            -w, --workers <n>  cap Rayon worker threads (default 4; env TOOL_MAX_WORKERS)\n\
+           -y, --yes         apply configuration drift without prompting\n\
            -h, --help\n\
            --version\n\n\
          {}",
@@ -439,6 +450,17 @@ mod tests {
         ])
         .unwrap();
         assert_eq!(parsed.workers, Some(2));
+    }
+
+    #[test]
+    fn yes_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "--yes".to_owned(),
+            "config".to_owned(),
+            "show".to_owned(),
+        ])
+        .unwrap();
+        assert!(parsed.yes);
     }
 
     #[test]

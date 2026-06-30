@@ -1,5 +1,5 @@
 # Ensures target/dist/dhara_tool matches tooling/dhara_tool/Cargo.toml package.version.
-# Bump tool version (and config sync) when shipping tool changes — same policy as CI cache.
+# Bump [tool].version in dhara.config.toml and package.version in tooling/dhara_tool/Cargo.toml together when shipping tool changes.
 param(
     [switch] $Force
 )

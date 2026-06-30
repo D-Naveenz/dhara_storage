@@ -48,7 +48,7 @@ flowchart TB
 ## Tool versioning and cache
 
 - **Source of truth:** `version` in [`tooling/dhara_tool/Cargo.toml`](../tooling/dhara_tool/Cargo.toml) (independent of workspace library semver).
-- **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — `dhara_tool config sync` copies manifest → config.
+- **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — must match `tooling/dhara_tool/Cargo.toml` in git; activation propagates config into manifests on run (`--yes` in CI).
 - **Policy:** any change under `tooling/dhara_tool/**` must bump the tool version; cache key is `dhara-tool-{version}-{os-arch}` with no source hash.
 - **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
 
@@ -69,11 +69,11 @@ Local developers: `cargo run -p dhara_tool -- quality run` or [verify-local][ver
 
 ### `quality` (linux)
 
-Restores `dhara-tool-{version}-linux-x64` on `ubuntu-latest`, then:
+Restores `dhara-tool-{version}-linux-x64` on `ubuntu-latest`, then (all invocations use `--yes`):
 
-- `dhara_tool quality fmt --check`
-- `dhara_tool quality clippy`
-- `dhara_tool quality doc`
+- `dhara_tool --yes quality fmt --check`
+- `dhara_tool --yes quality clippy`
+- `dhara_tool --yes quality doc`
 
 ### `platform-{windows,linux,linux-arm64,macos}`
 

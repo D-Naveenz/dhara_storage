@@ -7,7 +7,7 @@ use crate::command::{
     SectionSpec, ToolCapability, ToolContext,
 };
 use crate::commands::{
-    config_env_init, config_show, config_sync, defs_build_trid_xml, defs_inspect,
+    config_env_init, config_show, defs_build_trid_xml, defs_inspect,
     defs_inspect_trid_xml, defs_normalize, defs_pack, defs_sync_embedded, defs_verify,
     native_merge_command, package_pack_command, package_publish_command,
     package_stage_native_command, quality_clippy_command, quality_doc_command, quality_fmt_command,
@@ -105,14 +105,6 @@ impl DharaStorageCapability {
                 "",
                 "config",
                 config_show,
-            ),
-            command(
-                "config.sync",
-                &["config", "sync"],
-                "Synchronize repo-managed metadata",
-                "",
-                "config",
-                config_sync,
             ),
             command(
                 "config.env.init",
@@ -319,10 +311,6 @@ fn ui_for_command(
     match id {
         "config.show" => quick_command(
             "Inspect the effective Dhara repository configuration and resolved environment.",
-            false,
-        ),
-        "config.sync" => quick_command(
-            "Synchronize repo-managed metadata such as workspace version and NuGet package metadata.",
             false,
         ),
         "config.env.init" => quick_command(

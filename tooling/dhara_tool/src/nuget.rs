@@ -12,7 +12,7 @@ use crate::paths::{default_artifacts_dir, resolve_output_dir};
 
 use super::{
     DharaRepoConfig, inspect_package_entries, load_env, log_module_step_debug, run_command,
-    run_command_expect_failure, run_command_with_env_redacted, sync, verify_release,
+    run_command_expect_failure, run_command_with_env_redacted, verify_release,
     write_nuget_config,
 };
 
@@ -40,7 +40,6 @@ pub fn pack(
         options.version_override.as_deref().unwrap_or("from config")
     ));
     verify_release(repo_root)?;
-    sync(repo_root)?;
 
     let version = effective_version(config, &options.version_override);
     let artifacts_root = artifacts_root(tool_root)?;

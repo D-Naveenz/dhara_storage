@@ -34,7 +34,7 @@ Generated operator logs live next to the running binary, not under a fixed `tool
 | Concept | Meaning |
 |---------|---------|
 | **`tool_root`** | Directory containing the `dhara_tool` executable (canonicalized). Anchors default logs, artifacts, and NuGet output. |
-| **`repo_root`** | Dhara Storage workspace root (`dhara.config.toml` + `tooling/dhara_tool/Cargo.toml`). Anchors config sync, embedded defs, and repo-relative CLI overrides. |
+| **`repo_root`** | Dhara Storage workspace root (`dhara.config.toml` + `tooling/dhara_tool/Cargo.toml`). Anchors config activation, embedded defs, and repo-relative CLI overrides. |
 
 | Profile | Typical `tool_root` | Default log directory |
 |---------|---------------------|------------------------|

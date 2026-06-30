@@ -4,6 +4,7 @@ use std::path::Path;
 use crate::{OutputStream, WorkspaceSnapshot};
 
 use crate::command::{CommandRegistry, CommandResult, CommandSpec, ToolContext};
+use crate::repo_config::{ConfigDriftItem, apply_config_drift};
 
 use super::exec::{RunCompletion, RunHandle, cancel_run, start_run};
 use super::schema::CommandForm;
@@ -43,6 +44,21 @@ pub struct HistoryEntry {
     pub result: Option<CommandResult>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ActivationPrompt {
+    pub drifts: Vec<ConfigDriftItem>,
+    pub confirm_yes: bool,
+}
+
+impl ActivationPrompt {
+    pub fn new(drifts: Vec<ConfigDriftItem>) -> Self {
+        Self {
+            drifts,
+            confirm_yes: true,
+        }
+    }
+}
+
 pub struct AppState {
     pub repository_label: String,
     pub workspace: WorkspaceSnapshot,
@@ -60,6 +76,7 @@ pub struct AppState {
     pub latest_result: Option<CommandResult>,
     pub status_message: String,
     pub should_quit: bool,
+    pub activation_prompt: Option<ActivationPrompt>,
 }
 
 impl Default for AppState {
@@ -91,6 +108,7 @@ impl AppState {
             latest_result: None,
             status_message: "Ready.".to_owned(),
             should_quit: false,
+            activation_prompt: None,
         }
     }
 
@@ -351,6 +369,26 @@ impl AppState {
         } else {
             &self.active_output
         }
+    }
+
+    pub fn apply_activation_confirm(
+        &mut self,
+        repo_root: &std::path::Path,
+    ) -> anyhow::Result<()> {
+        let Some(prompt) = self.activation_prompt.take() else {
+            return Ok(());
+        };
+        apply_config_drift(repo_root, &prompt.drifts)?;
+        self.status_message =
+            "Configuration drift applied from dhara.config.toml.".to_owned();
+        Ok(())
+    }
+
+    pub fn decline_activation(&mut self) {
+        self.activation_prompt = None;
+        self.should_quit = true;
+        self.status_message =
+            "Activation declined. Update manifests manually or relaunch with --yes.".to_owned();
     }
 }
 

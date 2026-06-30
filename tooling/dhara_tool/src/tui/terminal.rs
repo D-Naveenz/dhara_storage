@@ -15,13 +15,17 @@ use crate::command::ToolContext;
 use crate::ensure_workspace_state;
 
 use super::render::render;
-use super::state::{AppState, Focus, MainView};
+use super::state::{ActivationPrompt, AppState, Focus, MainView};
 
 pub fn can_launch() -> bool {
     io::stdin().is_terminal() && io::stdout().is_terminal()
 }
 
-pub fn run_tui(registry: &CommandRegistry, context: &ToolContext) -> Result<()> {
+pub fn run_tui(
+    registry: &CommandRegistry,
+    context: &ToolContext,
+    pending_activation: Vec<crate::repo_config::ConfigDriftItem>,
+) -> Result<()> {
     let mut stdout = io::stdout();
     enable_raw_mode().context("failed to enable raw mode")?;
     execute!(stdout, EnterAlternateScreen).context("failed to enter alternate screen")?;
@@ -33,6 +37,11 @@ pub fn run_tui(registry: &CommandRegistry, context: &ToolContext) -> Result<()> 
         AppState::repository_label_from_path(&context.repo_root),
         workspace,
     );
+    if !pending_activation.is_empty() {
+        state.activation_prompt = Some(ActivationPrompt::new(pending_activation));
+        state.status_message =
+            "Configuration drift detected. Confirm activation to continue.".to_owned();
+    }
     loop {
         state.poll_active_run();
         terminal.draw(|frame| render(frame, &state, registry))?;
@@ -46,6 +55,22 @@ pub fn run_tui(registry: &CommandRegistry, context: &ToolContext) -> Result<()> 
                 continue;
             };
             if key.kind != KeyEventKind::Press {
+                continue;
+            }
+
+            if let Some(prompt) = state.activation_prompt.as_mut() {
+                match key.code {
+                    KeyCode::Left | KeyCode::Right => prompt.confirm_yes = !prompt.confirm_yes,
+                    KeyCode::Char('y') => {
+                        state.apply_activation_confirm(&context.repo_root)?;
+                    }
+                    KeyCode::Char('n') | KeyCode::Esc => state.decline_activation(),
+                    KeyCode::Enter if prompt.confirm_yes => {
+                        state.apply_activation_confirm(&context.repo_root)?;
+                    }
+                    KeyCode::Enter => state.decline_activation(),
+                    _ => {}
+                }
                 continue;
             }
 

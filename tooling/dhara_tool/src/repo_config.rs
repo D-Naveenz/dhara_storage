@@ -130,14 +130,35 @@ pub fn verify_release(repo_root: &Path) -> Result<()> {
     validate_config(repo_root, &config)
 }
 
-pub fn sync(repo_root: &Path) -> Result<()> {
-    let tool_version = read_tool_crate_version(repo_root)?;
-    let mut config = load_config(repo_root)?;
-    validate_config(repo_root, &config)?;
+/// Kind of manifest drift relative to `dhara.config.toml`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ConfigDriftKind {
+    ToolCrateVersion,
+    WorkspaceCargoToml,
+    NuGetCsproj,
+}
 
-    if config.tool.version != tool_version {
-        config.tool.version = tool_version.clone();
-        write_config(repo_root, &config)?;
+/// One detected drift item shown in activation prompts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConfigDriftItem {
+    pub kind: ConfigDriftKind,
+    pub summary: String,
+}
+
+/// Returns manifest fields that differ from `dhara.config.toml` (config is truth).
+pub fn detect_config_drift(repo_root: &Path) -> Result<Vec<ConfigDriftItem>> {
+    let config = load_config(repo_root)?;
+    let mut drifts = Vec::new();
+
+    let manifest_tool_version = read_tool_crate_version(repo_root)?;
+    if manifest_tool_version != config.tool.version {
+        drifts.push(ConfigDriftItem {
+            kind: ConfigDriftKind::ToolCrateVersion,
+            summary: format!(
+                "{TOOL_CARGO_TOML_PATH} package.version: {manifest_tool_version} -> {}",
+                config.tool.version
+            ),
+        });
     }
 
     let cargo_path = repo_root.join(ROOT_CARGO_TOML_PATH);
@@ -145,8 +166,13 @@ pub fn sync(repo_root: &Path) -> Result<()> {
         .with_context(|| format!("failed to read {}", cargo_path.display()))?;
     let updated_cargo = sync_cargo_toml(&cargo_content, &config.versions.workspace)?;
     if updated_cargo != cargo_content {
-        fs::write(&cargo_path, updated_cargo)
-            .with_context(|| format!("failed to write {}", cargo_path.display()))?;
+        drifts.push(ConfigDriftItem {
+            kind: ConfigDriftKind::WorkspaceCargoToml,
+            summary: format!(
+                "{ROOT_CARGO_TOML_PATH} workspace version -> {}",
+                config.versions.workspace
+            ),
+        });
     }
 
     let csproj_path = repo_root.join(&config.ci.package_project);
@@ -154,8 +180,58 @@ pub fn sync(repo_root: &Path) -> Result<()> {
         .with_context(|| format!("failed to read {}", csproj_path.display()))?;
     let updated_csproj = sync_csproj(&csproj_content, &config)?;
     if updated_csproj != csproj_content {
-        fs::write(&csproj_path, updated_csproj)
-            .with_context(|| format!("failed to write {}", csproj_path.display()))?;
+        drifts.push(ConfigDriftItem {
+            kind: ConfigDriftKind::NuGetCsproj,
+            summary: format!(
+                "{} NuGet metadata -> dhara.config.toml",
+                config.ci.package_project
+            ),
+        });
+    }
+
+    Ok(drifts)
+}
+
+/// Writes manifest updates for the given drift items (config is truth).
+pub fn apply_config_drift(repo_root: &Path, items: &[ConfigDriftItem]) -> Result<()> {
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let config = load_config(repo_root)?;
+    let kinds: std::collections::HashSet<_> = items.iter().map(|item| item.kind).collect();
+
+    if kinds.contains(&ConfigDriftKind::ToolCrateVersion) {
+        let path = repo_root.join(TOOL_CARGO_TOML_PATH);
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let updated = sync_tool_cargo_toml(&content, &config.tool.version)?;
+        if updated != content {
+            fs::write(&path, updated)
+                .with_context(|| format!("failed to write {}", path.display()))?;
+        }
+    }
+
+    if kinds.contains(&ConfigDriftKind::WorkspaceCargoToml) {
+        let path = repo_root.join(ROOT_CARGO_TOML_PATH);
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let updated = sync_cargo_toml(&content, &config.versions.workspace)?;
+        if updated != content {
+            fs::write(&path, updated)
+                .with_context(|| format!("failed to write {}", path.display()))?;
+        }
+    }
+
+    if kinds.contains(&ConfigDriftKind::NuGetCsproj) {
+        let path = repo_root.join(&config.ci.package_project);
+        let content = fs::read_to_string(&path)
+            .with_context(|| format!("failed to read {}", path.display()))?;
+        let updated = sync_csproj(&content, &config)?;
+        if updated != content {
+            fs::write(&path, updated)
+                .with_context(|| format!("failed to write {}", path.display()))?;
+        }
     }
 
     Ok(())
@@ -203,6 +279,15 @@ pub fn sync_cargo_toml(content: &str, version: &str) -> Result<String> {
     document["workspace"]["package"]["version"] = value(version);
     document["workspace"]["dependencies"]["dhara_storage_dal"]["version"] = value(version);
     document["workspace"]["dependencies"]["dhara_storage"]["version"] = value(version);
+    Ok(document.to_string())
+}
+
+pub fn sync_tool_cargo_toml(content: &str, version: &str) -> Result<String> {
+    Version::parse(version).with_context(|| format!("invalid tool version: {version}"))?;
+    let mut document = content
+        .parse::<DocumentMut>()
+        .context("failed to parse tooling/dhara_tool/Cargo.toml")?;
+    document["package"]["version"] = value(version);
     Ok(document.to_string())
 }
 
@@ -326,14 +411,6 @@ pub fn validate_config(repo_root: &Path, config: &DharaRepoConfig) -> Result<()>
         .with_context(|| format!("invalid workspace version: {}", config.versions.workspace))?;
     Version::parse(&config.tool.version)
         .with_context(|| format!("invalid tool version: {}", config.tool.version))?;
-    let manifest_tool_version = read_tool_crate_version(repo_root)?;
-    if config.tool.version != manifest_tool_version {
-        bail!(
-            "dhara.config.toml [tool].version ({}) does not match {} ({manifest_tool_version}); run `dhara_tool config sync`",
-            config.tool.version,
-            TOOL_CARGO_TOML_PATH
-        );
-    }
 
     if config.nuget.package_id.trim().is_empty() {
         bail!("nuget.package_id must not be empty");
@@ -833,6 +910,55 @@ mod tests {
         let config = sample_config();
 
         validate_config(temp.path(), &config).unwrap();
+    }
+
+    #[test]
+    fn sync_tool_cargo_toml_updates_package_version() {
+        let updated = sync_tool_cargo_toml("[package]\nversion = \"0.8.1\"\n", "0.8.4").unwrap();
+        assert!(updated.contains("version = \"0.8.4\""));
+    }
+
+    #[test]
+    fn detect_config_drift_reports_tool_manifest_mismatch() {
+        let temp = tempdir().unwrap();
+        write_required_files(temp.path());
+        let mut config = sample_config();
+        config.tool.version = "0.9.0".to_owned();
+        fs::write(
+            temp.path().join(CONFIG_PATH),
+            toml::to_string_pretty(&config).unwrap(),
+        )
+        .unwrap();
+
+        let drifts = detect_config_drift(temp.path()).unwrap();
+        assert!(drifts.iter().any(|item| {
+            item.kind == ConfigDriftKind::ToolCrateVersion
+                && item.summary.contains("0.8.1")
+                && item.summary.contains("0.9.0")
+        }));
+    }
+
+    #[test]
+    fn apply_config_drift_writes_tool_crate_from_config() {
+        let temp = tempdir().unwrap();
+        write_required_files(temp.path());
+        let mut config = sample_config();
+        config.tool.version = "0.9.0".to_owned();
+        fs::write(
+            temp.path().join(CONFIG_PATH),
+            toml::to_string_pretty(&config).unwrap(),
+        )
+        .unwrap();
+
+        let drifts = detect_config_drift(temp.path()).unwrap();
+        apply_config_drift(temp.path(), &drifts).unwrap();
+        assert_eq!(read_tool_crate_version(temp.path()).unwrap(), "0.9.0");
+        assert!(
+            !detect_config_drift(temp.path())
+                .unwrap()
+                .iter()
+                .any(|item| item.kind == ConfigDriftKind::ToolCrateVersion)
+        );
     }
 
     #[test]

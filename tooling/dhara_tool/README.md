@@ -8,7 +8,7 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 
 ## ✨ Key Features
 
-- **Config sync** — propagates [dhara.config.toml][dhara-config] into manifests
+- **Config activation** — `dhara.config.toml` is truth; startup prompts reconcile manifests (or `--yes` in CI). Tool bumps: update `[tool].version` and tool `Cargo.toml` together.
 - **Definitions pipeline** — pack, build TrID XML, inspect, verify, sync embedded `filedefs.dat`
 - **Quality gates** — `quality fmt`, `clippy`, `doc`, `test-rust`, `test-dotnet`, `run`
 - **Native merge** — combine per-OS `runtimes/**` trees before pack
@@ -77,7 +77,7 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 
 | Section | Commands |
 |---------|----------|
-| `config` | `show`, `sync`, `env init` |
+| `config` | `show`, `env init` |
 | `version` | `set`, `bump` |
 | `defs` | `pack`, `build-trid-xml`, `inspect`, `inspect-trid-xml`, `normalize`, `verify`, `sync-embedded` |
 | `quality` | `fmt`, `clippy`, `doc`, `test-rust`, `test-dotnet`, `run` |
@@ -86,18 +86,18 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 | `package` | `pack`, `stage-native` (`--msvc-env` on Windows), `publish` |
 | `release` | `run` |
 
-**Tool versioning:** bump `version` in this crate's `Cargo.toml` for any tool change; run `config sync` to update `[tool].version` in `dhara.config.toml`. CI caches binaries by that version.
+**Tool versioning:** bump `[tool].version` in [dhara.config.toml][dhara-config] and `package.version` in this crate's `Cargo.toml` together for tool-only changes. After `version bump`, the next run offers to sync root `Cargo.toml` and the NuGet csproj from config. CI uses `--yes` to apply drift without prompting.
 
 **Dist vs dev:** production-shaped binary lives at `target/dist/dhara_tool` (`[profile.dist]`). [`ensure-dhara-tool-dist`][ensure-dist-ps1] rebuilds only when the binary is missing or `--version` ≠ manifest. Use `cargo run -p dhara_tool` for day-to-day tool edits without invalidating dist.
 
 ```powershell
 ./tooling/scripts/ensure-dhara-tool-dist.ps1
 ./tooling/scripts/verify-local.ps1
-./target/dist/dhara_tool config sync
-./target/dist/dhara_tool package stage-native --msvc-env
-./target/dist/dhara_tool native merge --output target/dist/artifacts/native-stage --input ...
-./target/dist/dhara_tool verify package
-./target/dist/dhara_tool release run --dry-run
+./target/dist/dhara_tool --yes config show
+./target/dist/dhara_tool --yes package stage-native --msvc-env
+./target/dist/dhara_tool --yes native merge --output target/dist/artifacts/native-stage --input ...
+./target/dist/dhara_tool --yes verify package
+./target/dist/dhara_tool --yes release run --dry-run
 ```
 
 **Troubleshooting**

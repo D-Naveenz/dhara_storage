@@ -11,7 +11,7 @@ use crate::nuget::{
 };
 use crate::release::run as run_release;
 use crate::repo_config::{
-    VersionPart, bump_version, init_env, load_config, set_version, show, sync,
+    VersionPart, bump_version, init_env, load_config, set_version, show,
 };
 
 #[derive(Debug, Clone, Copy, ValueEnum)]
@@ -231,16 +231,6 @@ pub(crate) fn config_show(context: &ToolContext, args: &[String]) -> Result<Comm
         return Ok(CommandResult::success());
     }
     Ok(CommandResult::with_message(show(&context.repo_root)?))
-}
-
-pub(crate) fn config_sync(context: &ToolContext, args: &[String]) -> Result<CommandResult> {
-    if parse_args::<NoArgs>("config sync", args)?.is_none() {
-        return Ok(CommandResult::success());
-    }
-    sync(&context.repo_root)?;
-    Ok(CommandResult::with_message(
-        "Synchronized repository configuration.",
-    ))
 }
 
 pub(crate) fn config_env_init(context: &ToolContext, args: &[String]) -> Result<CommandResult> {

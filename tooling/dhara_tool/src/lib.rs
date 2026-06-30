@@ -1,3 +1,4 @@
+pub mod activation;
 pub mod app;
 pub mod command;
 pub mod commands;
@@ -46,8 +47,9 @@ pub use repo_config::{
     CONFIG_PATH, CiConfig, DharaRepoConfig, ENV_EXAMPLE_PATH, ENV_LOCAL_PATH, NuGetConfig,
     PublishConfig, ROOT_CARGO_TOML_PATH, ShowOutput, TOOL_CARGO_TOML_PATH, TargetsConfig,
     ToolConfig, VersionConfig, VersionPart, bump_version, init_env, load_config, load_env,
-    parse_env_content, read_tool_crate_version, set_version, show, sync, sync_cargo_toml,
-    sync_csproj, validate_config, verify_release,
+    parse_env_content, read_tool_crate_version, set_version, show, sync_cargo_toml,
+    sync_csproj, sync_tool_cargo_toml, validate_config, verify_release, apply_config_drift,
+    detect_config_drift, ConfigDriftItem, ConfigDriftKind,
 };
 pub use subprocess::{
     inspect_package_entries, run_command, run_command_expect_failure, run_command_with_env,

@@ -3,7 +3,7 @@ use ratatui::widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragra
 
 use crate::command::CommandRegistry;
 
-use super::state::{AppState, Focus, MainView};
+use super::state::{ActivationPrompt, AppState, Focus, MainView};
 
 pub fn render(frame: &mut Frame<'_>, state: &AppState, registry: &CommandRegistry) {
     let root = Layout::default()
@@ -41,6 +41,9 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState, registry: &CommandRegistr
     render_output(frame, output_layout[0], state);
     render_history(frame, output_layout[1], state);
     render_footer(frame, root[2], state);
+    if let Some(prompt) = &state.activation_prompt {
+        render_activation_prompt(frame, frame.area(), prompt);
+    }
 }
 
 fn render_header(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
@@ -280,7 +283,9 @@ fn render_history(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 }
 
 fn render_footer(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let help = if state.active_run.is_some() {
+    let help = if state.activation_prompt.is_some() {
+        "y/Enter apply | n/Esc decline"
+    } else if state.active_run.is_some() {
         "Tab focus | Enter select/edit | r run | c cancel | d dashboard | q quit"
     } else {
         "Tab focus | Enter select/edit | r run | d dashboard | q quit"
@@ -288,6 +293,67 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     let footer = Paragraph::new(format!("{help} | {}", state.status_message))
         .style(Style::default().fg(Color::Black).bg(Color::Gray));
     frame.render_widget(footer, area);
+}
+
+fn render_activation_prompt(frame: &mut Frame<'_>, area: Rect, prompt: &ActivationPrompt) {
+    let width = area.width.min(72).max(40);
+    let height = (prompt.drifts.len() as u16 + 8).min(area.height.saturating_sub(2));
+    let popup = centered_rect(width, height, area);
+    frame.render_widget(Clear, popup);
+
+    let yes_style = if prompt.confirm_yes {
+        Style::default().fg(Color::Black).bg(Color::Green)
+    } else {
+        Style::default()
+    };
+    let no_style = if prompt.confirm_yes {
+        Style::default()
+    } else {
+        Style::default().fg(Color::Black).bg(Color::Red)
+    };
+
+    let mut lines = vec![
+        Line::from("Configuration drift detected"),
+        Line::from("(dhara.config.toml is truth):"),
+        Line::from(""),
+    ];
+    for item in &prompt.drifts {
+        lines.push(Line::from(format!("  - {}", item.summary)));
+    }
+    lines.push(Line::from(""));
+    lines.push(Line::from(vec![
+        Span::styled(" Yes ", yes_style),
+        Span::raw("  "),
+        Span::styled(" No ", no_style),
+    ]));
+
+    let paragraph = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Apply configuration changes?")
+                .borders(Borders::ALL),
+        )
+        .wrap(Wrap { trim: true });
+    frame.render_widget(paragraph, popup);
+}
+
+fn centered_rect(width: u16, height: u16, area: Rect) -> Rect {
+    let horizontal = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length((area.height.saturating_sub(height)) / 2),
+            Constraint::Length(height),
+            Constraint::Min(0),
+        ])
+        .split(area);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length((area.width.saturating_sub(width)) / 2),
+            Constraint::Length(width),
+            Constraint::Min(0),
+        ])
+        .split(horizontal[1])[1]
 }
 
 fn focused_block<'a>(title: &'a str, focused: bool) -> Block<'a> {

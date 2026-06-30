@@ -77,9 +77,9 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" quality fmt --check
-          "$tool" quality clippy
-          "$tool" quality doc
+          "$tool" --yes quality fmt --check
+          "$tool" --yes quality clippy
+          "$tool" --yes quality doc
 
   platform-windows:
     name: platform (windows)
@@ -125,9 +125,9 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool.exe
-          "$tool" quality test-rust
-          "$tool" quality test-dotnet
-          "$tool" package stage-native --msvc-env
+          "$tool" --yes quality test-rust
+          "$tool" --yes quality test-dotnet
+          "$tool" --yes package stage-native --msvc-env
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -178,8 +178,8 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" quality test-rust
-          "$tool" package stage-native
+          "$tool" --yes quality test-rust
+          "$tool" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -230,8 +230,8 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" quality test-rust
-          "$tool" package stage-native
+          "$tool" --yes quality test-rust
+          "$tool" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -277,8 +277,8 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" quality test-rust
-          "$tool" package stage-native
+          "$tool" --yes quality test-rust
+          "$tool" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -336,7 +336,7 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" native merge \
+          "$tool" --yes native merge \
             --output target/dist/artifacts/native-stage \
             --input target/dist/artifacts/native-inputs/native-stage-windows \
             --input target/dist/artifacts/native-inputs/native-stage-linux \
@@ -347,7 +347,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool verify package
+          target/dist/dhara_tool --yes verify package
 
       - name: Write release metadata
         shell: bash
@@ -532,7 +532,7 @@ jobs:
             if [ "${{ inputs.publish_nuget }}" != "true" ]; then args+=(--skip-nuget); fi
             if [ "${{ inputs.verify_package }}" = "true" ]; then args+=(--verify-package); fi
           fi
-          "$tool" "${args[@]}"
+          "$tool" --yes "${args[@]}"
 
       - name: Upload NuGet artifacts
         if: always()

@@ -9,8 +9,9 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **Granular `dhara_tool` CI commands** — `quality *`, `native merge`, and `package stage-native --msvc-env` replace removed shell wrappers.
+- **Startup config activation** — on launch, `dhara_tool` detects manifest drift from `dhara.config.toml` and prompts to apply (`--yes`/`-y` for CI); replaces `config sync`.
 - **`dhara-tool-build` workflow** — version-keyed Actions cache builds `profile.dist` binaries per OS; pipeline jobs restore cached tools instead of compiling each run.
-- **Independent tool versioning** — `tooling/dhara_tool/Cargo.toml` owns tool semver; `[tool].version` in `dhara.config.toml` pins CI cache lookups (`config sync` keeps them aligned).
+- **Independent tool versioning** — `[tool].version` in `dhara.config.toml` pins CI cache; `tooling/dhara_tool/Cargo.toml` must match (update both together for tool-only bumps).
 - **Local dist ensure scripts** — `ensure-dhara-tool-dist` builds `profile.dist` to `target/dist/` only when the binary is missing or `--version` ≠ manifest; VS Code tasks/launch split dev (`cargo run`) vs dist.
 
 ### Changed
@@ -20,9 +21,11 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **`dhara-tool-build`** — `cargo test -p dhara_tool` runs once on Linux; matrix legs only compile `profile.dist` per OS (binaries are not portable).
 - **Linux-primary orchestration** — `quality`, `publish-readiness`, and CD `publish` run on `ubuntu-latest` with `linux-x64` tool cache; `platform-windows` remains on `windows-latest` for MSVC native DLL builds.
 - **Operator output paths** — `dhara_tool` writes logs, scratch artifacts, and NuGet output under the executable directory (`{tool_root}/logs`, `{tool_root}/artifacts`, `{tool_root}/output`); e.g. `target/dist/logs/` when using the cached dist binary. Workspace sources (`filedefs.dat`, TrID package inputs) stay repo-relative.
+- **Config activation** — `dhara.config.toml` is truth for tool semver and workspace/NuGet metadata; manifests sync on confirmed startup (or `--yes`). `config sync` removed. Tool-only bumps: update `[tool].version` and `tooling/dhara_tool/Cargo.toml` together in one commit.
 
 ### Removed
 
+- **`config sync` command** — replaced by startup activation (`--yes` in CI).
 - **Staging/release shell scripts** — `merge-native`, `stage-native-*`, `verify-package`, and `release-run-windows` scripts deleted in favor of `dhara_tool` commands.
 
 ## [0.8.0] — 2026-06-30

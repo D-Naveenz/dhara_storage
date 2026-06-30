@@ -15,7 +15,7 @@ Current release line: **0.8.0** (shared across crates and NuGet).
 - **Debounced watching** — stable directory change notifications
 - **Layered delivery** — Rust core → C ABI → `net10.0` managed wrapper
 - **Multi-RID NuGet** — `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`
-- **Operator CLI** — config sync, native staging, package verify, and release flows
+- **Operator CLI** — config activation, native staging, package verify, and release flows
 
 ## 📦 Tech Stack & Architecture
 
