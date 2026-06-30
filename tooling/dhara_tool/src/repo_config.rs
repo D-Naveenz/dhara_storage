@@ -494,16 +494,20 @@ fn set_or_add_property(group: &mut Element, name: &str, value_text: &str) {
     group.children.push(XMLNode::Element(element));
 }
 
+fn csproj_include_file_name(include: &str) -> Option<&str> {
+    include
+        .rsplit(['\\', '/'])
+        .next()
+        .filter(|name| !name.is_empty())
+}
+
 fn normalize_pack_none_item(
     project: &mut Element,
     aliases: &[&str],
     include: &str,
     package_path: &str,
 ) {
-    let include_file_name = Path::new(include)
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or(include);
+    let include_file_name = csproj_include_file_name(include).unwrap_or(include);
 
     for child in &mut project.children {
         let XMLNode::Element(group) = child else {
@@ -550,9 +554,7 @@ fn is_pack_none_alias(
         return true;
     }
 
-    let candidate_file_name = Path::new(candidate)
-        .file_name()
-        .and_then(|value| value.to_str());
+    let candidate_file_name = csproj_include_file_name(candidate);
     candidate_file_name == Some(include_file_name)
         && item_metadata(entry, "PackagePath").is_some_and(|candidate| candidate == package_path)
 }
