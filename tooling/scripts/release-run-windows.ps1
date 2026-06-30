@@ -30,6 +30,14 @@ if ($SkipCargo) { $toolArgs += "--skip-cargo" }
 if ($SkipNuget) { $toolArgs += "--skip-nuget" }
 if ($VerifyPackage) { $toolArgs += "--verify-package" }
 
+function Format-CmdArgument {
+    param([string] $Value)
+    if ($Value -match '[\s"]') {
+        return '"' + ($Value -replace '"', '""') + '"'
+    }
+    return $Value
+}
+
 $vsInstall = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
     -latest -products * `
     -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 Microsoft.VisualStudio.Component.VC.Tools.ARM64 `
@@ -40,7 +48,8 @@ if ([string]::IsNullOrWhiteSpace($vsInstall)) {
 }
 
 $vcvars = Join-Path $vsInstall "VC\Auxiliary\Build\vcvarsall.bat"
-$command = "call `"$vcvars`" x64_arm64 && `"$ToolPath`" " + ($toolArgs -join " ")
+$quotedArgs = $toolArgs | ForEach-Object { Format-CmdArgument $_ }
+$command = "call `"$vcvars`" x64_arm64 && `"$ToolPath`" " + ($quotedArgs -join " ")
 & cmd.exe /d /c $command
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
