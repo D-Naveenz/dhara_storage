@@ -5,9 +5,6 @@ internal static class NativeCallInvoker
     internal delegate NativeStatus NativeDataCall(out nint dataPtr, out nuint dataLen, out nint errorPtr, out nuint errorLen);
     internal delegate NativeStatus NativeUnitCall(out nint errorPtr, out nuint errorLen);
 
-    internal static T InvokeJson<T>(NativeDataCall call) =>
-        NativeJson.Deserialize<T>(InvokeString(call));
-
     internal static string InvokeString(NativeDataCall call)
     {
         NativeHelpers.EnsureSupportedPlatform();

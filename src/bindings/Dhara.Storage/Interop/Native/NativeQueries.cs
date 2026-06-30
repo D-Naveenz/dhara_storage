@@ -26,30 +26,6 @@ internal static partial class NativeQueries
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     internal static partial NativeStatus dhara_list_entries(string path, byte recursive, out nint entries, out nint errorPtr, out nuint errorLen);
 
-    [Obsolete("Legacy JSON ABI. Use typed dhara_analyze_path instead.")]
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_analyze_path_json_old(string path, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
-
-    [Obsolete("Legacy JSON ABI. Use typed dhara_get_file_info instead.")]
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_get_file_info_json_old(string path, byte includeAnalysis, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
-
-    [Obsolete("Legacy JSON ABI. Use typed dhara_get_directory_info instead.")]
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_get_directory_info_json_old(string path, byte includeSummary, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
-
-    [Obsolete("Legacy JSON ABI. Use typed dhara_list_files instead.")]
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_list_files_json_old(string path, byte recursive, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
-
-    [Obsolete("Legacy JSON ABI. Use typed dhara_list_directories instead.")]
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_list_directories_json_old(string path, byte recursive, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
-
-    [Obsolete("Legacy JSON ABI. Use typed dhara_list_entries instead.")]
-    [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    internal static partial NativeStatus dhara_list_entries_json_old(string path, byte recursive, out nint jsonPtr, out nuint jsonLen, out nint errorPtr, out nuint errorLen);
-
     [LibraryImport(LibraryName)]
     internal static partial void dhara_analysis_report_free(nint report);
 

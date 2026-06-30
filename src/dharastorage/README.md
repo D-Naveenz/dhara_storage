@@ -17,7 +17,7 @@ ABI instead of linking Rust types directly.
 
 ## ABI Policy
 
-The official structured-result ABI is typed and C-compatible:
+The structured-result ABI is typed and C-compatible:
 
 - `dhara_analyze_path`
 - `dhara_get_file_info`
@@ -34,10 +34,7 @@ fixed-layout fields, UTF-8 pointer/length slices, typed pointer/length arrays,
 and fixed integer discriminants. Callers must copy what they need immediately
 and release the result with the matching `*_free` function.
 
-Legacy JSON structured-result exports are kept only as temporary compatibility
-shims and are named with `_json_old`, for example `dhara_analyze_path_json_old`.
-They are deprecated and can be removed mechanically once no host imports an
-`_old` symbol. JSON remains acceptable for cold-path errors and logging records.
+JSON is used only for cold-path errors, operation error payloads, and logging records.
 
 ## Design Notes
 
