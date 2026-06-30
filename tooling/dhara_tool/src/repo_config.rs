@@ -178,12 +178,11 @@ pub fn detect_config_drift(repo_root: &Path) -> Result<Vec<ConfigDriftItem>> {
     let csproj_path = repo_root.join(&config.ci.package_project);
     let csproj_content = fs::read_to_string(&csproj_path)
         .with_context(|| format!("failed to read {}", csproj_path.display()))?;
-    let updated_csproj = sync_csproj(&csproj_content, &config)?;
-    if updated_csproj != csproj_content {
+    if csproj_needs_sync(&csproj_content, &config)? {
         drifts.push(ConfigDriftItem {
             kind: ConfigDriftKind::NuGetCsproj,
             summary: format!(
-                "{} NuGet metadata -> dhara.config.toml",
+                "dhara.config.toml NuGet metadata -> {}",
                 config.ci.package_project
             ),
         });
@@ -305,68 +304,331 @@ pub fn read_tool_crate_version(repo_root: &Path) -> Result<String> {
     Ok(version.to_owned())
 }
 
+/// NuGet fields owned by `dhara.config.toml` (semantic compare; not full-file text).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ManagedCsprojSnapshot {
+    package_id: String,
+    version: String,
+    description: String,
+    package_readme_file: String,
+    repository_url: String,
+    package_project_url: String,
+    authors: String,
+    package_tags: String,
+    package_icon: Option<String>,
+    readme_include: String,
+    icon_include: Option<String>,
+}
+
+pub fn csproj_needs_sync(content: &str, config: &DharaRepoConfig) -> Result<bool> {
+    Ok(managed_csproj_snapshot_from_content(content, config)?
+        != managed_csproj_snapshot_from_config(config)?)
+}
+
 pub fn sync_csproj(content: &str, config: &DharaRepoConfig) -> Result<String> {
-    let mut project =
-        Element::parse(content.as_bytes()).context("failed to parse Dhara.Storage.csproj")?;
-    let property_group = get_or_add_property_group(&mut project);
-
-    set_or_add_property(property_group, "PackageId", &config.nuget.package_id);
-    set_or_add_property(property_group, "Version", &config.versions.workspace);
-    set_or_add_property(property_group, "Description", &config.nuget.description);
-    set_or_add_property(
-        property_group,
-        "PackageReadmeFile",
-        file_name(&config.nuget.readme)?,
-    );
-    set_or_add_property(
-        property_group,
-        "RepositoryUrl",
-        &config.nuget.repository_url,
-    );
-    set_or_add_property(
-        property_group,
-        "PackageProjectUrl",
-        &config.nuget.project_url,
-    );
-    set_or_add_property(property_group, "Authors", &config.nuget.authors.join(";"));
-    set_or_add_property(property_group, "PackageTags", &config.nuget.tags.join(";"));
-
-    if let Some(icon) = &config.nuget.icon {
-        set_or_add_property(property_group, "PackageIcon", file_name(icon)?);
+    let expected = managed_csproj_snapshot_from_config(config)?;
+    let current = managed_csproj_snapshot_from_content(content, config)?;
+    if current == expected {
+        return Ok(content.to_owned());
     }
-    dedupe_managed_package_properties(&mut project);
 
-    let readme_file = file_name(&config.nuget.readme)?.to_owned();
+    let mut updated = content.to_owned();
+    upsert_property_element(&mut updated, "PackageId", &expected.package_id)?;
+    upsert_property_element(&mut updated, "Version", &expected.version)?;
+    upsert_property_element(&mut updated, "Description", &expected.description)?;
+    upsert_property_element(
+        &mut updated,
+        "PackageReadmeFile",
+        &expected.package_readme_file,
+    )?;
+    upsert_property_element(&mut updated, "RepositoryUrl", &expected.repository_url)?;
+    upsert_property_element(
+        &mut updated,
+        "PackageProjectUrl",
+        &expected.package_project_url,
+    )?;
+    upsert_property_element(&mut updated, "Authors", &expected.authors)?;
+    upsert_property_element(&mut updated, "PackageTags", &expected.package_tags)?;
+
+    match (&expected.package_icon, current.package_icon.as_ref()) {
+        (Some(icon), _) => upsert_property_element(&mut updated, "PackageIcon", icon)?,
+        (None, Some(_)) => remove_property_element(&mut updated, "PackageIcon"),
+        (None, None) => {}
+    }
+
+    let readme_file = file_name(&config.nuget.readme)?;
+    patch_pack_none_include(
+        &mut updated,
+        &[config.nuget.readme.as_str(), readme_file],
+        &expected.readme_include,
+        current.readme_include.as_str(),
+    )?;
+
+    if let Some(icon_include) = &expected.icon_include {
+        let icon_file = file_name(config.nuget.icon.as_deref().unwrap_or(icon_include))?;
+        patch_pack_none_include(
+            &mut updated,
+            &[
+                config.nuget.icon.as_deref().unwrap_or(icon_include),
+                icon_file,
+            ],
+            icon_include,
+            current.icon_include.as_deref().unwrap_or(""),
+        )?;
+    }
+
+    Ok(updated)
+}
+
+fn managed_csproj_snapshot_from_config(config: &DharaRepoConfig) -> Result<ManagedCsprojSnapshot> {
+    let readme_file = file_name(&config.nuget.readme)?;
     let readme_include =
         project_relative_include(&config.nuget.readme, &config.ci.package_project)?;
-    normalize_pack_none_item(
-        &mut project,
-        &[config.nuget.readme.as_str(), readme_file.as_str()],
-        &readme_include,
-        "\\",
-    );
-    if let Some(icon) = &config.nuget.icon {
-        let icon_file = file_name(icon)?.to_owned();
-        let icon_include = project_relative_include(icon, &config.ci.package_project)?;
-        normalize_pack_none_item(
-            &mut project,
-            &[icon.as_str(), icon_file.as_str()],
-            &icon_include,
-            "\\",
-        );
-    }
-    prune_empty_item_groups(&mut project);
+    let icon_include = config
+        .nuget
+        .icon
+        .as_deref()
+        .map(|icon| project_relative_include(icon, &config.ci.package_project))
+        .transpose()?;
 
-    let mut output = Vec::new();
-    project
-        .write_with_config(
-            &mut output,
-            xmltree::EmitterConfig::new()
-                .perform_indent(true)
-                .write_document_declaration(false),
-        )
-        .context("failed to render Dhara.Storage.csproj")?;
-    String::from_utf8(output).context("generated csproj was not valid utf-8")
+    Ok(ManagedCsprojSnapshot {
+        package_id: config.nuget.package_id.clone(),
+        version: config.versions.workspace.clone(),
+        description: config.nuget.description.clone(),
+        package_readme_file: readme_file.to_owned(),
+        repository_url: config.nuget.repository_url.clone(),
+        package_project_url: config.nuget.project_url.clone(),
+        authors: config.nuget.authors.join(";"),
+        package_tags: config.nuget.tags.join(";"),
+        package_icon: config
+            .nuget
+            .icon
+            .as_deref()
+            .map(file_name)
+            .transpose()?
+            .map(str::to_owned),
+        readme_include,
+        icon_include,
+    })
+}
+
+fn managed_csproj_snapshot_from_content(
+    content: &str,
+    config: &DharaRepoConfig,
+) -> Result<ManagedCsprojSnapshot> {
+    let project =
+        Element::parse(content.as_bytes()).context("failed to parse Dhara.Storage.csproj")?;
+    let readme_file = file_name(&config.nuget.readme)?;
+    let readme_include = find_pack_none_include(
+        &project,
+        &[config.nuget.readme.as_str(), readme_file],
+    )
+    .map(|path| normalize_include_path(&path))
+    .unwrap_or_default();
+    let icon_include = config.nuget.icon.as_deref().and_then(|icon| {
+        let icon_file = file_name(icon).ok()?;
+        find_pack_none_include(&project, &[icon, icon_file])
+            .map(|path| normalize_include_path(&path))
+    });
+
+    Ok(ManagedCsprojSnapshot {
+        package_id: find_property_text(&project, "PackageId").unwrap_or_default(),
+        version: find_property_text(&project, "Version").unwrap_or_default(),
+        description: find_property_text(&project, "Description").unwrap_or_default(),
+        package_readme_file: find_property_text(&project, "PackageReadmeFile").unwrap_or_default(),
+        repository_url: find_property_text(&project, "RepositoryUrl").unwrap_or_default(),
+        package_project_url: find_property_text(&project, "PackageProjectUrl").unwrap_or_default(),
+        authors: find_property_text(&project, "Authors").unwrap_or_default(),
+        package_tags: find_property_text(&project, "PackageTags").unwrap_or_default(),
+        package_icon: find_property_text(&project, "PackageIcon"),
+        readme_include,
+        icon_include,
+    })
+}
+
+fn normalize_include_path(path: &str) -> String {
+    path.replace('/', "\\")
+}
+
+fn find_property_text(project: &Element, name: &str) -> Option<String> {
+    for child in &project.children {
+        let XMLNode::Element(group) = child else {
+            continue;
+        };
+        if group.name != "PropertyGroup" {
+            continue;
+        }
+
+        for item in &group.children {
+            let XMLNode::Element(property) = item else {
+                continue;
+            };
+            if property.name == name {
+                return property
+                    .get_text()
+                    .map(|value| value.trim().to_owned())
+                    .filter(|value| !value.is_empty());
+            }
+        }
+    }
+
+    None
+}
+
+fn find_pack_none_include(project: &Element, aliases: &[&str]) -> Option<String> {
+    for child in &project.children {
+        let XMLNode::Element(group) = child else {
+            continue;
+        };
+        if group.name != "ItemGroup" {
+            continue;
+        }
+
+        for item in &group.children {
+            let XMLNode::Element(entry) = item else {
+                continue;
+            };
+            if entry.name != "None" || !none_pack_enabled(entry) {
+                continue;
+            }
+
+            let include = entry.attributes.get("Include")?;
+            if aliases.contains(&include.as_str()) {
+                return Some(include.clone());
+            }
+
+            let include_file_name = csproj_include_file_name(include)?;
+            if aliases
+                .iter()
+                .any(|alias| csproj_include_file_name(alias) == Some(include_file_name))
+            {
+                return Some(include.clone());
+            }
+        }
+    }
+
+    None
+}
+
+fn none_pack_enabled(entry: &Element) -> bool {
+    if entry
+        .attributes
+        .get("Pack")
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+    {
+        return true;
+    }
+
+    entry.children.iter().any(|child| {
+        let XMLNode::Element(element) = child else {
+            return false;
+        };
+        element.name == "Pack"
+            && element
+                .get_text()
+                .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+    })
+}
+
+fn upsert_property_element(content: &mut String, name: &str, value: &str) -> Result<()> {
+    let open = format!("<{name}>");
+    let close = format!("</{name}>");
+    if let Some(start) = content.find(&open) {
+        let value_start = start + open.len();
+        let rel_end = content[value_start..]
+            .find(&close)
+            .with_context(|| format!("malformed csproj element <{name}>"))?;
+        let value_end = value_start + rel_end;
+        if &content[value_start..value_end] == value {
+            return Ok(());
+        }
+        content.replace_range(value_start..value_end, value);
+        return Ok(());
+    }
+
+    let updated = insert_property_in_first_group(content, name, value)?;
+    *content = updated;
+    Ok(())
+}
+
+fn remove_property_element(content: &mut String, name: &str) {
+    let open = format!("<{name}>");
+    let close = format!("</{name}>");
+    let Some(start) = content.find(&open) else {
+        return;
+    };
+    let Some(rel_end) = content[start..].find(&close) else {
+        return;
+    };
+    let end = start + rel_end + close.len();
+    content.replace_range(start..end, "");
+}
+
+fn insert_property_in_first_group(content: &str, name: &str, value: &str) -> Result<String> {
+    if let Some(index) = content.find("<PropertyGroup>") {
+        let insert_at = index + "<PropertyGroup>".len();
+        let insertion = format!("\n    <{name}>{value}</{name}>");
+        let mut updated = String::with_capacity(content.len() + insertion.len());
+        updated.push_str(&content[..insert_at]);
+        updated.push_str(&insertion);
+        updated.push_str(&content[insert_at..]);
+        return Ok(updated);
+    }
+
+    let project_open = content
+        .find("<Project")
+        .context("csproj is missing a Project root element")?;
+    let rel_close = content[project_open..]
+        .find('>')
+        .context("csproj has a malformed Project opening tag")?;
+    let insert_at = project_open + rel_close + 1;
+    let insertion = format!("\n  <PropertyGroup>\n    <{name}>{value}</{name}>\n  </PropertyGroup>");
+    let mut updated = String::with_capacity(content.len() + insertion.len());
+    updated.push_str(&content[..insert_at]);
+    updated.push_str(&insertion);
+    updated.push_str(&content[insert_at..]);
+    Ok(updated)
+}
+
+fn patch_pack_none_include(
+    content: &mut String,
+    _aliases: &[&str],
+    expected_include: &str,
+    current_include: &str,
+) -> Result<()> {
+    let expected_include = normalize_include_path(expected_include);
+    if !current_include.is_empty() && normalize_include_path(current_include) == expected_include
+    {
+        return Ok(());
+    }
+
+    if !current_include.is_empty() {
+        for candidate in [
+            current_include.to_owned(),
+            normalize_include_path(current_include),
+        ] {
+            let quoted = format!(r#"Include="{candidate}""#);
+            if let Some(start) = content.find(&quoted) {
+                content.replace_range(
+                    start..start + quoted.len(),
+                    &format!(r#"Include="{expected_include}""#),
+                );
+                return Ok(());
+            }
+        }
+    }
+
+    append_pack_none_item(content, &expected_include);
+    Ok(())
+}
+
+fn append_pack_none_item(content: &mut String, include: &str) {
+    let item = format!(
+        "  <ItemGroup>\n    <None Include=\"{include}\" Pack=\"true\" PackagePath=\"\\\" />\n  </ItemGroup>\n"
+    );
+    if let Some(index) = content.rfind("</Project>") {
+        content.insert_str(index, &item);
+    }
 }
 
 pub fn parse_env_content(content: &str) -> Result<BTreeMap<String, String>> {
@@ -536,161 +798,11 @@ fn require_exists(repo_root: &Path, relative_path: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
-fn get_or_add_property_group(project: &mut Element) -> &mut Element {
-    let index = project
-        .children
-        .iter()
-        .position(
-            |child| matches!(child, XMLNode::Element(element) if element.name == "PropertyGroup"),
-        )
-        .unwrap_or_else(|| {
-            project
-                .children
-                .insert(0, XMLNode::Element(Element::new("PropertyGroup")));
-            0
-        });
-
-    match project.children.get_mut(index) {
-        Some(XMLNode::Element(element)) => element,
-        _ => unreachable!("property group index always points to an element"),
-    }
-}
-
-fn set_or_add_property(group: &mut Element, name: &str, value_text: &str) {
-    if let Some(element) = group.children.iter_mut().find_map(|child| match child {
-        XMLNode::Element(element) if element.name == name => Some(element),
-        _ => None,
-    }) {
-        element.children.clear();
-        element.children.push(XMLNode::Text(value_text.to_owned()));
-        return;
-    }
-
-    let mut element = Element::new(name);
-    element.children.push(XMLNode::Text(value_text.to_owned()));
-    group.children.push(XMLNode::Element(element));
-}
-
 fn csproj_include_file_name(include: &str) -> Option<&str> {
     include
         .rsplit(['\\', '/'])
         .next()
         .filter(|name| !name.is_empty())
-}
-
-fn normalize_pack_none_item(
-    project: &mut Element,
-    aliases: &[&str],
-    include: &str,
-    package_path: &str,
-) {
-    let include_file_name = csproj_include_file_name(include).unwrap_or(include);
-
-    for child in &mut project.children {
-        let XMLNode::Element(group) = child else {
-            continue;
-        };
-        if group.name != "ItemGroup" {
-            continue;
-        }
-
-        group
-            .children
-            .retain(|item| !is_pack_none_alias(item, aliases, include_file_name, package_path));
-    }
-
-    let mut none = Element::new("None");
-    none.attributes
-        .insert("Include".to_owned(), include.to_owned());
-    none.attributes.insert("Pack".to_owned(), "true".to_owned());
-    none.attributes
-        .insert("PackagePath".to_owned(), package_path.to_owned());
-
-    let mut group = Element::new("ItemGroup");
-    group.children.push(XMLNode::Element(none));
-    project.children.push(XMLNode::Element(group));
-}
-
-fn is_pack_none_alias(
-    item: &XMLNode,
-    aliases: &[&str],
-    include_file_name: &str,
-    package_path: &str,
-) -> bool {
-    let XMLNode::Element(entry) = item else {
-        return false;
-    };
-    if entry.name != "None" {
-        return false;
-    }
-
-    let Some(candidate) = entry.attributes.get("Include") else {
-        return false;
-    };
-    if aliases.contains(&candidate.as_str()) {
-        return true;
-    }
-
-    let candidate_file_name = csproj_include_file_name(candidate);
-    candidate_file_name == Some(include_file_name)
-        && item_metadata(entry, "PackagePath").is_some_and(|candidate| candidate == package_path)
-}
-
-fn item_metadata(entry: &Element, name: &str) -> Option<String> {
-    if let Some(value) = entry.attributes.get(name) {
-        return Some(value.clone());
-    }
-
-    entry.children.iter().find_map(|child| match child {
-        XMLNode::Element(element) if element.name == name => {
-            element.get_text().map(|value| value.into_owned())
-        }
-        _ => None,
-    })
-}
-
-fn dedupe_managed_package_properties(project: &mut Element) {
-    const MANAGED: &[&str] = &[
-        "PackageId",
-        "Version",
-        "Description",
-        "PackageReadmeFile",
-        "PackageIcon",
-        "RepositoryUrl",
-        "PackageProjectUrl",
-        "Authors",
-        "PackageTags",
-    ];
-
-    let mut found_first_group = false;
-    for child in &mut project.children {
-        let XMLNode::Element(group) = child else {
-            continue;
-        };
-        if group.name != "PropertyGroup" {
-            continue;
-        }
-        if !found_first_group {
-            found_first_group = true;
-            continue;
-        }
-
-        group.children.retain(|item| {
-            !matches!(
-                item,
-                XMLNode::Element(entry) if MANAGED.contains(&entry.name.as_str())
-            )
-        });
-    }
-}
-
-fn prune_empty_item_groups(project: &mut Element) {
-    project.children.retain(|child| {
-        !matches!(
-            child,
-            XMLNode::Element(group) if group.name == "ItemGroup" && group.children.is_empty()
-        )
-    });
 }
 
 #[cfg(test)]
@@ -901,6 +1013,34 @@ mod tests {
 
         assert!(updated.contains("..\\..\\..\\assets\\branding\\dhara-logo-colored_sm.png"));
         assert!(!updated.contains("Dhara.AI"));
+    }
+
+    #[test]
+    fn csproj_needs_sync_ignores_msbuild_xml_formatting() {
+        let config = sample_config();
+        let formatted = r#"<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <StagedNativeRoot Condition="&apos;$(StagedNativeRoot)&apos; == &apos;&apos;" />
+    <PackageId>Dhara.Storage</PackageId>
+    <Version>0.2.0</Version>
+    <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/D-Naveenz/rheo_storage</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/D-Naveenz/rheo_storage</PackageProjectUrl>
+    <Authors>Naveen Dharmathunga</Authors>
+    <PackageTags>storage;ffi</PackageTags>
+    <PackageIcon>icon-small.png</PackageIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Pack="true" Include="README.md" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="icon-small.png" Pack="true" PackagePath="\" />
+  </ItemGroup>
+</Project>"#;
+
+        assert!(!csproj_needs_sync(formatted, &config).unwrap());
+        assert_eq!(sync_csproj(formatted, &config).unwrap(), formatted);
     }
 
     #[test]
