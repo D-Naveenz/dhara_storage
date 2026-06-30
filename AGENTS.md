@@ -26,7 +26,7 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 
 - Unified workflow: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - GitHub runs `cargo`/`dotnet` directly for quality and tests; `dhara_tool` handles native staging, `verify package`, and `release run` only
-- CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits so the merge commit SHA matches PR CI
+- CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits (not squash) so CD can resolve the PR branch tip (`HEAD^2`) for artifact lookup
 
 ## Local Guardrails
 

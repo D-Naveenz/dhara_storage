@@ -19,10 +19,11 @@ flowchart TB
   subgraph pr ["pull_request"]
     Q[quality native cargo]
     PW[platform windows]
-    PL[platform linux]
+    PL[platform linux x64]
+    PLA[platform linux arm64]
     PM[platform macos]
     PR[publish readiness]
-    Q --> PW & PL & PM --> PR
+    Q --> PW & PL & PLA & PM --> PR
     PR --> ART[release artifacts]
   end
 
@@ -52,17 +53,19 @@ Local developers use [verify-local][verify-local-ps1] / [`.sh`][verify-local-sh]
 - `cargo fmt --check`, `clippy`, `cargo doc` for all workspace crates
 - No `dhara_tool` compile
 
-### `platform-{windows,linux,macos}`
+### `platform-{windows,linux,linux-arm64,macos}`
 
 - Rust tests: `dhara_storage` (all-features), `dhara_storage_dal`, `dharastorage`
 - `dotnet test` on **Windows only**
 - Stage natives via `stage-native-windows.ps1` or `stage-native-{linux,macos}.sh`
-- Upload `native-stage-{os}` artifact
+- **Linux x64** (`ubuntu-latest`): stages `linux-x64` only
+- **Linux arm64** (`ubuntu-24.04-arm`): stages `linux-arm64` only — see [native packaging][native-packaging]
+- Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact
 
 ### `publish-readiness` (windows)
 
-1. Download per-OS native artifacts
-2. `merge-native.ps1` → `tooling/artifacts/native-stage`
+1. Download per-OS native artifacts (`native-stage-*`)
+2. `merge-native.ps1` with `-StagePaths @(...)` → `tooling/artifacts/native-stage`
 3. `verify-package.ps1` → `verify package --native-stage …`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention)
 
@@ -70,10 +73,11 @@ Local developers use [verify-local][verify-local-ps1] / [`.sh`][verify-local-sh]
 
 Runs on `workflow_dispatch` or `push` to `main` when non-doc paths changed.
 
-1. Download PR CI artifacts for `${{ github.sha }}` via `dawidd6/action-download-artifact`
-2. Fail if artifacts missing (squash merges need a follow-up policy)
-3. `release-run-windows.ps1` with `--prepacked-nuget` (no rebuild, no re-verify)
-4. `cargo-release` + `nuget push` inside the tool
+1. Resolve artifact commit: for a **merge commit**, use the second parent (`git rev-parse HEAD^2`) — the PR branch tip that ran `publish-readiness`. For a **direct push** to `main` after a merge (e.g. CD hotfix), fall back to the second parent of `github.event.before`. PR CI artifacts are keyed to that SHA, not the merge commit on `main`.
+2. Download `release-native-stage` and `release-nuget-package` for that commit via `dawidd6/action-download-artifact`
+3. Fail if artifacts missing (squash merges are unsupported — no second parent, no matching PR artifacts)
+4. `release-run-windows.ps1` with `--prepacked-nuget` (no rebuild, no re-verify)
+5. `cargo-release` + `nuget push` inside the tool
 
 **Dispatch inputs:** `dry_run`, `publish_cargo`, `publish_nuget`, `verify_package` (optional full verify on dry-run).
 
@@ -94,6 +98,7 @@ Root [Cargo.toml][workspace-cargo] defines `[profile.ci]` (release without LTO) 
 
 ## Related docs
 
+- [Multi-platform native packaging][native-packaging] — RID staging rules, merge pitfalls, NuGet pack invariants
 - [Logging conventions][logging] — audit logs under `tooling/logs/`
 - [filedefs.dat / DSFD format][filedefs-dat] — DSFD `packageVersion` uses DAL semver
 - [dhara_tool README][readme-tool] — operator command surface
@@ -113,5 +118,6 @@ Root [Cargo.toml][workspace-cargo] defines `[profile.ci]` (release without LTO) 
 [release-run-windows]: ../tooling/scripts/release-run-windows.ps1
 [logging]: logging.md
 [filedefs-dat]: filedefs-dat.md
+[native-packaging]: native-packaging.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [docs-index]: README.md

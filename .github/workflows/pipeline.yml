@@ -364,13 +364,36 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
+      - name: Resolve PR CI artifact commit
+        id: artifact-commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          merge_sha="${{ github.sha }}"
+          artifact_sha=""
+          if git rev-parse --verify "${merge_sha}^2" >/dev/null 2>&1; then
+            artifact_sha="$(git rev-parse "${merge_sha}^2")"
+            echo "Using merge second parent ${artifact_sha} for PR CI artifacts."
+          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            before="${{ github.event.before }}"
+            if git rev-parse --verify "${before}^2" >/dev/null 2>&1; then
+              artifact_sha="$(git rev-parse "${before}^2")"
+              echo "Using second parent ${artifact_sha} of previous main tip ${before} for PR CI artifacts."
+            fi
+          fi
+          if [ -z "${artifact_sha}" ]; then
+            artifact_sha="${merge_sha}"
+            echo "Using push commit ${artifact_sha} for artifacts."
+          fi
+          echo "sha=${artifact_sha}" >> "${GITHUB_OUTPUT}"
+
       - name: Download PR CI native stage
         id: native-artifact
         continue-on-error: true
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: pipeline.yml
-          commit: ${{ github.sha }}
+          commit: ${{ steps.artifact-commit.outputs.sha }}
           workflow_conclusion: success
           name: release-native-stage
           path: tooling/artifacts/native-stage
@@ -381,7 +404,7 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: pipeline.yml
-          commit: ${{ github.sha }}
+          commit: ${{ steps.artifact-commit.outputs.sha }}
           workflow_conclusion: success
           name: release-nuget-package
           path: tooling/output/nuget
@@ -394,7 +417,7 @@ jobs:
           if ($hasNative -and $nupkg) {
             exit 0
           }
-          Write-Error "No PR CI artifacts found for commit ${{ github.sha }}. Merge with a merge commit so PR CI artifacts match, or run publish-readiness on main."
+          Write-Error "No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure publish-readiness succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
 
       - name: Resolve pre-packed NuGet path
         id: nupkg
