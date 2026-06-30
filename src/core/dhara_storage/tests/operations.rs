@@ -294,7 +294,10 @@ fn directory_watch_reports_created_files() {
         .unwrap()
         .expect("expected a watcher event");
 
-    assert_eq!(event.path, created_file);
+    assert_eq!(
+        event.path,
+        fs::canonicalize(&created_file).unwrap_or(created_file)
+    );
     assert!(matches!(
         event.change_type,
         StorageChangeType::Created | StorageChangeType::Modified

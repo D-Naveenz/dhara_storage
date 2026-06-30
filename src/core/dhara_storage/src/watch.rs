@@ -210,6 +210,10 @@ fn flush_batch(batch: &[Event], event_tx: &mpsc::Sender<StorageChangeEvent>) {
     }
 }
 
+fn normalize_watch_path(path: PathBuf) -> PathBuf {
+    std::fs::canonicalize(&path).unwrap_or(path)
+}
+
 fn map_notify_event(event: &Event) -> Vec<StorageChangeEvent> {
     let observed_at = SystemTime::now();
     match &event.kind {
@@ -219,7 +223,7 @@ fn map_notify_event(event: &Event) -> Vec<StorageChangeEvent> {
             .cloned()
             .map(|path| StorageChangeEvent {
                 change_type: StorageChangeType::Created,
-                path,
+                path: normalize_watch_path(path),
                 previous_path: None,
                 observed_at,
             })
@@ -230,7 +234,7 @@ fn map_notify_event(event: &Event) -> Vec<StorageChangeEvent> {
             .cloned()
             .map(|path| StorageChangeEvent {
                 change_type: StorageChangeType::Deleted,
-                path,
+                path: normalize_watch_path(path),
                 previous_path: None,
                 observed_at,
             })
@@ -238,16 +242,16 @@ fn map_notify_event(event: &Event) -> Vec<StorageChangeEvent> {
         EventKind::Modify(ModifyKind::Name(RenameMode::Both)) if event.paths.len() >= 2 => {
             vec![StorageChangeEvent {
                 change_type: StorageChangeType::Relocated,
-                previous_path: Some(event.paths[0].clone()),
-                path: event.paths[1].clone(),
+                previous_path: Some(normalize_watch_path(event.paths[0].clone())),
+                path: normalize_watch_path(event.paths[1].clone()),
                 observed_at,
             }]
         }
         EventKind::Modify(ModifyKind::Name(_)) if event.paths.len() >= 2 => {
             vec![StorageChangeEvent {
                 change_type: StorageChangeType::Relocated,
-                previous_path: Some(event.paths[0].clone()),
-                path: event.paths[1].clone(),
+                previous_path: Some(normalize_watch_path(event.paths[0].clone())),
+                path: normalize_watch_path(event.paths[1].clone()),
                 observed_at,
             }]
         }
@@ -257,7 +261,7 @@ fn map_notify_event(event: &Event) -> Vec<StorageChangeEvent> {
             .cloned()
             .map(|path| StorageChangeEvent {
                 change_type: StorageChangeType::Modified,
-                path,
+                path: normalize_watch_path(path),
                 previous_path: None,
                 observed_at,
             })
