@@ -38,7 +38,7 @@ Full binary layout: [filedefs.dat / DSFD reference][filedefs-dat].
 
 ```toml
 [dependencies]
-dhara_storage_dal = "0.7.1"
+dhara_storage_dal = "0.8.0"
 ```
 
 ## 🔧 Configuration & Environment Variables

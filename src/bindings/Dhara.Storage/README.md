@@ -42,7 +42,7 @@ Typed ABI contract: [reference doc][typed-abi]. Workspace overview: [repo root][
 - A supported runtime identifier at execution time (see below)
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.7.1
+dotnet add package Dhara.Storage --version 0.8.0
 ```
 
 **Supported RIDs**

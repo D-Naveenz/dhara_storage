@@ -43,13 +43,13 @@ Higher layers: [dharastorage][repo-dharastorage] (C ABI) and [Dhara.Storage][rep
 
 ```toml
 [dependencies]
-dhara_storage = "0.7.1"
+dhara_storage = "0.8.0"
 ```
 
 Optional async wrappers:
 
 ```toml
-dhara_storage = { version = "0.7.1", features = ["async-tokio"] }
+dhara_storage = { version = "0.8.0", features = ["async-tokio"] }
 ```
 
 ## 🔧 Configuration & Environment Variables
