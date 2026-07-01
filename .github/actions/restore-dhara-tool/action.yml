@@ -1,5 +1,5 @@
 name: Restore dhara_tool
-description: Restore a versioned dhara_tool dist binary from Actions cache
+description: Restore a versioned dhara_tool dist binary from Actions cache, building on cache miss
 
 inputs:
   tool-version:
@@ -21,6 +21,14 @@ runs:
         restore-keys: |
           dhara-tool-${{ inputs.tool-version }}-
 
+    - name: Build dhara_tool on cache miss
+      if: steps.tool-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Cache miss for dhara-tool-${{ inputs.tool-version }}-${{ inputs.os-arch }}; building profile.dist."
+        cargo build -p dhara_tool --profile dist
+
     - name: Require dhara_tool binary
       shell: bash
       run: |
@@ -31,8 +39,13 @@ runs:
           bin="target/dist/dhara_tool"
         fi
         if [ ! -f "$bin" ]; then
-          echo "::error::dhara_tool v${{ inputs.tool-version }} (${{ inputs.os-arch }}) is not cached. Push tooling/dhara_tool changes to development (bump tool version) and wait for dhara-tool-build, or run that workflow with force=true."
+          echo "::error::dhara_tool v${{ inputs.tool-version }} (${{ inputs.os-arch }}) is missing after cache restore and dist build."
           exit 1
         fi
         chmod +x "$bin" 2>/dev/null || true
-        "$bin" --version
+        built="$("$bin" --version)"
+        if [ "$built" != "${{ inputs.tool-version }}" ]; then
+          echo "::error::dist reports v${built}, expected v${{ inputs.tool-version }}"
+          exit 1
+        fi
+        echo "Using dhara_tool v${built} (${{ inputs.os-arch }})."

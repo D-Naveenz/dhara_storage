@@ -80,6 +80,7 @@ NuGet CD still **requires PR artifacts** from `publish-readiness` at merge secon
 - **Source of truth:** `[workspace.package].version` in [`tooling/dhara_tool/Cargo.toml`](../tooling/dhara_tool/Cargo.toml) (independent of workspace library semver).
 - **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — must match `tooling/dhara_tool/Cargo.toml` in git; activation propagates config into manifests on run (`--yes` in CI).
 - **Policy:** any change under `tooling/dhara_tool/**` must bump the tool version; cache key is `dhara-tool-{version}-{os-arch}` with no source hash.
+- **PR cache miss:** `restore-dhara-tool` builds `profile.dist` when the versioned cache is unavailable (common on PRs from non-`main` branches). `dhara-tool-build` still owns warming the cache on `development` / `main`.
 - **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
 - **DAL coupling:** `dhara-tool-build` compiles against **crates.io** `dhara_storage_dal` (local `[patch.crates-io]` applies only in full workspace dev builds).
 

@@ -6,7 +6,7 @@
 
 Dhara Storage is a Rust-first storage and file-analysis workspace with a Windows-first delivery story.
 It ships a native runtime, a C ABI layer, a .NET NuGet package, and operator tooling from one repo.
-Current release line: **0.8.0** (shared across crates and NuGet).
+Current release line: **0.9.0** (workspace crates and NuGet; `dhara_tool` is independently versioned at **0.8.9**).
 
 ## ✨ Key Features
 
@@ -92,7 +92,7 @@ Local secrets belong in `.env.local`, not in git. Run `cargo run -p dhara_tool -
 
 ```toml
 [dependencies]
-dhara_storage = "0.8.0"
+dhara_storage = "0.9.0"
 ```
 
 ```rust
@@ -106,7 +106,7 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 **.NET** — install [Dhara.Storage][readme-nuget]:
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.8.0
+dotnet add package Dhara.Storage --version 0.9.0
 ```
 
 **Operator** — verify package shape and dry-run release:

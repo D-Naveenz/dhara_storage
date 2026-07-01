@@ -129,7 +129,7 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 
 | Concern | Mechanism |
 |---------|-----------|
-| **Compile-time DAL** | `dhara_tool_kernel` pins `dhara_storage_dal = { version = "0.8.0" }` from crates.io |
+| **Compile-time DAL** | `dhara_tool_kernel` pins `dhara_storage_dal = { version = "0.9.0" }` from crates.io |
 | **Local co-dev** | Root `[patch.crates-io] dhara_storage_dal = { path = "src/core/dhara_storage_dal" }` only |
 | **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `resources/filedefs.dat` — data path, not a path dependency |
 | **Package version read** | `defs_package_version()` uses `dhara_storage_dal::PACKAGE_VERSION` from the linked crate |

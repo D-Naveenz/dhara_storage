@@ -1,5 +1,5 @@
 [versions]
-workspace = "0.8.0"
+workspace = "0.9.0"
 
 [tool]
 version = "0.8.9"

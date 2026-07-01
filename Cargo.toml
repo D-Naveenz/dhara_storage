@@ -15,15 +15,15 @@ resolver = "3"
 dhara_storage_dal = { path = "src/core/dhara_storage_dal" }
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/D-Naveenz/dhara_storage"
 homepage = "https://github.com/D-Naveenz/dhara_storage"
 
 [workspace.dependencies]
-dhara_storage_dal = { version = "0.8.0", path = "src/core/dhara_storage_dal" }
-dhara_storage = { version = "0.8.0", path = "src/core/dhara_storage" }
+dhara_storage_dal = { version = "0.9.0", path = "src/core/dhara_storage_dal" }
+dhara_storage = { version = "0.9.0", path = "src/core/dhara_storage" }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

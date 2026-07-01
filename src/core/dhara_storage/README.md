@@ -43,7 +43,7 @@ Higher layers: [dharastorage][repo-dharastorage] (C ABI) and [Dhara.Storage][rep
 
 ```toml
 [dependencies]
-dhara_storage = "0.8.0"
+dhara_storage = "0.9.0"
 ```
 
 Optional async wrappers:

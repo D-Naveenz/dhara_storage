@@ -24,7 +24,7 @@
     <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
     <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
     <PackageId>Dhara.Storage</PackageId>
-    <Version>0.8.0</Version>
+    <Version>0.9.0</Version>
     <Description>High-level .NET bindings for the native Dhara Storage Rust runtime.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/D-Naveenz/dhara_storage</RepositoryUrl>
