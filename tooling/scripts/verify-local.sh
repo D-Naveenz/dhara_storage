@@ -7,7 +7,7 @@ cd "$repo_root"
 "$(dirname "$0")/ensure-dhara-tool-dist.sh"
 
 bin="$repo_root/target/dist/dhara_tool"
-args=(--yes quality run)
+args=(-r "$repo_root" --yes quality run)
 for arg in "$@"; do
   case "$arg" in
     --skip-docs) args+=(--skip-docs) ;;

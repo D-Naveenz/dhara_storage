@@ -105,4 +105,4 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
             args+=(--dry-run)
           fi
-          "$tool" --yes "${args[@]}"
+          "$tool" -r "$GITHUB_WORKSPACE" --yes "${args[@]}"

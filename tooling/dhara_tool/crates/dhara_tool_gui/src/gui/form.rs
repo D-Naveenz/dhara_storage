@@ -5,6 +5,7 @@ use dhara_tool_cli::command::{CommandSpec, FieldKind};
 use dhara_tool_cli::forms::{CommandForm, FormValue};
 
 use super::app::Message;
+use super::widgets::path_field::browsable_path_field;
 
 pub fn view_options_form<'a>(
     command: &'a CommandSpec,
@@ -34,6 +35,21 @@ pub fn view_options_form<'a>(
                 .padding(6)
                 .width(Length::Fill)
                 .into(),
+            (FieldKind::BrowsablePath { .. }, Some(FormValue::Text(value))) => {
+                browsable_path_field(
+                    value,
+                    "",
+                    move |input| Message::FormTextChanged {
+                        command_id: command.id,
+                        field_index: index,
+                        value: input,
+                    },
+                    Message::FormBrowsePressed {
+                        command_id: command.id,
+                        field_index: index,
+                    },
+                )
+            }
             (FieldKind::Boolean, Some(FormValue::Boolean(value))) => checkbox(*value)
                 .label(field.label)
                 .on_toggle(move |checked| Message::FormBooleanChanged {
@@ -44,7 +60,8 @@ pub fn view_options_form<'a>(
                 .into(),
             (FieldKind::Select(options), Some(FormValue::Select(selected))) => {
                 let current = options.get(*selected).copied();
-                let options_owned: Vec<String> = options.iter().map(|option| (*option).to_owned()).collect();
+                let options_owned: Vec<String> =
+                    options.iter().map(|option| (*option).to_owned()).collect();
                 pick_list(options_owned, current.map(str::to_owned), move |choice| {
                     Message::FormSelectChanged {
                         command_id: command.id,

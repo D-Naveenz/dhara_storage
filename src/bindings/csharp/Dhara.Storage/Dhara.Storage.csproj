@@ -81,6 +81,6 @@
     <None Pack="true" PackagePath="\" Include="README.md" />
   </ItemGroup>
   <ItemGroup>
-    <None Pack="true" Include="..\..\..\..\assets\dhara-logo-colored_sm.png" PackagePath="\" />
+    <None Pack="true" Include="assets\dhara-logo-colored_sm.png" PackagePath="\" />
   </ItemGroup>
 </Project>

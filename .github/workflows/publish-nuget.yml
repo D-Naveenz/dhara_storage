@@ -176,7 +176,7 @@ jobs:
             if [ "${{ inputs.dry_run }}" = "true" ]; then args+=(--dry-run); fi
             if [ "${{ inputs.verify_package }}" = "true" ]; then args+=(--verify-package); fi
           fi
-          "$tool" --yes "${args[@]}"
+          "$tool" -r "$GITHUB_WORKSPACE" --yes "${args[@]}"
 
       - name: Upload NuGet artifacts
         if: always()

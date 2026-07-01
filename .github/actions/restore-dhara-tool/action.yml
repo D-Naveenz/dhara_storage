@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: Restore dhara_tool
 description: Restore a versioned dhara_tool dist binary from Actions cache, building on cache miss
 

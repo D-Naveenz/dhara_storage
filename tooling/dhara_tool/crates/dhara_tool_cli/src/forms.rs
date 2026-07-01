@@ -23,7 +23,7 @@ impl CommandForm {
             .fields
             .iter()
             .map(|field| match field.kind {
-                FieldKind::Text | FieldKind::Path => {
+                FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. } => {
                     FormValue::Text(field.default_value.unwrap_or_default().to_owned())
                 }
                 FieldKind::Boolean => FormValue::Boolean(field.default_value == Some("true")),

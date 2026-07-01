@@ -2,7 +2,7 @@
 workspace = "0.9.0"
 
 [tool]
-version = "0.8.9"
+version = "0.8.10"
 
 [nuget]
 package_id = "Dhara.Storage"
@@ -19,7 +19,7 @@ tags = [
     "watching",
 ]
 readme = "src/bindings/csharp/Dhara.Storage/README.md"
-icon = "assets/dhara-logo-colored_sm.png"
+icon = "src/bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png"
 repository_url = "https://github.com/D-Naveenz/dhara_storage"
 project_url = "https://github.com/D-Naveenz/dhara_storage"
 

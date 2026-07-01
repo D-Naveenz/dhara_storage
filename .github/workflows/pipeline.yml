@@ -53,9 +53,9 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" --yes quality fmt --check
-          "$tool" --yes quality clippy
-          "$tool" --yes quality doc
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality fmt --check
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality clippy
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality doc
 
   platform-windows:
     name: platform (windows)
@@ -101,9 +101,9 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool.exe
-          "$tool" --yes quality test-rust
-          "$tool" --yes quality test-dotnet
-          "$tool" --yes package stage-native --msvc-env
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-dotnet
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native --msvc-env
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -154,8 +154,8 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" --yes quality test-rust
-          "$tool" --yes package stage-native
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -206,8 +206,8 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" --yes quality test-rust
-          "$tool" --yes package stage-native
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -253,8 +253,8 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" --yes quality test-rust
-          "$tool" --yes package stage-native
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
@@ -312,7 +312,7 @@ jobs:
         run: |
           set -euo pipefail
           tool=target/dist/dhara_tool
-          "$tool" --yes native merge \
+          "$tool" -r "$GITHUB_WORKSPACE" --yes native merge \
             --output target/dist/artifacts/native-stage \
             --input target/dist/artifacts/native-inputs/native-stage-windows \
             --input target/dist/artifacts/native-inputs/native-stage-linux \
@@ -323,7 +323,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool --yes verify package
+          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package
 
       - name: Write release metadata
         shell: bash

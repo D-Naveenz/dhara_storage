@@ -1,5 +1,9 @@
 use std::path::{Path, PathBuf};
 
+use anyhow::{Context, Result, bail};
+
+use crate::repo_config::CONFIG_PATH;
+
 const OUTPUT: &str = "output";
 const ARTIFACTS: &str = "artifacts";
 const LOGS: &str = "logs";
@@ -16,27 +20,58 @@ pub const EMBEDDED_DEFS_RELATIVE: &str = "src/core/dhara_storage_dal/resources/f
 /// Relative path from the repository root to the embedded runtime defs package.
 pub const RUNTIME_DEFS_RELATIVE: &str = EMBEDDED_DEFS_RELATIVE;
 
-/// Returns true when `path` is the Dhara Storage workspace root (not a member crate directory).
+/// Returns true when `path` contains a Dhara Storage operator config (`dhara.config.toml`).
 pub fn is_repo_root(path: &Path) -> bool {
-    path.join("dhara.config.toml").is_file()
-        && path.join("Cargo.toml").is_file()
-        && path.join(TOOL_CRATE_MANIFEST_RELATIVE).is_file()
+    path.join(CONFIG_PATH).is_file()
 }
 
-/// Canonical directory containing the running `dhara_tool` executable (runtime output root).
-pub fn resolve_tool_root(current_exe: Option<PathBuf>, fallback: Option<PathBuf>) -> PathBuf {
-    if let Some(exe) = current_exe
-        && let Some(parent) = exe.parent()
-    {
-        return canonicalize_path(parent);
+/// Canonical directory containing the running `dhara_tool` executable (`exe_path`).
+pub fn resolve_exe_root(current_exe: PathBuf) -> Result<PathBuf> {
+    let parent = current_exe
+        .parent()
+        .with_context(|| format!("failed to resolve directory for '{}'", current_exe.display()))?;
+    Ok(canonicalize_path(parent))
+}
+
+/// Normalizes operator input to the repository root directory.
+///
+/// Accepts either a directory containing `dhara.config.toml` or a direct path to that file.
+pub fn normalize_repository_input(path: PathBuf) -> Result<PathBuf> {
+    if path.is_file() {
+        let is_config = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .is_some_and(|name| name == CONFIG_PATH);
+        if !is_config {
+            bail!(
+                "expected a repository directory or {CONFIG_PATH} file, got '{}'",
+                path.display()
+            );
+        }
+        let parent = path
+            .parent()
+            .with_context(|| format!("'{CONFIG_PATH}' has no parent directory"))?;
+        let root = canonicalize_path(parent);
+        if !is_repo_root(&root) {
+            bail!(
+                "parent of '{}' is not a repository root (missing {CONFIG_PATH})",
+                path.display()
+            );
+        }
+        return Ok(root);
     }
 
-    fallback
-        .map(|path| canonicalize_path(&path))
-        .unwrap_or_else(|| PathBuf::from("."))
+    let root = canonicalize_path(&path);
+    if !is_repo_root(&root) {
+        bail!(
+            "'{}' is not a repository root (expected {CONFIG_PATH})",
+            root.display()
+        );
+    }
+    Ok(root)
 }
 
-fn canonicalize_path(path: &Path) -> PathBuf {
+pub(crate) fn canonicalize_path(path: &Path) -> PathBuf {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
 
     #[cfg(windows)]
@@ -179,16 +214,35 @@ mod tests {
     }
 
     #[test]
-    fn is_repo_root_requires_monorepo_layout() {
+    fn is_repo_root_requires_dhara_config() {
         let temp = tempfile::tempdir().unwrap();
         let root = temp.path().join("repo");
-        let crate_dir = root.join("tooling").join("dhara_tool");
-        std::fs::create_dir_all(&crate_dir).unwrap();
-        std::fs::write(root.join("dhara.config.toml"), "[versions]\n").unwrap();
-        std::fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
-        std::fs::write(crate_dir.join("Cargo.toml"), "[package]\n").unwrap();
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(!is_repo_root(&root));
 
+        std::fs::write(root.join(CONFIG_PATH), "[versions]\n").unwrap();
         assert!(is_repo_root(&root));
-        assert!(!is_repo_root(&crate_dir));
+    }
+
+    #[test]
+    fn normalize_accepts_directory_or_config_file() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        let config = root.join(CONFIG_PATH);
+        std::fs::write(&config, "[versions]\n").unwrap();
+
+        let from_dir = normalize_repository_input(root.clone()).unwrap();
+        let from_file = normalize_repository_input(config).unwrap();
+        assert!(is_repo_root(&from_dir));
+        assert_eq!(from_dir, from_file);
+    }
+
+    #[test]
+    fn normalize_rejects_missing_config() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = temp.path().join("repo");
+        std::fs::create_dir_all(&root).unwrap();
+        assert!(normalize_repository_input(root).is_err());
     }
 }

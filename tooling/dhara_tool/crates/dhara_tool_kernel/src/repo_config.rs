@@ -1012,9 +1012,11 @@ mod tests {
     }
 
     #[test]
-    fn sync_csproj_uses_project_relative_root_assets() {
+    fn sync_csproj_uses_project_relative_package_assets() {
         let mut config = sample_config();
-        config.nuget.icon = Some("assets/branding/dhara-logo-colored_sm.png".to_owned());
+        config.nuget.icon = Some(
+            "src/bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png".to_owned(),
+        );
         let updated = sync_csproj(
             r#"<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -1031,7 +1033,7 @@ mod tests {
         )
         .unwrap();
 
-        assert!(updated.contains("..\\..\\..\\assets\\branding\\dhara-logo-colored_sm.png"));
+        assert!(updated.contains(r"assets\dhara-logo-colored_sm.png"));
         assert!(!updated.contains("Dhara.AI"));
     }
 

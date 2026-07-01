@@ -32,13 +32,16 @@ dhara_tool/src/
 ├── ui/              # shared form schema and command runner
 └── logging/         # audit log setup
 
-{tool_root}/         # directory containing the running binary (exe-relative)
-├── logs/            # audit logs ({date}_dhara_tool*.log)
-├── output/          # NuGet packages and operator artifacts
-└── artifacts/       # native staging scratch (e.g. native-stage/)
+{exe_path}/              # directory containing the running binary
+├── logs/                # audit logs ({date}_dhara_tool*.log)
+├── output/              # NuGet packages and operator artifacts
+├── artifacts/           # native staging scratch (e.g. native-stage/)
+└── runtime.toml         # cached repository path
 ```
 
-With the dist binary (`target/dist/dhara_tool`), `tool_root` is `target/dist/`. `cargo run` uses `target/debug/` instead. Workspace sources (TrID inputs, embedded defs) stay under the repo root — see [logging reference][logging].
+With the dist binary (`target/dist/dhara_tool`), `exe_path` is `target/dist/`. `cargo run` uses `target/debug/` instead. Workspace sources (TrID inputs, embedded defs) stay under the repository — see [logging reference][logging].
+
+**Repository resolution:** `-r` / `--repository` overrides `{exe_path}/runtime.toml`; otherwise cache, then CLI prompt or GUI repository picker on first launch.
 
 CI vs tool split: [CI/CD reference][ci-cd]. Audit log rules: [logging reference][logging].
 
@@ -96,11 +99,11 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 ```powershell
 ./tooling/scripts/ensure-dhara-tool-dist.ps1
 ./tooling/scripts/verify-local.ps1
-./target/dist/dhara_tool --yes config show
-./target/dist/dhara_tool --yes package stage-native --msvc-env
-./target/dist/dhara_tool --yes native merge --output target/dist/artifacts/native-stage --input ...
-./target/dist/dhara_tool --yes verify package
-./target/dist/dhara_tool --yes release run --dry-run
+./target/dist/dhara_tool -r . --yes config show
+./target/dist/dhara_tool -r . --yes package stage-native --msvc-env
+./target/dist/dhara_tool -r . --yes native merge --output target/dist/artifacts/native-stage --input ...
+./target/dist/dhara_tool -r . --yes verify package
+./target/dist/dhara_tool -r . --yes release run --dry-run
 ```
 
 **Troubleshooting**

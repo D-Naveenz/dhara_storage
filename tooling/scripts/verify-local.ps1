@@ -14,7 +14,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $bin = Join-Path $repoRoot "target\dist\dhara_tool.exe"
-$args = @("--yes", "quality", "run")
+$args = @("-r", $repoRoot, "--yes", "quality", "run")
 if ($SkipDocs) { $args += "--skip-docs" }
 if ($SkipDotnet) { $args += "--skip-dotnet" }
 

@@ -6,6 +6,7 @@ pub mod msvc;
 pub mod output;
 pub mod paths;
 pub mod repo_config;
+pub mod runtime_cache;
 pub mod subprocess;
 pub mod workers;
 pub mod workspace;
@@ -42,6 +43,11 @@ pub use repo_config::{
 pub use subprocess::{
     inspect_package_entries, run_command, run_command_expect_failure, run_command_with_env,
     run_command_with_env_redacted, write_nuget_config,
+};
+pub use paths::{is_repo_root, normalize_repository_input, resolve_exe_root};
+pub use runtime_cache::{
+    RuntimeCache, load_runtime_cache, resolve_and_persist_repository, runtime_cache_path,
+    save_runtime_cache, stale_cached_repository, try_cached_repository,
 };
 pub use workspace::{
     DefsPackageStatus, WorkspaceSnapshot, ensure_workspace_state, next_package_revision,

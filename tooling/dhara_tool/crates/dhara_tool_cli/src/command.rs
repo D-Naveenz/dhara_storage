@@ -33,6 +33,9 @@ pub enum ArgBinding {
 pub enum FieldKind {
     Text,
     Path,
+    BrowsablePath {
+        dialog_title: &'static str,
+    },
     Boolean,
     Select(&'static [&'static str]),
 }

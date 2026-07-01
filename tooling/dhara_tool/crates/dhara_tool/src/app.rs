@@ -1,16 +1,18 @@
 use std::env;
-use std::path::{Path, PathBuf};
+use std::io::{self, BufRead, IsTerminal, Write};
+use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
 use dhara_tool_cli::{
     CommandRegistry, DharaStorageCapability, RunMode, ToolCapability, ToolContext,
 };
-use dhara_tool_gui::{can_launch_gui, run_gui};
+use dhara_tool_gui::{can_launch_gui, run_gui, GuiBootParams};
 use dhara_tool_kernel::{
     activation::run_activation,
     ensure_workspace_state, log_session_end,
-    paths::{is_repo_root, resolve_tool_root},
+    paths::resolve_exe_root,
+    resolve_and_persist_repository, stale_cached_repository, try_cached_repository,
     workers,
 };
 
@@ -30,16 +32,7 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
-    let current_exe = env::current_exe().ok();
-    let current_dir = env::current_dir().ok();
-
-    let repo_root = resolve_repo_root(
-        cli.repo_root.clone(),
-        current_dir.clone(),
-        current_exe.clone(),
-    )?;
-
-    let tool_root = resolve_tool_root(current_exe, current_dir);
+    let exe_root = resolve_exe_root(env::current_exe().context("failed to resolve current executable")?)?;
 
     let run_mode = if !cli.command.is_empty() {
         RunMode::Direct
@@ -51,26 +44,59 @@ pub fn run() -> Result<()> {
 
     let effective_workers = workers::init_global_thread_pool(cli.workers)?;
 
-    let context = ToolContext {
-        repo_root: repo_root.clone(),
-        tool_root,
-        run_mode,
+    let boot = GuiBootParams {
         min: cli.min,
         trace: cli.trace,
         workers: effective_workers,
-        package_dir: cli.package_dir,
-        output_dir: cli.output_dir,
-        logs_dir: cli.logs_dir,
+        yes: cli.yes,
+        package_dir: cli.package_dir.clone(),
+        output_dir: cli.output_dir.clone(),
+        logs_dir: cli.logs_dir.clone(),
     };
 
-    let pending_activation = run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
+    let launch = determine_launch_mode(!cli.command.is_empty(), can_launch_gui());
 
-    ensure_workspace_state(&context);
-
-    match determine_launch_mode(!cli.command.is_empty(), can_launch_gui()) {
-        LaunchMode::InteractiveGui => run_gui(&registry, &context, pending_activation)?,
+    match launch {
+        LaunchMode::InteractiveGui => {
+            if let Some(repo_root) = try_early_repository(&exe_root, cli.repository.clone())? {
+                let pending_activation =
+                    run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
+                let context = build_context(
+                    repo_root,
+                    exe_root.clone(),
+                    run_mode,
+                    &cli,
+                    effective_workers,
+                );
+                ensure_workspace_state(&context);
+                run_gui(
+                    &registry,
+                    exe_root,
+                    boot,
+                    Some(context),
+                    pending_activation,
+                    None,
+                )?;
+            } else {
+                let stale_hint = stale_cached_repository(&exe_root);
+                run_gui(&registry, exe_root, boot, None, Vec::new(), stale_hint)?;
+            }
+        }
         LaunchMode::PlainHelp => print!("{}", help_text(&registry)),
         LaunchMode::DirectCommand => {
+            let repo_root = resolve_repository_for_direct(&exe_root, cli.repository.clone())?;
+            let pending_activation =
+                run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
+            let _ = pending_activation;
+            let context = build_context(
+                repo_root,
+                exe_root.clone(),
+                run_mode,
+                &cli,
+                effective_workers,
+            );
+            ensure_workspace_state(&context);
+
             let command_id = registry
                 .resolve(&cli.command)
                 .map(|(command, _)| command.id)
@@ -94,6 +120,81 @@ pub fn run() -> Result<()> {
     Ok(())
 }
 
+fn build_context(
+    repo_root: PathBuf,
+    exe_root: PathBuf,
+    run_mode: RunMode,
+    cli: &RootArgs,
+    workers: usize,
+) -> ToolContext {
+    ToolContext {
+        repo_root,
+        tool_root: exe_root,
+        run_mode,
+        min: cli.min,
+        trace: cli.trace,
+        workers,
+        package_dir: cli.package_dir.clone(),
+        output_dir: cli.output_dir.clone(),
+        logs_dir: cli.logs_dir.clone(),
+    }
+}
+
+/// Resolves from `-r` or valid cache only (no prompt).
+fn try_early_repository(
+    exe_root: &PathBuf,
+    cli_override: Option<PathBuf>,
+) -> Result<Option<PathBuf>> {
+    if let Some(path) = cli_override {
+        return Ok(Some(resolve_and_persist_repository(
+            exe_root,
+            path,
+            true,
+        )?));
+    }
+
+    Ok(try_cached_repository(exe_root))
+}
+
+fn resolve_repository_for_direct(
+    exe_root: &PathBuf,
+    cli_override: Option<PathBuf>,
+) -> Result<PathBuf> {
+    if let Some(repo) = try_early_repository(exe_root, cli_override)? {
+        return Ok(repo);
+    }
+
+    if io::stdin().is_terminal() {
+        let path = prompt_repository_path()?;
+        return resolve_and_persist_repository(exe_root, path, true);
+    }
+
+    bail!(
+        "repository path is required; pass -r/--repository <path> or run interactively to create {}/runtime.toml",
+        exe_root.display()
+    );
+}
+
+fn prompt_repository_path() -> Result<PathBuf> {
+    let mut stderr = io::stderr();
+    write!(
+        stderr,
+        "Repository path (folder or dhara.config.toml): "
+    )?;
+    stderr.flush()?;
+
+    let mut line = String::new();
+    io::stdin()
+        .lock()
+        .read_line(&mut line)
+        .context("failed to read repository path from stdin")?;
+    let trimmed = line.trim();
+    if trimmed.is_empty() {
+        bail!("repository path is required");
+    }
+    Ok(PathBuf::from(trimmed))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LaunchMode {
     InteractiveGui,
@@ -111,82 +212,9 @@ fn determine_launch_mode(has_command: bool, interactive_gui: bool) -> LaunchMode
     }
 }
 
-fn resolve_repo_root(
-    requested_repo_root: Option<PathBuf>,
-    current_dir: Option<PathBuf>,
-    current_exe: Option<PathBuf>,
-) -> Result<PathBuf> {
-    if let Some(path) = requested_repo_root {
-        let root = normalize_repo_root(path.clone())
-            .with_context(|| format!("failed to canonicalize repo root '{}'", path.display()))?;
-        if !is_repo_root(&root) {
-            bail!(
-                "--repo-root '{}' is not a Dhara Storage workspace root (expected dhara.config.toml and tooling/dhara_tool/Cargo.toml)",
-                root.display()
-            );
-        }
-        return Ok(root);
-    }
-
-    discover_repo_root(current_dir, current_exe).context(
-        "failed to discover repo root; run dhara_tool from the workspace or pass --repo-root",
-    )
-}
-
-fn discover_repo_root(
-    current_dir: Option<PathBuf>,
-    current_exe: Option<PathBuf>,
-) -> Result<PathBuf> {
-    let mut candidates = Vec::new();
-    if let Some(dir) = current_dir {
-        candidates.push(dir);
-    }
-    if let Some(exe) = current_exe.and_then(|path| path.parent().map(Path::to_path_buf))
-        && !candidates.iter().any(|candidate| candidate == &exe)
-    {
-        candidates.push(exe);
-    }
-
-    for candidate in candidates {
-        if let Some(repo_root) = discover_repo_root_from(&candidate) {
-            return Ok(repo_root);
-        }
-    }
-
-    bail!("no workspace containing dhara.config.toml was found")
-}
-
-fn discover_repo_root_from(start: &Path) -> Option<PathBuf> {
-    for candidate in start.ancestors() {
-        if !is_repo_root(candidate) {
-            continue;
-        }
-        if let Ok(root) = normalize_repo_root(candidate.to_path_buf()) {
-            return Some(root);
-        }
-    }
-
-    None
-}
-
-fn normalize_repo_root(path: PathBuf) -> Result<PathBuf> {
-    let canonical = path.canonicalize()?;
-
-    #[cfg(windows)]
-    {
-        const VERBATIM_PREFIX: &str = r"\\?\";
-        let canonical_text = canonical.to_string_lossy();
-        if let Some(stripped) = canonical_text.strip_prefix(VERBATIM_PREFIX) {
-            return Ok(PathBuf::from(stripped));
-        }
-    }
-
-    Ok(canonical)
-}
-
 #[derive(Debug, Clone)]
 struct RootArgs {
-    repo_root: Option<PathBuf>,
+    repository: Option<PathBuf>,
     min: bool,
     trace: bool,
     workers: Option<usize>,
@@ -201,7 +229,7 @@ struct RootArgs {
 
 fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
     let mut parsed = RootArgs {
-        repo_root: None,
+        repository: None,
         min: false,
         trace: false,
         workers: None,
@@ -238,6 +266,11 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.yes = true;
                 index += 1;
             }
+            "-r" | "--repository" => {
+                parsed.repository =
+                    Some(PathBuf::from(next_value(&args, index, "--repository")?));
+                index += 2;
+            }
             "-w" | "--workers" => {
                 let value = next_value(&args, index, "--workers")?;
                 parsed.workers = Some(
@@ -245,10 +278,6 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                         .parse()
                         .with_context(|| format!("'{value}' is not a valid worker count"))?,
                 );
-                index += 2;
-            }
-            "--repo-root" => {
-                parsed.repo_root = Some(PathBuf::from(next_value(&args, index, "--repo-root")?));
                 index += 2;
             }
             "--package-dir" => {
@@ -264,8 +293,13 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 parsed.logs_dir = Some(PathBuf::from(next_value(&args, index, "--logs-dir")?));
                 index += 2;
             }
-            _ if token.starts_with("--repo-root=") => {
-                parsed.repo_root = Some(PathBuf::from(token.trim_start_matches("--repo-root=")));
+            _ if token.starts_with("--repository=") => {
+                parsed.repository =
+                    Some(PathBuf::from(token.trim_start_matches("--repository=")));
+                index += 1;
+            }
+            _ if token.starts_with("-r=") => {
+                parsed.repository = Some(PathBuf::from(token.trim_start_matches("-r=")));
                 index += 1;
             }
             _ if token.starts_with("--package-dir=") => {
@@ -313,7 +347,7 @@ fn help_text(registry: &CommandRegistry) -> String {
            interactive  no subcommand with a graphical display — opens the operator GUI\n\
            direct       subcommand present — runs immediately (CI, agents, scripts)\n\n\
          Global options (may appear before or after the command):\n\
-           --repo-root <path>\n\
+           -r, --repository <path>  repository directory or dhara.config.toml (overrides runtime cache)\n\
            --package-dir <path>\n\
            --output-dir <path>\n\
            --logs-dir <path>\n\
@@ -323,6 +357,10 @@ fn help_text(registry: &CommandRegistry) -> String {
            -y, --yes         apply configuration drift without prompting\n\
            -h, --help\n\
            --version\n\n\
+         Repository resolution:\n\
+           1. -r/--repository when provided\n\
+           2. exe_path/runtime.toml when valid\n\
+           3. interactive prompt (TTY) or GUI repository picker\n\n\
          {}",
         registry.help_text()
     )
@@ -334,9 +372,10 @@ mod tests {
 
     use tempfile::tempdir;
 
+    use dhara_tool_kernel::{CONFIG_PATH, resolve_and_persist_repository, try_cached_repository};
+
     use super::{
-        LaunchMode, determine_launch_mode, discover_repo_root_from, normalize_repo_root,
-        parse_root_args, resolve_repo_root,
+        LaunchMode, determine_launch_mode, parse_root_args, try_early_repository,
     };
 
     #[test]
@@ -362,40 +401,43 @@ mod tests {
     }
 
     #[test]
-    fn explicit_repo_root_wins_over_discovery() {
-        let temp = tempdir().unwrap();
-        let root = temp.path().join("repo");
-        let nested = root.join("target").join("debug");
-        fs::create_dir_all(&nested).unwrap();
-        fs::write(root.join("dhara.config.toml"), "placeholder").unwrap();
-        fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
-        fs::create_dir_all(root.join("tooling/dhara_tool")).unwrap();
-        fs::write(root.join("tooling/dhara_tool/Cargo.toml"), "[package]\n").unwrap();
-
-        let resolved = resolve_repo_root(
-            Some(root.clone()),
-            Some(nested.clone()),
-            Some(nested.join("dhara_tool.exe")),
-        )
+    fn repository_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "-r".to_owned(),
+            "/repo".to_owned(),
+            "config".to_owned(),
+            "show".to_owned(),
+        ])
         .unwrap();
-
-        assert_eq!(resolved, normalize_repo_root(root).unwrap());
+        assert_eq!(parsed.repository, Some("/repo".into()));
     }
 
     #[test]
-    fn discovers_repo_root_from_nested_target_directory() {
+    fn repository_long_flag_parsed() {
+        let parsed = parse_root_args(vec![
+            "--repository=/repo".to_owned(),
+            "config".to_owned(),
+            "show".to_owned(),
+        ])
+        .unwrap();
+        assert_eq!(parsed.repository, Some("/repo".into()));
+    }
+
+    #[test]
+    fn explicit_repository_wins_and_persists_cache() {
         let temp = tempdir().unwrap();
         let root = temp.path().join("repo");
-        let nested = root.join("target").join("debug");
-        fs::create_dir_all(&nested).unwrap();
-        fs::write(root.join("dhara.config.toml"), "placeholder").unwrap();
-        fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
-        fs::create_dir_all(root.join("tooling/dhara_tool")).unwrap();
-        fs::write(root.join("tooling/dhara_tool/Cargo.toml"), "[package]\n").unwrap();
+        let exe = temp.path().join("bin");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(&exe).unwrap();
+        fs::write(root.join(CONFIG_PATH), "[versions]\n").unwrap();
 
-        let resolved = discover_repo_root_from(&nested).unwrap();
-
-        assert_eq!(resolved, normalize_repo_root(root).unwrap());
+        let resolved = try_early_repository(&exe, Some(root.clone())).unwrap().unwrap();
+        assert!(try_cached_repository(&exe).is_some());
+        assert_eq!(
+            resolved,
+            resolve_and_persist_repository(&exe, root, false).unwrap()
+        );
     }
 
     #[test]
@@ -465,35 +507,5 @@ mod tests {
         ])
         .unwrap();
         assert!(parsed.yes);
-    }
-
-    #[test]
-    fn discovers_repo_root_from_current_executable_when_cwd_is_elsewhere() {
-        let temp = tempdir().unwrap();
-        let root = temp.path().join("repo");
-        let nested = root.join("target").join("debug");
-        let elsewhere = temp.path().join("elsewhere");
-        fs::create_dir_all(&nested).unwrap();
-        fs::create_dir_all(&elsewhere).unwrap();
-        fs::write(root.join("dhara.config.toml"), "placeholder").unwrap();
-        fs::write(root.join("Cargo.toml"), "[workspace]\n").unwrap();
-        fs::create_dir_all(root.join("tooling/dhara_tool")).unwrap();
-        fs::write(root.join("tooling/dhara_tool/Cargo.toml"), "[package]\n").unwrap();
-
-        let resolved =
-            resolve_repo_root(None, Some(elsewhere), Some(nested.join("dhara_tool.exe"))).unwrap();
-
-        assert_eq!(resolved, normalize_repo_root(root).unwrap());
-    }
-
-    #[test]
-    fn rejects_explicit_repo_root_outside_workspace_layout() {
-        let temp = tempdir().unwrap();
-        let crate_dir = temp.path().join("tooling").join("dhara_tool");
-        fs::create_dir_all(&crate_dir).unwrap();
-        fs::write(crate_dir.join("Cargo.toml"), "[package]\n").unwrap();
-
-        let error = resolve_repo_root(Some(crate_dir.clone()), Some(crate_dir), None).unwrap_err();
-        assert!(error.to_string().contains("--repo-root"));
     }
 }

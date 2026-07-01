@@ -19,9 +19,9 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 ## Local Commands
 
 - Ensure production-shaped tool binary: `./tooling/scripts/ensure-dhara-tool-dist.ps1` (rebuilds only when `target/dist/` version ≠ `tooling/dhara_tool/Cargo.toml`)
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — ensures dist, then `target/dist/dhara_tool quality run`
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — ensures dist, then `target/dist/dhara_tool -r <repo> quality run` (or rely on `runtime.toml` after first run)
 - Active tool development: `cargo run -p dhara_tool` / `cargo test -p dhara_tool` (dev profile; does not replace dist until version bump + ensure)
-- Verify NuGet package shape: `target/dist/dhara_tool --yes verify package` (after ensure) or `cargo run -p dhara_tool -- --yes verify package`
+- Verify NuGet package shape: `target/dist/dhara_tool -r . --yes verify package` (after ensure) or `cargo run -p dhara_tool -- -r . --yes verify package`
 - **Tool version bump:** update `[tool].version` in `dhara.config.toml` and `[workspace.package].version` in `tooling/dhara_tool/Cargo.toml` in the same commit. **Workspace/NuGet manifest drift** is reconciled on the next tool run (confirm activation, or pass `--yes` in CI/scripts).
 
 ## CI/CD

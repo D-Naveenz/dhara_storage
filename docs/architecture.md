@@ -110,9 +110,16 @@ Primitives stay **iced-first** (no business logic); screens call into `dhara_too
 
 ## Path resolution and config
 
-`dhara_tool_kernel::paths::is_repo_root` requires both `dhara.config.toml` and `tooling/dhara_tool/Cargo.toml` (nested workspace root).
+`dhara_tool` separates **exe_path** (directory of the running binary) from **repo_path** (directory containing `dhara.config.toml`).
 
-`ToolContext` carries `repo_root`, activated `DharaRepoConfig`, and logging handles. CLI and GUI construct it once per invocation; ops functions take `&ToolContext` or explicit paths derived from it.
+| Anchor | Resolution | Outputs |
+|--------|------------|---------|
+| `exe_path` | `resolve_exe_root(current_exe)` | `logs/`, `output/`, `artifacts/`, `runtime.toml` |
+| `repo_path` | `-r` / `--repository`, then `runtime.toml`, then prompt or GUI picker | `filedefs.dat`, Cargo/dotnet sources, config activation |
+
+`is_repo_root` requires only `dhara.config.toml`. `-r` accepts a repository directory or a direct path to that file.
+
+`ToolContext` carries `repo_root`, `tool_root` (`exe_path`), activated `DharaRepoConfig`, and logging handles. CLI and GUI construct it once per invocation after repository resolution; ops functions take `&ToolContext` or explicit paths derived from it.
 
 ## Publish pipelines (ops)
 

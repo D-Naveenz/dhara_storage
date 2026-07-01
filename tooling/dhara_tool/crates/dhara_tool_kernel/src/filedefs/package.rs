@@ -251,7 +251,8 @@ where
 }
 
 fn packages_match_content(left: &DefinitionPackage, right: &DefinitionPackage) -> bool {
-    left.definitions_release == right.definitions_release
+    left.package_version == right.package_version
+        && left.definitions_release == right.definitions_release
         && left.tags == right.tags
         && left.definitions == right.definitions
 }
