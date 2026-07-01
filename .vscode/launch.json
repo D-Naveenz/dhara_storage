@@ -14,6 +14,7 @@
       "type": "lldb",
       "request": "launch",
       "cwd": "${workspaceFolder}",
+      "sourceLanguages": ["rust"],
       "cargo": {
         "args": [
           "run",
@@ -33,11 +34,12 @@
       "type": "lldb",
       "request": "launch",
       "cwd": "${workspaceFolder}",
+      "sourceLanguages": ["rust"],
       "cargo": {
         "args": ["test", "-p", "dhara_tool", "--no-run"],
         "filter": {
           "name": "dhara_tool",
-          "kind": "bin"
+          "kind": "lib"
         }
       },
       "args": []

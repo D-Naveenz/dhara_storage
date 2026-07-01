@@ -1,104 +1,114 @@
 use iced::widget::{
-    button, column, container, progress_bar, row, scrollable, space, text,
+    button, column, container, mouse_area, progress_bar, row, scrollable, space, text,
 };
-use iced::{Element, Length, Padding, Theme};
+use iced::{Alignment, Element, Length, Padding, Theme};
 
 use crate::command::CommandRegistry;
 
 use super::app::Message;
 use super::form::view_options_form;
 use super::state::{AppState, MainTab, OutputLine};
-
-pub fn view_header<'a>(state: &'a AppState) -> Element<'a, Message> {
-    row![
-        text(format!("Dhara Tool v{}", crate::version())).size(16),
-        space::horizontal(),
-        text(&state.repository_label).size(14),
-    ]
-    .width(Length::Fill)
-    .padding(Padding::from([8, 12]))
-    .into()
-}
+use super::style::{
+    chevron_icon_rotated, panel_container, tab_button_style, tree_row_accent, tree_row_container,
+    tree_row_text_color, PANEL_INSET, TREE_ROW_INSET,
+};
+use super::tree::VisibleTreeRow;
 
 pub fn view_tree_nav<'a>(
     state: &'a AppState,
-    registry: &'a CommandRegistry,
+    _registry: &'a CommandRegistry,
 ) -> Element<'a, Message> {
     let rows = state.tree_view.visible_rows(&state.nav_tree);
-    let mut list = column![text("Tasks").size(14)].spacing(4).padding(8);
+    let mut list = column![text("Tasks").size(14)].spacing(4);
 
     for row in rows {
-        let indent = row.depth as u16 * 16;
-        let prefix = if row.has_children {
-            if row.expanded { "▼ " } else { "▶ " }
-        } else {
-            "  "
-        };
-        let label = format!("{prefix}{}", row.node.label);
         let is_selected = row
             .node
             .command_id
             .is_some_and(|id| state.tree_view.selected_command_id == Some(id));
-
-        let mut item = button(text(label).size(13))
-            .width(Length::Fill)
-            .padding(Padding::from([4, 8]).left(f32::from(indent + 8)));
-
-        if is_selected {
-            item = item.style(button::primary);
-        }
-
-        if row.has_children {
-            let path_key = row.node.path_key.clone();
-            list = list.push(
-                row![
-                    item.on_press(Message::TreeToggleExpand(path_key)),
-                    if let Some(command_id) = row.node.command_id {
-                        button("Open")
-                            .on_press(Message::CommandSelected(command_id))
-                            .padding([4, 8])
-                    } else {
-                        button("").padding(0)
-                    }
-                ]
-                .spacing(4)
-                .width(Length::Fill),
-            );
-        } else if let Some(command_id) = row.node.command_id {
-            list = list.push(item.on_press(Message::CommandSelected(command_id)));
-        } else {
-            list = list.push(item.on_press(Message::TreeToggleExpand(row.node.path_key.clone())));
-        }
+        list = list.push(tree_row(&row, is_selected));
     }
 
-    let _ = registry;
     container(scrollable(list).height(Length::Fill))
         .width(Length::Fill)
         .height(Length::Fill)
+        .padding(PANEL_INSET)
+        .style(|theme: &Theme| panel_container(theme))
         .into()
 }
 
-pub fn view_main_tabs<'a>(active: MainTab) -> Element<'a, Message> {
+fn tree_row<'a>(row: &VisibleTreeRow, selected: bool) -> Element<'a, Message> {
+    let indent = container(space::horizontal()).width(f32::from(row.depth as u16 * 16));
+
+    let chevron_cell: Element<'a, Message> = if row.has_children {
+        container(chevron_icon_rotated(row.expanded))
+            .width(16)
+            .height(12)
+            .align_y(Alignment::Center)
+            .into()
+    } else {
+        container(space::horizontal()).width(16).into()
+    };
+
+    let accent: Element<'a, Message> = if selected {
+        container(space::horizontal())
+            .width(3)
+            .style(|theme: &Theme| tree_row_accent(theme))
+            .into()
+    } else {
+        container(space::horizontal()).width(0).into()
+    };
+
+    let label = text(row.node.label.clone()).size(13).style(move |theme: &Theme| {
+        text::Style {
+            color: Some(tree_row_text_color(theme, selected)),
+        }
+    });
+
+    let row_content = row![indent, chevron_cell, accent, label]
+        .spacing(4)
+        .align_y(Alignment::Center)
+        .width(Length::Fill)
+        .height(Length::Shrink);
+
+    let interactive = container(row_content)
+        .width(Length::Fill)
+        .height(Length::Shrink)
+        .padding(Padding::from(TREE_ROW_INSET))
+        .style(tree_row_container(selected));
+
+    let message = if row.has_children {
+        Message::TreeToggleExpand(row.node.path_key.clone())
+    } else if let Some(command_id) = row.node.command_id {
+        Message::CommandSelected(command_id)
+    } else {
+        Message::TreeToggleExpand(row.node.path_key.clone())
+    };
+
+    mouse_area(interactive)
+        .on_press(message)
+        .interaction(iced::mouse::Interaction::Pointer)
+        .into()
+}
+
+pub fn view_tab_bar<'a>(active: MainTab) -> Element<'a, Message> {
     row![
         tab_button("Options", MainTab::Options, active),
         tab_button("Terminal", MainTab::Terminal, active),
         tab_button("History", MainTab::History, active),
     ]
-    .spacing(6)
-    .padding([8, 12])
+    .spacing(0)
+    .height(Length::Shrink)
     .into()
 }
 
 fn tab_button<'a>(label: &'a str, tab: MainTab, active: MainTab) -> Element<'a, Message> {
-    let control = button(text(label).size(13)).padding([6, 12]);
-    if tab == active {
-        control
-            .style(button::primary)
-            .on_press(Message::TabSelected(tab))
-            .into()
-    } else {
-        control.on_press(Message::TabSelected(tab)).into()
-    }
+    let is_active = tab == active;
+    button(text(label).size(13))
+        .padding([8, 16])
+        .style(tab_button_style(is_active))
+        .on_press(Message::TabSelected(tab))
+        .into()
 }
 
 pub fn view_tab_content<'a>(
@@ -126,7 +136,7 @@ fn view_options_tab<'a>(
         text("Select a command from the tree.").size(14).into()
     };
 
-    scrollable(container(content).padding(12).width(Length::Fill))
+    scrollable(container(content).padding(PANEL_INSET).width(Length::Fill))
         .height(Length::Fill)
         .into()
 }
@@ -160,7 +170,7 @@ fn view_history_tab<'a>(state: &'a AppState) -> Element<'a, Message> {
         .push(scrollable(history_list).height(Length::Fill))
         .push(container(preview).width(Length::FillPortion(2)).height(Length::Fill));
 
-    container(layout).padding(12).into()
+    container(layout).padding(PANEL_INSET).into()
 }
 
 fn view_output_lines(lines: &[OutputLine]) -> Element<'static, Message> {
@@ -231,14 +241,18 @@ pub fn view_action_bar<'a>(
         actions = actions.push(button("Decline").on_press(Message::ActivationDecline));
     }
 
-    column![
-        progress_bar(0.0..=1.0, progress_value),
-        text(progress_label).size(12),
-        actions,
-    ]
-    .spacing(8)
-    .padding([8, 12])
+    container(
+        column![
+            progress_bar(0.0..=1.0, progress_value),
+            text(progress_label).size(12),
+            actions,
+        ]
+        .spacing(8)
+        .width(Length::Fill),
+    )
+    .padding(PANEL_INSET)
     .width(Length::Fill)
+    .style(|theme: &Theme| panel_container(theme))
     .into()
 }
 

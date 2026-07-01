@@ -14,10 +14,10 @@ use crate::repo_config::ConfigDriftItem;
 use crate::ui::FormValue;
 
 use super::panels::{
-    view_action_bar, view_activation_overlay, view_header, view_main_tabs, view_tab_content,
-    view_tree_nav,
+    view_action_bar, view_activation_overlay, view_tab_bar, view_tab_content, view_tree_nav,
 };
 use super::state::{ActivationPrompt, AppState, MainTab};
+use super::style::tab_content_panel;
 
 pub struct DharaApp {
     pub state: AppState,
@@ -110,11 +110,17 @@ pub fn run_gui(
     };
 
     let run_result = iced::application(boot, update, view)
-        .title("Dhara Tool")
+        .title(|app: &DharaApp| {
+            format!(
+                "Dhara Tool - v{} | {}",
+                crate::version(),
+                app.state.repository_label
+            )
+        })
         .subscription(subscription)
         .theme(Theme::Dark)
         .window(iced::window::Settings {
-            size: iced::Size::new(1200.0, 800.0),
+            size: iced::Size::new(960.0, 640.0),
             ..Default::default()
         })
         .exit_on_close_request(true)
@@ -230,35 +236,32 @@ fn update(app: &mut DharaApp, message: Message) -> Task<Message> {
 }
 
 fn view(app: &DharaApp) -> iced::Element<'_, Message> {
+    let tab_stack = column![
+        view_tab_bar(app.state.main_tab),
+        container(view_tab_content(&app.state, &app.registry))
+            .height(Length::Fill)
+            .width(Length::Fill)
+            .style(|theme: &Theme| tab_content_panel(theme)),
+    ]
+    .spacing(0)
+    .height(Length::Fill);
+
+    let right_column = column![tab_stack, view_action_bar(&app.state, &app.registry)]
+    .spacing(8)
+    .width(Length::FillPortion(5))
+    .height(Length::Fill);
+
     let body = row![
         container(view_tree_nav(&app.state, &app.registry))
             .width(Length::FillPortion(2))
-            .height(Length::Fill)
-            .padding(4),
-        container(
-            column![
-                view_main_tabs(app.state.main_tab),
-                container(view_tab_content(&app.state, &app.registry))
-                    .height(Length::FillPortion(3))
-                    .width(Length::Fill),
-                container(view_action_bar(&app.state, &app.registry))
-                    .height(Length::FillPortion(1))
-                    .width(Length::Fill),
-            ]
-            .spacing(4),
-        )
-        .width(Length::FillPortion(5))
-        .height(Length::Fill),
+            .height(Length::Fill),
+        right_column,
     ]
     .spacing(8)
-    .padding(8)
+    .padding(12)
     .height(Length::Fill);
 
-    let layout = column![view_header(&app.state), body]
-        .spacing(4)
-        .height(Length::Fill);
-
-    let main = container(layout)
+    let main = container(body)
         .width(Length::Fill)
         .height(Length::Fill);
 
