@@ -69,7 +69,7 @@
   </Target>
   <!-- Include native assets for supported runtimes -->
   <Target BeforeTargets="BeforeBuild" Condition="'$(StagedNativeRoot)' == ''" Name="BuildNativeLibrary">
-    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dharastorage $(NativeCargoArgs)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dharastorage-ffi $(NativeCargoArgs)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
   </Target>
   <Target Condition="'$(StagedNativeRoot)' == ''" BeforeTargets="Pack" Name="ValidatePackNativeAssets">
     <Error Text="Packing Dhara.Storage requires staged native assets for all supported 64-bit runtimes. Use the repo packaging flow." />

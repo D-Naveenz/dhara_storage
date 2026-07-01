@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Ensures target/dist/dhara_tool matches tooling/dhara_tool/Cargo.toml package.version.
-# Bump [tool].version in dhara.config.toml and package.version in tooling/dhara_tool/Cargo.toml together when shipping tool changes.
+# Ensures target/dist/dhara_tool matches tooling/dhara_tool/Cargo.toml workspace.package.version.
+# Bump [tool].version in dhara.config.toml and workspace.package.version in tooling/dhara_tool/Cargo.toml together when shipping tool changes.
 set -euo pipefail
 
 force=false
@@ -15,9 +15,9 @@ repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$repo_root"
 
 manifest="$repo_root/tooling/dhara_tool/Cargo.toml"
-expected_version="$(grep -E '^version\s*=' "$manifest" | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+expected_version="$(grep -A1 '^\[workspace\.package\]' "$manifest" | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
 if [[ -z "$expected_version" ]]; then
-  echo "missing package.version in $manifest" >&2
+  echo "missing workspace.package.version in $manifest" >&2
   exit 1
 fi
 

@@ -146,7 +146,7 @@ version bump to `0.8.0`, the next build starts again at `1`.
 
 At startup, `dhara_tool` reads the canonical output path, caches revision and version
 for logging and the GUI workspace snapshot, and updates the cache after each successful write.
-See [`tooling/dhara_tool/src/workspace.rs`](../tooling/dhara_tool/src/workspace.rs).
+See [`tooling/dhara_tool/crates/dhara_tool_kernel/src/workspace.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/workspace.rs).
 
 ## `tags` field
 

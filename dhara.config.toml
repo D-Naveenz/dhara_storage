@@ -2,7 +2,7 @@
 workspace = "0.8.0"
 
 [tool]
-version = "0.8.8"
+version = "0.8.9"
 
 [nuget]
 package_id = "Dhara.Storage"
@@ -18,15 +18,15 @@ tags = [
     "directory-management",
     "watching",
 ]
-readme = "src/bindings/Dhara.Storage/README.md"
+readme = "src/bindings/csharp/Dhara.Storage/README.md"
 icon = "assets/dhara-logo-colored_sm.png"
 repository_url = "https://github.com/D-Naveenz/dhara_storage"
 project_url = "https://github.com/D-Naveenz/dhara_storage"
 
 [ci]
-smoke_project = "src/bindings/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj"
-package_project = "src/bindings/Dhara.Storage/Dhara.Storage.csproj"
-tests_project = "src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
+smoke_project = "src/bindings/csharp/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj"
+package_project = "src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj"
+tests_project = "src/bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
 native_runtimes = [
     "win-x64",
     "win-arm64",

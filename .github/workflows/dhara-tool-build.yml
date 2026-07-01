@@ -74,7 +74,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version=$(grep -E '^version\s*=' tooling/dhara_tool/Cargo.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          version=$(grep -A1 '^\[workspace\.package\]' tooling/dhara_tool/Cargo.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore dhara_tool cache

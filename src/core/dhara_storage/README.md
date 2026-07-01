@@ -138,8 +138,8 @@ Deep references: [typed C ABI][typed-abi], [logging conventions][logging].
 
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
 [repo-dal]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage_dal
-[repo-dharastorage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/dharastorage
-[repo-nuget]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/Dhara.Storage
+[repo-dharastorage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/dharastorage-ffi
+[repo-nuget]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/csharp/Dhara.Storage
 [filedefs-dat]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/filedefs-dat.md
 [typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md
 [logging]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/logging.md

@@ -2,10 +2,17 @@
 members = [
     "src/core/dhara_storage_dal",
     "src/core/dhara_storage",
-    "src/dharastorage",
-    "tooling/dhara_tool",
+    "src/bindings/dharastorage-ffi",
+    "tooling/dhara_tool/crates/dhara_tool_kernel",
+    "tooling/dhara_tool/crates/dhara_tool_ops",
+    "tooling/dhara_tool/crates/dhara_tool_cli",
+    "tooling/dhara_tool/crates/dhara_tool_gui",
+    "tooling/dhara_tool/crates/dhara_tool",
 ]
 resolver = "3"
+
+[patch.crates-io]
+dhara_storage_dal = { path = "src/core/dhara_storage_dal" }
 
 [workspace.package]
 version = "0.8.0"

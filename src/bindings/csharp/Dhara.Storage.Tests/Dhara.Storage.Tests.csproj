@@ -35,7 +35,7 @@
   </ItemGroup>
 
   <Target Name="BuildNativeLibrary" BeforeTargets="BeforeBuild">
-    <Exec Command="cargo build -p dharastorage" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+    <Exec Command="cargo build -p dharastorage-ffi" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
   </Target>
 
   <Target Name="CopyNativeLibraryToOutput" AfterTargets="Build">

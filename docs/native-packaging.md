@@ -93,7 +93,7 @@ Staged natives must be added in a `Pack` target as `_PackageFiles` with an expli
 
 ```powershell
 $stage = (Resolve-Path target/dist/artifacts/native-stage).Path
-dotnet pack src/bindings/Dhara.Storage/Dhara.Storage.csproj `
+dotnet pack src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj `
   -c Release -p:StagedNativeRoot=$stage `
   --output target/dist/output/test-nuget
 ```
@@ -117,7 +117,7 @@ Directory watch integration tests should **poll for the created file path** afte
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |
-| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage -p dhara_tool` |
+| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p dhara_tool` |
 
 ## Related docs
 
@@ -125,16 +125,16 @@ Directory watch integration tests should **poll for the created file path** afte
 - [Logging conventions][logging] — `package.stage-native` and `verify.package` audit lines
 - [dhara.config.toml][dhara-config] — `ci.native_runtimes` and rust target mappings
 
-[readme-nuget]: ../src/bindings/Dhara.Storage/README.md
+[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [ci-cd]: ci-cd-pipelines.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [tooling-scripts]: ../tooling/scripts/
-[nuget-rs]: ../tooling/dhara_tool/src/nuget.rs
-[native-rids-rs]: ../tooling/dhara_tool/src/native_rids.rs
+[nuget-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/nuget.rs
+[native-rids-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
 [tool-build-yml]: ../.github/workflows/dhara-tool-build.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
-[csproj]: ../src/bindings/Dhara.Storage/Dhara.Storage.csproj
+[csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
 [watch-rs]: ../src/core/dhara_storage/src/watch.rs
 [logging]: logging.md
 [dhara-config]: ../dhara.config.toml

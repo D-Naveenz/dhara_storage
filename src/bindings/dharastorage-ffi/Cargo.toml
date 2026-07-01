@@ -1,5 +1,5 @@
 [package]
-name = "dharastorage"
+name = "dharastorage-ffi"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,12 +7,13 @@ repository.workspace = true
 homepage.workspace = true
 description = "Native C ABI wrapper for consuming Dhara Storage from .NET and other FFI clients."
 readme = "README.md"
-documentation = "https://github.com/D-Naveenz/dhara_storage/tree/main/src/dharastorage"
+documentation = "https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/dharastorage-ffi"
 keywords = ["ffi", "storage", "filesystem", "windows", "abi"]
 categories = ["filesystem", "external-ffi-bindings", "os::windows-apis"]
 publish = false
 
 [lib]
+name = "dharastorage"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

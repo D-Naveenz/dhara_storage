@@ -1,18 +1,20 @@
 # CI/CD Pipeline Flow
 
-Human-readable map of the [pipeline workflow][pipeline-yml], [dhara-tool-build workflow][tool-build-yml], and `dhara_tool` command touchpoints.
+Human-readable map of the four GitHub Actions workflows and `dhara_tool` command touchpoints.
 
 ## Triggers
 
 | Workflow | Event | Jobs |
 |----------|-------|------|
 | [pipeline.yml][pipeline-yml] | `pull_request` | `quality`, `platform-*`, `publish-readiness` |
-| [pipeline.yml][pipeline-yml] | `push` to `main` (non-docs) | `push-changes`, `publish` |
-| [pipeline.yml][pipeline-yml] | `workflow_dispatch` | `publish` |
 | [dhara-tool-build.yml][tool-build-yml] | `push` to `development` / `main` (tool paths) | `test-tool`, `build-tool` matrix |
 | [dhara-tool-build.yml][tool-build-yml] | `workflow_dispatch` (`force`) | `test-tool`, `build-tool` matrix |
+| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `publish` |
+| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `publish` |
+| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `publish` |
+| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `publish` |
 
-**Concurrency:** PR pipeline runs cancel in-progress; `push` to `main` does not.
+**Concurrency:** PR pipeline runs cancel in-progress; merge publishes do not.
 
 ## Architecture
 
@@ -39,18 +41,47 @@ flowchart TB
     PR --> ART[release artifacts]
   end
 
-  subgraph cd ["push main or dispatch"]
-    PUB[publish release run linux]
-    ART --> PUB
+  subgraph cd_cargo ["publish-crates.yml"]
+    FC[cargo_scope filter]
+    CR[cargo release linux]
+    FC --> CR
+  end
+
+  subgraph cd_nuget ["publish-nuget.yml"]
+    FN[nuget_scope filter]
+    NU[nuget release linux]
+    ART --> NU
+    FN --> NU
   end
 ```
 
+## Path-scoped merge publishes
+
+`dorny/paths-filter@v3` gates whether publish jobs run on `push` to `main`. `workflow_dispatch` always runs (escape hatch when automation skipped a merge).
+
+| Filter | Paths (illustrative) | Skips when merge only touches |
+|--------|----------------------|-------------------------------|
+| **cargo_scope** | `src/core/dhara_storage/**`, `src/core/dhara_storage_dal/**`, `dhara.config.toml`, root `Cargo.toml` / `Cargo.lock` | `tooling/**`, `docs/**`, bindings-only, markdown |
+| **nuget_scope** | `src/core/**`, `src/bindings/**`, `dhara.config.toml`, root manifests | `tooling/**`, `docs/**`, pure markdown |
+
+| Merge diff example | `publish-crates` | `publish-nuget` |
+|--------------------|------------------|-----------------|
+| Docs / README only | skip | skip |
+| `tooling/dhara_tool` only | skip | skip |
+| Core crate + defs dat | run | run |
+| C# bindings only | skip | run |
+| FFI (`dharastorage-ffi`) only | skip | run |
+| `dhara.config.toml` version bump | run | run |
+
+NuGet CD still **requires PR artifacts** from `publish-readiness` at merge second parent (`HEAD^2`). Path filters gate *attempt*; they do not replace the artifact contract.
+
 ## Tool versioning and cache
 
-- **Source of truth:** `version` in [`tooling/dhara_tool/Cargo.toml`](../tooling/dhara_tool/Cargo.toml) (independent of workspace library semver).
+- **Source of truth:** `[workspace.package].version` in [`tooling/dhara_tool/Cargo.toml`](../tooling/dhara_tool/Cargo.toml) (independent of workspace library semver).
 - **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — must match `tooling/dhara_tool/Cargo.toml` in git; activation propagates config into manifests on run (`--yes` in CI).
 - **Policy:** any change under `tooling/dhara_tool/**` must bump the tool version; cache key is `dhara-tool-{version}-{os-arch}` with no source hash.
 - **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
+- **DAL coupling:** `dhara-tool-build` compiles against **crates.io** `dhara_storage_dal` (local `[patch.crates-io]` applies only in full workspace dev builds).
 
 ## Responsibility split
 
@@ -60,7 +91,8 @@ flowchart TB
 | `quality test-rust` / `test-dotnet` | Cached `dhara_tool` (`platform-*`; `test-dotnet` Windows only) |
 | `package stage-native` | Per-OS runner (`--msvc-env` on `platform-windows` only) |
 | `native merge` / `verify package` | `ubuntu-latest` + `linux-x64` cached `dhara_tool` (`publish-readiness`) |
-| `release run` (CD) | `ubuntu-latest` + `linux-x64` cached `dhara_tool` |
+| `release run --skip-nuget` (CD) | `ubuntu-latest` + `linux-x64` cached `dhara_tool` (`publish-crates`) |
+| `release run --skip-cargo --prepacked-nuget` (CD) | `ubuntu-latest` + `linux-x64` + `nuget-production` (`publish-nuget`) |
 | `dharastorage` native compiles | Inside `package stage-native` (per OS, not cached) |
 
 Local developers: `cargo run -p dhara_tool -- quality run` or [verify-local][verify-local-ps1] (forwards to `cargo run`).
@@ -94,12 +126,19 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 3. `dhara_tool verify package` (default stage under dist `tool_root`)
 4. Upload `release-native-stage`, `release-nuget-package` (`target/dist/output/nuget/`), `release-metadata` (90-day retention)
 
-## CD job: `publish`
+## CD: `publish-crates`
 
-1. Resolve artifact commit (`HEAD^2` for merge commits; `event.before^2` for direct main hotfixes) — see [native packaging][native-packaging].
-2. Download PR CI artifacts for that commit.
-3. Restore cached `linux-x64` `dhara_tool` on `ubuntu-latest`.
-4. `dhara_tool release run --prepacked-nuget …` (no native rebuild / re-verify).
+1. `detect-changes` — `cargo_scope` filter (or always on `workflow_dispatch`).
+2. Restore cached `linux-x64` `dhara_tool`.
+3. `dhara_tool release run --skip-nuget` (`CARGO_REGISTRY_TOKEN`).
+
+## CD: `publish-nuget`
+
+1. `detect-changes` — `nuget_scope` filter (or always on `workflow_dispatch`).
+2. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
+3. Download PR CI artifacts for that commit.
+4. Restore cached `linux-x64` `dhara_tool` on `ubuntu-latest`.
+5. `dhara_tool release run --skip-cargo --prepacked-nuget …` (`NUGET_API_KEY`, `nuget-production` environment).
 
 ## `dhara-tool-build` workflow
 
@@ -109,7 +148,7 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
    - On cache hit → exit (no compile).
    - On miss → `cargo build -p dhara_tool --profile dist`, smoke `--version`, save cache.
 
-**Local parity:** [`ensure-dhara-tool-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] use the same version gate (`Cargo.toml` vs `target/dist/dhara_tool --version`). Rebuild only on missing binary or version mismatch; `-Force` / `--force` for manual refresh.
+**Local parity:** [`ensure-dhara-tool-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] use the same version gate (`workspace.package.version` vs `target/dist/dhara_tool --version`). Rebuild only on missing binary or version mismatch; `-Force` / `--force` for manual refresh.
 
 ## Scripts
 
@@ -120,6 +159,7 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 
 ## Related docs
 
+- [Workspace architecture][architecture] — tool crate DAG, DAL coupling
 - [Multi-platform native packaging][native-packaging] — RID staging rules, artifact SHA pitfalls
 - [Logging conventions][logging] — audit logs under `{tool_root}/logs/` (e.g. `target/dist/logs/`)
 - [dhara_tool README][readme-tool] — full command surface
@@ -127,6 +167,8 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 
 [pipeline-yml]: ../.github/workflows/pipeline.yml
 [tool-build-yml]: ../.github/workflows/dhara-tool-build.yml
+[publish-crates-yml]: ../.github/workflows/publish-crates.yml
+[publish-nuget-yml]: ../.github/workflows/publish-nuget.yml
 [workspace-cargo]: ../Cargo.toml
 [verify-local-ps1]: ../tooling/scripts/verify-local.ps1
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
@@ -134,5 +176,6 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 [ensure-dist-sh]: ../tooling/scripts/ensure-dhara-tool-dist.sh
 [logging]: logging.md
 [native-packaging]: native-packaging.md
+[architecture]: architecture.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [docs-index]: README.md

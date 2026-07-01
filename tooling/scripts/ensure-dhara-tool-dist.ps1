@@ -1,5 +1,5 @@
-# Ensures target/dist/dhara_tool matches tooling/dhara_tool/Cargo.toml package.version.
-# Bump [tool].version in dhara.config.toml and package.version in tooling/dhara_tool/Cargo.toml together when shipping tool changes.
+# Ensures target/dist/dhara_tool matches tooling/dhara_tool/Cargo.toml workspace.package.version.
+# Bump [tool].version in dhara.config.toml and workspace.package.version in tooling/dhara_tool/Cargo.toml together when shipping tool changes.
 param(
     [switch] $Force
 )
@@ -11,8 +11,8 @@ Set-Location $repoRoot
 
 $manifestPath = Join-Path $repoRoot "tooling\dhara_tool\Cargo.toml"
 $manifestContent = Get-Content $manifestPath -Raw
-if ($manifestContent -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
-    throw "missing package.version in $manifestPath"
+if ($manifestContent -notmatch '(?ms)\[workspace\.package\][^\[]*?version\s*=\s*"([^"]+)"') {
+    throw "missing workspace.package.version in $manifestPath"
 }
 $expectedVersion = $Matches[1]
 

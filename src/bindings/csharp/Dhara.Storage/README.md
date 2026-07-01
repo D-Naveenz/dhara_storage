@@ -102,7 +102,7 @@ Upload directly to Skia, ImageSharp, or similar. Encode to PNG in managed code i
 From the workspace root (Windows):
 
 ```powershell
-dotnet test src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj
+dotnet test src/bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj
 ./tooling/scripts/verify-local.ps1
 ```
 
@@ -113,7 +113,7 @@ Full five-RID package verification runs in CI after per-OS native merge — see 
 Part of the [Dhara Storage workspace][repo-root]. NuGet package licensed under Apache-2.0.
 
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
-[repo-dharastorage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/dharastorage
+[repo-dharastorage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/dharastorage-ffi
 [repo-tool]: https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool
 [typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md
 [ci-cd]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/ci-cd-pipelines.md

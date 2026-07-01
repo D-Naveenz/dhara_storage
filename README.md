@@ -34,10 +34,11 @@ dhara_storage/
 │   ├── core/
 │   │   ├── dhara_storage/       # Rust runtime (crates.io)
 │   │   └── dhara_storage_dal/   # FlatBuffers DAL (crates.io)
-│   ├── dharastorage/            # C ABI for FFI hosts
-│   └── bindings/Dhara.Storage/  # NuGet package source
+│   ├── bindings/
+│   │   ├── dharastorage-ffi/    # C ABI (`dharastorage` cdylib)
+│   │   └── csharp/              # Dhara.Storage NuGet source
 ├── tooling/
-│   ├── dhara_tool/              # Operator CLI
+│   ├── dhara_tool/              # Operator CLI (nested workspace)
 │   ├── scripts/                 # ensure-dhara-tool-dist, verify-local (dist quality run)
 │   └── output/                  # staged packages (gitignored)
 ├── docs/                        # technical reference
@@ -130,7 +131,7 @@ cargo run -p dhara_tool -- release run --dry-run
 # Per-crate Rust tests
 cargo test -p dhara_storage --all-features
 cargo test -p dhara_storage_dal
-cargo test -p dharastorage
+cargo test -p dharastorage-ffi
 
 # NuGet package verification (after native staging)
 cargo run -p dhara_tool -- verify package
@@ -148,8 +149,8 @@ Licensed under [Apache-2.0][license]. See per-crate `Cargo.toml` and the NuGet p
 
 [readme-dhara-storage]: src/core/dhara_storage/README.md
 [readme-dal]: src/core/dhara_storage_dal/README.md
-[readme-dharastorage]: src/dharastorage/README.md
-[readme-nuget]: src/bindings/Dhara.Storage/README.md
+[readme-dharastorage]: src/bindings/dharastorage-ffi/README.md
+[readme-nuget]: src/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: tooling/dhara_tool/README.md
 [verify-local]: tooling/scripts/verify-local.ps1
 [env-example]: .env.example

@@ -40,7 +40,7 @@ ABI design rules and ownership patterns: [typed C-compatible ABI reference][type
 Build from the workspace root:
 
 ```powershell
-cargo build -p dharastorage --release
+cargo build -p dharastorage-ffi --release
 ```
 
 Multi-RID packaging uses [dhara_tool `package stage-native`][repo-tool] and [`native merge`][repo-tool] in CI — see [CI/CD reference][ci-cd].
@@ -76,8 +76,8 @@ Hosts register a logger with `dhara_register_logger` to receive UTF-8 JSON log r
 ## ✅ Testing & Quality Assurance
 
 ```powershell
-cargo test -p dharastorage
-cargo clippy -p dharastorage --all-targets -- -D warnings
+cargo test -p dharastorage-ffi
+cargo clippy -p dharastorage-ffi --all-targets -- -D warnings
 ```
 
 Integration coverage also runs through [Dhara.Storage.Tests][repo-nuget] on Windows CI.
@@ -88,7 +88,7 @@ Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
 
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
 [repo-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage
-[repo-nuget]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/Dhara.Storage
+[repo-nuget]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/csharp/Dhara.Storage
 [repo-tool]: https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool
 [typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md
 [ci-cd]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/ci-cd-pipelines.md

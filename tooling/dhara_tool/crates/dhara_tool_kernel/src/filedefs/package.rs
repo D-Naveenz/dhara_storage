@@ -1,0 +1,582 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use dhara_storage_dal::{
+    DEFINITION_PACKAGE_IDENTIFIER, DEFINITION_PACKAGE_SIGNATURE, DefinitionPackage,
+    bundled_definition_package, decode_definition_package, encode_definition_package,
+};
+use thiserror::Error;
+use tracing::debug;
+
+use crate::workspace::record_package_written;
+
+pub use crate::filedefs::trid::{
+    ReduceTraceDetail, TridBuildProgress, TridBuildStage, TridBuildStats, TridTransformReport,
+    build_trid_xml_package_with_progress,
+};
+
+#[derive(Debug, Error)]
+pub enum BuilderError {
+    #[error("failed to {operation} '{path}': {source}")]
+    Io {
+        operation: &'static str,
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
+
+    #[error("package error: {message}")]
+    Package { message: String },
+
+    #[error("failed to parse TrID XML '{path}': {message}")]
+    Xml { path: PathBuf, message: String },
+
+    #[error("invalid hex sequence '{value}' in '{path}'")]
+    InvalidHex { path: PathBuf, value: String },
+
+    #[error("unsupported TrID source '{path}': expected a .7z archive, .xml file, or directory")]
+    UnsupportedSource { path: PathBuf },
+
+    #[error("archive tool '{tool}' is not available on PATH")]
+    ArchiveToolUnavailable { tool: &'static str },
+
+    #[error("failed to {operation} archive '{path}': {message}")]
+    ArchiveCommand {
+        operation: &'static str,
+        path: PathBuf,
+        message: String,
+    },
+
+    #[error("missing definitions release sidecar manifest at '{path}'")]
+    MissingDefinitionsRelease { path: PathBuf },
+
+    #[error("invalid definitions release in '{path}': {message}")]
+    InvalidDefinitionsRelease { path: PathBuf, message: String },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PackageSummary {
+    pub(crate) signature: String,
+    pub(crate) package_id: String,
+    pub(crate) package_version: String,
+    pub(crate) definitions_release: String,
+    pub(crate) package_revision: u16,
+    pub(crate) tags: u32,
+    pub(crate) definition_count: usize,
+}
+
+impl PackageSummary {
+    pub(crate) fn from_loaded(loaded: &LoadedPackage) -> Self {
+        Self {
+            signature: DEFINITION_PACKAGE_SIGNATURE.to_owned(),
+            package_id: DEFINITION_PACKAGE_IDENTIFIER.to_owned(),
+            package_version: loaded.package.package_version.clone(),
+            definitions_release: loaded.package.definitions_release.clone(),
+            package_revision: loaded.package.package_revision,
+            tags: loaded.package.tags,
+            definition_count: loaded.package.definitions.len(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LoadedPackage {
+    pub(crate) package: DefinitionPackage,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncEmbeddedStatus {
+    Skipped,
+    UpToDate,
+    Updated,
+    NeedsUpdate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncEmbeddedOutcome {
+    pub(crate) input: PathBuf,
+    pub(crate) output: PathBuf,
+    pub(crate) status: SyncEmbeddedStatus,
+    pub(crate) package_version: Option<String>,
+    pub(crate) detail: String,
+}
+
+pub fn load_package(path: impl AsRef<Path>) -> Result<LoadedPackage, BuilderError> {
+    let path = path.as_ref();
+    debug!(path = %path.display(), "loading definitions package");
+    let bytes = fs::read(path).map_err(|source| BuilderError::Io {
+        operation: "read package",
+        path: path.to_path_buf(),
+        source,
+    })?;
+    let package = decode_definition_package(&bytes).map_err(|err| BuilderError::Package {
+        message: err.to_string(),
+    })?;
+    Ok(LoadedPackage { package })
+}
+
+pub fn load_bundled_package() -> Result<DefinitionPackage, BuilderError> {
+    debug!("loading bundled runtime definitions package");
+    bundled_definition_package()
+        .cloned()
+        .map_err(|err| BuilderError::Package {
+            message: err.to_string(),
+        })
+}
+
+pub fn write_package(
+    package: &DefinitionPackage,
+    path: impl AsRef<Path>,
+) -> Result<PathBuf, BuilderError> {
+    let path = path.as_ref().to_path_buf();
+    debug!(path = %path.display(), "writing definitions package");
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|source| BuilderError::Io {
+            operation: "create output directory for",
+            path: parent.to_path_buf(),
+            source,
+        })?;
+    }
+
+    let bytes = encode_definition_package(package);
+    debug!(
+        bytes = bytes.len(),
+        definitions = package.definitions.len(),
+        "encoded definitions package"
+    );
+    fs::write(&path, bytes).map_err(|source| BuilderError::Io {
+        operation: "write package",
+        path: path.clone(),
+        source,
+    })?;
+    record_package_written(&path, package);
+    Ok(path)
+}
+
+pub fn normalize_package(
+    input: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+) -> Result<PathBuf, BuilderError> {
+    debug!("normalizing definitions package");
+    let package = load_package(input)?;
+    write_package(&package.package, output)
+}
+
+pub fn packages_match(
+    left: impl AsRef<Path>,
+    right: impl AsRef<Path>,
+) -> Result<bool, BuilderError> {
+    debug!("comparing definitions packages");
+    let left = load_package(left)?;
+    let right = load_package(right)?;
+    Ok(left.package == right.package)
+}
+
+pub fn inspect_package(path: impl AsRef<Path>) -> Result<PackageSummary, BuilderError> {
+    debug!("inspecting definitions package");
+    let package = load_package(path)?;
+    Ok(PackageSummary::from_loaded(&package))
+}
+
+pub fn sync_embedded_package<F>(
+    input: impl AsRef<Path>,
+    output: impl AsRef<Path>,
+    check_only: bool,
+    mut progress: F,
+) -> Result<SyncEmbeddedOutcome, BuilderError>
+where
+    F: FnMut(TridBuildProgress),
+{
+    let input = input.as_ref().to_path_buf();
+    let output = output.as_ref().to_path_buf();
+    debug!(
+        input = %input.display(),
+        output = %output.display(),
+        check_only,
+        "syncing embedded definitions package"
+    );
+
+    if !input.exists() {
+        return Ok(SyncEmbeddedOutcome {
+            input,
+            output,
+            status: SyncEmbeddedStatus::Skipped,
+            package_version: None,
+            detail: "TrID archive was not available; skipped embedded package refresh".to_string(),
+        });
+    }
+
+    let build = crate::filedefs::trid::build_trid_xml_package_with_progress(&input, |update| {
+        progress(update);
+    })?;
+    let desired_package = build.package;
+    let desired_version = desired_package.package_version.clone();
+
+    let current_state = match load_package(&output) {
+        Ok(current) => current_validity_reason(&current, &desired_package),
+        Err(error) if output.exists() => {
+            Some(format!("current embedded package is invalid: {error}"))
+        }
+        Err(_) => Some("embedded package is missing".to_string()),
+    };
+
+    let Some(reason) = current_state else {
+        return Ok(SyncEmbeddedOutcome {
+            input,
+            output,
+            status: SyncEmbeddedStatus::UpToDate,
+            package_version: Some(desired_version),
+            detail: "embedded package is already current".to_string(),
+        });
+    };
+
+    if check_only {
+        return Ok(SyncEmbeddedOutcome {
+            input,
+            output,
+            status: SyncEmbeddedStatus::NeedsUpdate,
+            package_version: Some(desired_version),
+            detail: reason,
+        });
+    }
+
+    write_package(&desired_package, &output)?;
+    Ok(SyncEmbeddedOutcome {
+        input,
+        output,
+        status: SyncEmbeddedStatus::Updated,
+        package_version: Some(desired_version),
+        detail: reason,
+    })
+}
+
+fn packages_match_content(left: &DefinitionPackage, right: &DefinitionPackage) -> bool {
+    left.definitions_release == right.definitions_release
+        && left.tags == right.tags
+        && left.definitions == right.definitions
+}
+
+fn current_validity_reason(current: &LoadedPackage, desired: &DefinitionPackage) -> Option<String> {
+    if packages_match_content(&current.package, desired) {
+        return None;
+    }
+    if current.package.definitions_release != desired.definitions_release {
+        return Some(format!(
+            "definitions release mismatch: current='{}', desired='{}'",
+            current.package.definitions_release, desired.definitions_release
+        ));
+    }
+    Some("definition payload differs from desired build".to_owned())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    use tempfile::tempdir;
+
+    use super::{
+        PackageSummary, SyncEmbeddedStatus, load_bundled_package, normalize_package,
+        packages_match, sync_embedded_package, write_package,
+    };
+
+    use dhara_storage_dal::{DEFINITION_PACKAGE_SIGNATURE, PACKAGE_VERSION};
+
+    fn fixtures_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../tests")
+            .join("fixtures")
+            .join("trid_xml")
+    }
+
+    fn write_source_sidecar(source: &Path) {
+        let parent = source.parent().unwrap_or_else(|| Path::new("."));
+        let stem = source
+            .file_stem()
+            .or_else(|| source.file_name())
+            .map(|value| value.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "filedefs".to_owned());
+        fs::write(
+            parent.join(format!("{stem}.source.toml")),
+            "definitions_release = \"2026-06-24\"\n",
+        )
+        .expect("source sidecar should be written");
+    }
+
+    fn write_archive_sidecar(dir: &Path) {
+        fs::write(
+            dir.join("triddefs_xml.source.toml"),
+            "definitions_release = \"2026-06-24\"\n",
+        )
+        .expect("archive sidecar should be written");
+    }
+
+    #[test]
+    fn bundled_package_has_expected_summary() {
+        let package = load_bundled_package().expect("bundled package should load");
+        assert_eq!(package.package_version, PACKAGE_VERSION);
+        assert!(!package.definitions.is_empty());
+    }
+
+    #[test]
+    fn normalize_roundtrip_preserves_semantics() {
+        let temp = tempdir().unwrap();
+        let original = temp.path().join("original.dat");
+        let normalized = temp.path().join("normalized.dat");
+        let package = load_bundled_package().expect("bundled package should load");
+        write_package(&package, &original).expect("original package should be written");
+
+        normalize_package(&original, &normalized).expect("normalized package should be written");
+
+        assert!(packages_match(&original, &normalized).expect("packages should compare"));
+    }
+
+    #[test]
+    fn builds_package_from_fixture_directory() {
+        let package = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
+            .expect("fixture directory should build");
+
+        assert_eq!(package.tags, 48);
+        assert_eq!(package.definitions_release, "2026-06-24");
+        assert_eq!(package.package_revision, 1);
+        assert_eq!(package.package_version, PACKAGE_VERSION);
+        assert_eq!(package.definitions.len(), 3);
+    }
+
+    #[test]
+    fn builds_same_package_from_7z_archive() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let archive_path = temp.path().join("triddefs_xml.7z");
+
+        let status = Command::new("tar")
+            .arg("-a")
+            .arg("-cf")
+            .arg(&archive_path)
+            .arg("-C")
+            .arg(fixtures_root())
+            .arg("defs")
+            .status()
+            .expect("tar should be available for archive creation");
+        assert!(status.success(), "tar should create a 7z archive");
+        write_archive_sidecar(temp.path());
+
+        let from_directory = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
+            .expect("fixture directory should build");
+        let from_archive = crate::filedefs::trid::build_trid_xml_package(&archive_path)
+            .expect("fixture archive should build");
+
+        assert_eq!(from_archive, from_directory);
+    }
+
+    #[test]
+    fn inspects_trid_xml_source_without_writing_package() {
+        let report = crate::filedefs::trid::inspect_trid_xml_source(fixtures_root())
+            .expect("fixture directory should be inspectable");
+
+        assert_eq!(report.total_parsed, 3);
+        assert_eq!(report.mime_corrected, 0);
+        assert_eq!(report.mime_rejected, 0);
+        assert_eq!(report.extension_rejected, 0);
+        assert_eq!(report.signature_rejected, 0);
+        assert_eq!(report.final_trimmed, 0);
+        assert_eq!(report.final_kept, 3);
+    }
+
+    #[test]
+    fn malformed_mime_types_are_corrected() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let defs_dir = temp.path().join("defs").join("a");
+        fs::create_dir_all(&defs_dir).expect("fixture directory should be created");
+        fs::write(
+            defs_dir.join("broken_pdf.trid.xml"),
+            r#"<TrID ver="2.00">
+    <Info>
+        <FileType>Broken PDF</FileType>
+        <Ext>PDF</Ext>
+        <Mime>Applicaiton/PDF;</Mime>
+        <ExtraInfo>
+            <Rem></Rem>
+            <RefURL>https://example.com/pdf</RefURL>
+        </ExtraInfo>
+    </Info>
+    <General>
+        <FileNum>42</FileNum>
+    </General>
+    <FrontBlock>
+        <Pattern>
+            <Bytes>255044462D</Bytes>
+            <Pos>0</Pos>
+        </Pattern>
+    </FrontBlock>
+</TrID>"#,
+        )
+        .expect("fixture XML should be written");
+        write_source_sidecar(temp.path());
+
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(temp.path())
+            .expect("fixture should build");
+        let definition = build
+            .package
+            .definitions
+            .first()
+            .expect("definition should be present");
+
+        assert_eq!(definition.mime_type, "application/pdf");
+        assert_eq!(build.report.mime_corrected, 1);
+        assert_eq!(build.report.final_kept, 1);
+    }
+
+    #[test]
+    fn builder_writes_full_package_readable_by_runtime() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let output_path = temp.path().join("filedefs.dat");
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(fixtures_root())
+            .expect("fixture should build");
+
+        write_package(&build.package, &output_path).expect("package should be written");
+        let loaded = crate::filedefs::load_package(&output_path).expect("package should load");
+
+        assert_eq!(loaded.package, build.package);
+    }
+
+    #[test]
+    fn builder_writes_flatbuffers_packages_with_identifier() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let output_path = temp.path().join("filedefs.dat");
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(fixtures_root())
+            .expect("fixture should build");
+
+        write_package(&build.package, &output_path).expect("package should be written");
+        let bytes = fs::read(&output_path).expect("package bytes should be readable");
+        let loaded = crate::filedefs::load_package(&output_path).expect("package should load");
+
+        assert!(dhara_storage_dal::root_definition_package(&bytes).is_ok());
+        assert_eq!(loaded.package, build.package);
+    }
+
+    #[test]
+    fn inspect_package_reports_flatbuffers_metadata() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let output_path = temp.path().join("filedefs.dat");
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(fixtures_root())
+            .expect("fixture should build");
+        write_package(&build.package, &output_path).expect("package should be written");
+
+        let summary = super::inspect_package(&output_path).expect("summary should load");
+        assert_eq!(
+            summary,
+            PackageSummary {
+                signature: DEFINITION_PACKAGE_SIGNATURE.to_string(),
+                package_id: "DSFD".to_string(),
+                package_version: PACKAGE_VERSION.to_string(),
+                definitions_release: "2026-06-24".to_string(),
+                package_revision: 1,
+                tags: 48,
+                definition_count: 3,
+            }
+        );
+    }
+
+    #[test]
+    fn sync_embedded_skips_when_archive_is_missing() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let outcome = sync_embedded_package(
+            temp.path().join("missing.7z"),
+            temp.path().join("filedefs.dat"),
+            false,
+            |_| {},
+        )
+        .expect("sync should succeed");
+
+        assert_eq!(outcome.status, SyncEmbeddedStatus::Skipped);
+    }
+
+    #[test]
+    fn sync_embedded_updates_when_target_is_stale() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let archive_path = temp.path().join("triddefs_xml.7z");
+        let output_path = temp.path().join("filedefs.dat");
+
+        let status = Command::new("tar")
+            .arg("-a")
+            .arg("-cf")
+            .arg(&archive_path)
+            .arg("-C")
+            .arg(fixtures_root())
+            .arg("defs")
+            .status()
+            .expect("tar should create the fixture archive");
+        assert!(status.success(), "tar should create a 7z archive");
+        write_archive_sidecar(temp.path());
+
+        let mut package = crate::filedefs::trid::build_trid_xml_package(fixtures_root())
+            .expect("fixture should build");
+        package.definitions_release = "1970-01-01".to_owned();
+        write_package(&package, &output_path).expect("stale package should be written");
+
+        let outcome = sync_embedded_package(&archive_path, &output_path, false, |_| {})
+            .expect("sync should work");
+        assert_eq!(outcome.status, SyncEmbeddedStatus::Updated);
+
+        let loaded =
+            crate::filedefs::load_package(&output_path).expect("updated package should load");
+        assert_eq!(loaded.package.package_version, PACKAGE_VERSION);
+    }
+
+    #[test]
+    fn sync_embedded_check_reports_when_update_is_needed() {
+        let temp = tempdir().expect("temporary directory should exist");
+        let archive_path = temp.path().join("triddefs_xml.7z");
+        let output_path = temp.path().join("filedefs.dat");
+
+        let status = Command::new("tar")
+            .arg("-a")
+            .arg("-cf")
+            .arg(&archive_path)
+            .arg("-C")
+            .arg(fixtures_root())
+            .arg("defs")
+            .status()
+            .expect("tar should create the fixture archive");
+        assert!(status.success(), "tar should create a 7z archive");
+        write_archive_sidecar(temp.path());
+
+        let output = sync_embedded_package(&archive_path, &output_path, true, |_| {})
+            .expect("check should run");
+        assert_eq!(output.status, SyncEmbeddedStatus::NeedsUpdate);
+    }
+
+    #[test]
+    #[ignore = "slow smoke test over the real TrID XML archive"]
+    fn full_archive_build_stays_within_target_range() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("workspace root should exist")
+            .join("temp")
+            .join("trid-defs")
+            .join("triddefs_xml.7z");
+        assert!(source.exists(), "real TrID archive should be available");
+
+        let build = crate::filedefs::trid::build_trid_xml_package_with_report(&source)
+            .expect("real archive should be inspectable");
+        let report = &build.report;
+
+        assert!(
+            report.final_kept >= 4_500,
+            "final_kept={}",
+            report.final_kept
+        );
+        assert!(
+            report.final_kept <= 6_500,
+            "final_kept={}",
+            report.final_kept
+        );
+        assert!(build.package.definitions.iter().all(|definition| {
+            !definition.mime_type.is_empty()
+                && !definition.extensions.is_empty()
+                && !definition.signature.patterns.is_empty()
+        }));
+    }
+}
