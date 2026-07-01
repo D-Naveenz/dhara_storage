@@ -63,8 +63,7 @@ pub fn run() -> Result<()> {
         logs_dir: cli.logs_dir,
     };
 
-    let pending_activation =
-        run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
+    let pending_activation = run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
 
     ensure_workspace_state(&context);
 
