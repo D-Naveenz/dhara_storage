@@ -6,27 +6,48 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+_Pre-release fixes and polish before **0.9.0** ships._
+
+## [0.9.0] — planned
+
+Compared to [v0.8.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.8.0). Additional fixes are expected before publish.
+
 ### Added
 
+- **Monorepo bindings layout** — C ABI crate at `src/bindings/dharastorage-ffi` (package `dharastorage-ffi`, stable `dharastorage` lib/DLL name); .NET projects under `src/bindings/csharp/`.
+- **Nested `dhara_tool` workspace** — `dhara_tool_kernel`, `dhara_tool_ops`, `dhara_tool_cli`, `dhara_tool_gui`, and slim binary crate under `tooling/dhara_tool/crates/`.
+- **Split publish workflows** — `publish-crates.yml` and `publish-nuget.yml` with path-scoped triggers; `pipeline.yml` is PR-only (artifacts). `workflow_dispatch` remains the manual escape hatch.
+- **`docs/architecture.md`** — tool crate DAG, bindings layout, publish split, and registry DAL coupling.
+- **Interactive GUI** — `dhara_tool` replaces the TUI with an iced-based operator UI (tabs, tree navigation, command forms).
 - **Granular `dhara_tool` CI commands** — `quality *`, `native merge`, and `package stage-native --msvc-env` replace removed shell wrappers.
 - **Startup config activation** — on launch, `dhara_tool` detects manifest drift from `dhara.config.toml` and prompts to apply (`--yes`/`-y` for CI); replaces `config sync`.
 - **`dhara-tool-build` workflow** — version-keyed Actions cache builds `profile.dist` binaries per OS; pipeline jobs restore cached tools instead of compiling each run.
-- **Independent tool versioning** — `[tool].version` in `dhara.config.toml` pins CI cache; `tooling/dhara_tool/Cargo.toml` must match (update both together for tool-only bumps).
+- **Independent tool versioning** — `[tool].version` in `dhara.config.toml` pins CI cache; `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` must match (bump both together for tool-only releases).
 - **Local dist ensure scripts** — `ensure-dhara-tool-dist` builds `profile.dist` to `target/dist/` only when the binary is missing or `--version` ≠ manifest; VS Code tasks/launch split dev (`cargo run`) vs dist.
 
 ### Changed
 
+- **Workspace version** — `dhara_storage`, `dhara_storage_dal`, `dharastorage-ffi`, and NuGet package metadata bumped to **0.9.0**. `dhara_tool` stays on its own semver line (**0.8.9** at plan time; further tool patches expected before a 0.9.x tool release).
+- **Tool ↔ DAL coupling** — `dhara_tool_kernel` pins published `dhara_storage_dal` from crates.io; root `[patch.crates-io]` supports local co-development only.
 - **Build profiles** — removed `[profile.ci]`; operator CLI uses `[profile.dist]` (optimized, rare rebuilds on tool version bump).
-- **Pipeline** — PR/CD jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` ensures dist then runs `quality run` (CI parity).
+- **Pipeline** — PR jobs invoke `target/dist/dhara_tool` subcommands; `verify-local` ensures dist then runs `quality run` (CI parity).
 - **`dhara-tool-build`** — `cargo test -p dhara_tool` runs once on Linux; matrix legs only compile `profile.dist` per OS (binaries are not portable).
-- **Linux-primary orchestration** — `quality`, `publish-readiness`, and CD `publish` run on `ubuntu-latest` with `linux-x64` tool cache; `platform-windows` remains on `windows-latest` for MSVC native DLL builds.
+- **Linux-primary orchestration** — `quality`, `publish-readiness`, and CD publish jobs run on `ubuntu-latest` with `linux-x64` tool cache; `platform-windows` remains on `windows-latest` for MSVC native DLL builds.
 - **Operator output paths** — `dhara_tool` writes logs, scratch artifacts, and NuGet output under the executable directory (`{tool_root}/logs`, `{tool_root}/artifacts`, `{tool_root}/output`); e.g. `target/dist/logs/` when using the cached dist binary. Workspace sources (`filedefs.dat`, TrID package inputs) stay repo-relative.
-- **Config activation** — `dhara.config.toml` is truth for tool semver and workspace/NuGet metadata; manifests sync on confirmed startup (or `--yes`). `config sync` removed. Tool-only bumps: update `[tool].version` and `tooling/dhara_tool/Cargo.toml` together in one commit.
+- **Config activation** — `dhara.config.toml` is truth for workspace/NuGet metadata and tool semver; manifests sync on confirmed startup (or `--yes`). `config sync` removed. Tool-only bumps: update `[tool].version` and `tooling/dhara_tool/Cargo.toml` together in one commit.
+- **PR tool cache** — `restore-dhara-tool` builds `profile.dist` on cache miss so PR pipelines do not depend on caches warmed only on `development`/`main`.
+
+### Fixed
+
+- **FFI integration tests** — fixture path corrected after `dharastorage-ffi` move under `src/bindings/`.
+- **NuGet packaging** — icon asset relative path fixed after C# projects moved to `src/bindings/csharp/`.
+- **Quality gates** — `cargo` package name updated to `dharastorage-ffi` in fmt/clippy/test invocations.
 
 ### Removed
 
 - **`config sync` command** — replaced by startup activation (`--yes` in CI).
 - **Staging/release shell scripts** — `merge-native`, `stage-native-*`, `verify-package`, and `release-run-windows` scripts deleted in favor of `dhara_tool` commands.
+- **Monolithic CD `publish` job** — merge publishes live in `publish-crates.yml` and `publish-nuget.yml`.
 
 ## [0.8.0] — 2026-06-30
 
@@ -111,6 +132,7 @@ Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.
 
 Initial tagged release in this changelog series. See git history before `v0.6.0` for earlier changes.
 
+[0.9.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.8.0...development
 [0.8.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.6.0...v0.7.0
