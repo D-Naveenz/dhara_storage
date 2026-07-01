@@ -14,21 +14,22 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 - **Native merge** — combine per-OS `runtimes/**` trees before pack
 - **Package verify** — checks merged native layout before publish
 - **Release orchestration** — crates.io + NuGet publish with dry-run support
-- **Interactive TUI** — launch without a subcommand in a real terminal
+- **Interactive GUI** — launch without a subcommand when a graphical display is available
 
 ## 📦 Tech Stack & Architecture
 
 | Piece | Role |
 |-------|------|
 | Clap | Subcommand parsing (direct mode) |
-| Ratatui | Interactive operator TUI |
+| iced | Interactive operator GUI |
 | Rayon | Parallel TrID parse/reduce |
 | `dhara_storage_dal` | DSFD encode/decode for defs commands |
 
 ```
 dhara_tool/src/
 ├── commands/        # config, defs, quality, native, verify, package, release, version
-├── tui/             # interactive mode
+├── gui/             # interactive mode (iced)
+├── ui/              # shared form schema and command runner
 └── logging/         # audit log setup
 
 {tool_root}/         # directory containing the running binary (exe-relative)
@@ -51,11 +52,13 @@ From the workspace root:
 cargo run -p dhara_tool -- --help
 ```
 
-Launch the TUI (interactive mode — no subcommand, real TTY):
+Launch the GUI (interactive mode — no subcommand, graphical display available):
 
 ```powershell
 cargo run -p dhara_tool
 ```
+
+Without a display (CI pipe, headless SSH), the same command prints plain-text help.
 
 ## 🔧 Configuration & Environment Variables
 

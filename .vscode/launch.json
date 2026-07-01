@@ -4,7 +4,7 @@
     {
       "id": "dharaToolArgs",
       "type": "promptString",
-      "description": "dhara_tool CLI args after '--' (empty for TUI / no subcommand)",
+      "description": "dhara_tool CLI args after '--' (empty for GUI / no subcommand)",
       "default": ""
     }
   ],

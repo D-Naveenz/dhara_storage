@@ -25,10 +25,10 @@ pub fn is_repo_root(path: &Path) -> bool {
 
 /// Canonical directory containing the running `dhara_tool` executable (runtime output root).
 pub fn resolve_tool_root(current_exe: Option<PathBuf>, fallback: Option<PathBuf>) -> PathBuf {
-    if let Some(exe) = current_exe {
-        if let Some(parent) = exe.parent() {
-            return canonicalize_path(parent);
-        }
+    if let Some(exe) = current_exe
+        && let Some(parent) = exe.parent()
+    {
+        return canonicalize_path(parent);
     }
 
     fallback

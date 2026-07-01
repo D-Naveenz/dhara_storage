@@ -6,7 +6,7 @@ use anyhow::{Context, Result, bail};
 use crate::activation::run_activation;
 use crate::command::{CommandRegistry, RunMode, ToolCapability, ToolContext};
 use crate::paths::{is_repo_root, resolve_tool_root};
-use crate::tui::{can_launch, run_tui};
+use crate::gui::{can_launch_gui, run_gui};
 use crate::{DharaStorageCapability, ensure_workspace_state, log_session_end};
 
 pub fn run() -> Result<()> {
@@ -38,7 +38,7 @@ pub fn run() -> Result<()> {
 
     let run_mode = if !cli.command.is_empty() {
         RunMode::Direct
-    } else if can_launch() {
+    } else if can_launch_gui() {
         RunMode::Interactive
     } else {
         RunMode::Direct
@@ -63,8 +63,8 @@ pub fn run() -> Result<()> {
 
     ensure_workspace_state(&context);
 
-    match determine_launch_mode(!cli.command.is_empty(), can_launch()) {
-        LaunchMode::InteractiveTui => run_tui(&registry, &context, pending_activation)?,
+    match determine_launch_mode(!cli.command.is_empty(), can_launch_gui()) {
+        LaunchMode::InteractiveGui => run_gui(&registry, &context, pending_activation)?,
         LaunchMode::PlainHelp => print!("{}", help_text(&registry)),
         LaunchMode::DirectCommand => {
             let command_id = registry
@@ -92,16 +92,16 @@ pub fn run() -> Result<()> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LaunchMode {
-    InteractiveTui,
+    InteractiveGui,
     PlainHelp,
     DirectCommand,
 }
 
-fn determine_launch_mode(has_command: bool, interactive_terminal: bool) -> LaunchMode {
+fn determine_launch_mode(has_command: bool, interactive_gui: bool) -> LaunchMode {
     if has_command {
         LaunchMode::DirectCommand
-    } else if interactive_terminal {
-        LaunchMode::InteractiveTui
+    } else if interactive_gui {
+        LaunchMode::InteractiveGui
     } else {
         LaunchMode::PlainHelp
     }
@@ -306,7 +306,7 @@ fn help_text(registry: &CommandRegistry) -> String {
     format!(
         "Usage: dhara_tool [global-options] <command> [command-options]\n\n\
          Launch modes:\n\
-           interactive  no subcommand in a TTY — opens the guided TUI\n\
+           interactive  no subcommand with a graphical display — opens the operator GUI\n\
            direct       subcommand present — runs immediately (CI, agents, scripts)\n\n\
          Global options (may appear before or after the command):\n\
            --repo-root <path>\n\
@@ -336,15 +336,15 @@ mod tests {
     };
 
     #[test]
-    fn no_command_in_tty_uses_tui() {
+    fn no_command_with_gui_uses_interactive() {
         assert_eq!(
             determine_launch_mode(false, true),
-            LaunchMode::InteractiveTui
+            LaunchMode::InteractiveGui
         );
     }
 
     #[test]
-    fn no_command_without_tty_uses_plain_help() {
+    fn no_command_without_gui_uses_plain_help() {
         assert_eq!(determine_launch_mode(false, false), LaunchMode::PlainHelp);
     }
 

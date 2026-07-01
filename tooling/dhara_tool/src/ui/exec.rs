@@ -3,8 +3,6 @@ use std::thread::{self, JoinHandle};
 
 use crate::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
 
-// TODO(tui): wire progress panel for long-running TrID builds
-
 use crate::command::{CommandRegistry, CommandResult, RunMode, ToolContext};
 
 pub struct RunHandle {
