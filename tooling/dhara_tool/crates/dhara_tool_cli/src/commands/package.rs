@@ -1,10 +1,14 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+#[cfg(windows)]
+use anyhow::Context;
+use anyhow::{Result, bail};
 
 use crate::command::{CommandResult, ToolContext};
 use dhara_tool_kernel::paths::resolve_path_against_repo;
-use dhara_tool_ops::nuget::{PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host};
+use dhara_tool_ops::nuget::{
+    PackageOptions, pack as pack_package, publish as publish_package, stage_native_for_host,
+};
 use dhara_tool_ops::release::run as run_release;
 
 use super::{
