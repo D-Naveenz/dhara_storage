@@ -312,7 +312,7 @@ fn stage_native_assets(
             &[
                 "build".to_owned(),
                 "-p".to_owned(),
-                "dharastorage".to_owned(),
+                "dharastorage-ffi".to_owned(),
                 profile_flag.to_owned(),
                 "--target".to_owned(),
                 target.clone(),
