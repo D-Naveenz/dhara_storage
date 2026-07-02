@@ -37,18 +37,9 @@ jobs:
       - name: Setup Linux tool dependencies
         uses: ./.github/actions/setup-linux-tool-deps
 
-      - name: Read pinned tool version
-        id: tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore dhara_tool
         uses: ./.github/actions/restore-dhara-tool
         with:
-          tool-version: ${{ steps.tool.outputs.version }}
           os-arch: linux-x64
 
       - name: Quality checks
@@ -85,18 +76,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Read pinned tool version
-        id: tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore dhara_tool
         uses: ./.github/actions/restore-dhara-tool
         with:
-          tool-version: ${{ steps.tool.outputs.version }}
           os-arch: windows-x64
 
       - name: Platform tests and native staging
@@ -138,18 +120,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Read pinned tool version
-        id: tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore dhara_tool
         uses: ./.github/actions/restore-dhara-tool
         with:
-          tool-version: ${{ steps.tool.outputs.version }}
           os-arch: linux-x64
 
       - name: Platform tests and native staging
@@ -190,18 +163,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Read pinned tool version
-        id: tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore dhara_tool
         uses: ./.github/actions/restore-dhara-tool
         with:
-          tool-version: ${{ steps.tool.outputs.version }}
           os-arch: linux-arm64
 
       - name: Platform tests and native staging
@@ -237,18 +201,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Read pinned tool version
-        id: tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore dhara_tool
         uses: ./.github/actions/restore-dhara-tool
         with:
-          tool-version: ${{ steps.tool.outputs.version }}
           os-arch: osx-arm64
 
       - name: Platform tests and native staging
@@ -289,18 +244,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Read pinned tool version
-        id: tool
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
-
       - name: Restore dhara_tool
         uses: ./.github/actions/restore-dhara-tool
         with:
-          tool-version: ${{ steps.tool.outputs.version }}
           os-arch: linux-x64
 
       - name: Download native stages

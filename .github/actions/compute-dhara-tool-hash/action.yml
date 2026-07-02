@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Compute dhara_tool source hash
+description: Content hash of tracked inputs that affect dhara_tool dist builds
+
+outputs:
+  hash:
+    description: Short SHA256 of tool sources and workspace lock inputs
+    value: ${{ steps.hash.outputs.hash }}
+
+runs:
+  using: composite
+  steps:
+    - id: hash
+      shell: bash
+      run: |
+        set -euo pipefail
+        hash=$(
+          {
+            git ls-files 'tooling/dhara_tool'
+            git ls-files 'Cargo.toml' 'Cargo.lock'
+          } | sort -u | while read -r file; do
+            [ -f "$file" ] && sha256sum "$file"
+          done | sha256sum | awk '{print substr($1, 1, 16)}'
+        )
+        echo "hash=${hash}" >> "${GITHUB_OUTPUT}"

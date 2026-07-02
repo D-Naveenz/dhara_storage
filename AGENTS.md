@@ -29,9 +29,9 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 - PR/release pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) (PR artifacts only)
 - Tool cache build: [`.github/workflows/dhara-tool-build.yml`](.github/workflows/dhara-tool-build.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
-- Pipeline jobs restore cached `dhara_tool` (`target/dist/`) by `[tool].version`; they do not compile the tool per job.
+- Pipeline jobs restore cached `dhara_tool` (`target/dist/`) by **tool source hash** (`tooling/dhara_tool/**`, root `Cargo.toml`, `Cargo.lock`); they do not compile the tool per job unless the cache misses.
 - **Linux-primary orchestration:** `quality`, `publish-readiness`, and CD publish jobs use `ubuntu-latest` + `linux-x64` tool cache; only `platform-windows` stays on Windows for MSVC `stage-native`.
-- **Tool version bump required** for any `tooling/dhara_tool/**` change (cache is version-keyed).
+- **`dhara-tool-build`** runs on `pull_request` (tool paths) only — not on branch pushes. Cache invalidates when tool sources change; no version bump required for CI cache.
 - CD on merge reuses PR artifacts (`--prepacked-nuget`); use merge commits (not squash) so CD can resolve the PR branch tip (`HEAD^2`).
 - **Tool ↔ DAL:** `dhara_tool_kernel` pins published `dhara_storage_dal` from crates.io; root `[patch.crates-io]` for local co-dev only.
 

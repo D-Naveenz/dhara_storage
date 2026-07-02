@@ -113,7 +113,7 @@ Directory watch integration tests should **poll for the created file path** afte
 | Symptom | Likely cause | Check |
 |---------|--------------|-------|
 | `staged native asset missing before pack` | Merge produced empty `native-stage` | Verify `native merge` inputs include `runtimes/` |
-| `Tool vX not cached` on pipeline | `dhara-tool-build` not run for pinned version | Push tool changes to `development` with version bump |
+| Tool cache miss / slow pipeline restore | `dhara-tool-build` not run on PR or sources changed | Open/update a PR with tool-path changes; `restore-dhara-tool` rebuilds on miss |
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |

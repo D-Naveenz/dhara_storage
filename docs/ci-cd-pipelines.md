@@ -7,8 +7,7 @@ Human-readable map of the four GitHub Actions workflows and `dhara_tool` command
 | Workflow | Event | Jobs |
 |----------|-------|------|
 | [pipeline.yml][pipeline-yml] | `pull_request` | `quality`, `platform-*`, `publish-readiness` |
-| [dhara-tool-build.yml][tool-build-yml] | `push` to `development` / `main` (tool paths) | `test-tool`, `build-tool` matrix |
-| [dhara-tool-build.yml][tool-build-yml] | `pull_request` → `main` (tool paths) | `test-tool`, `build-tool` matrix |
+| [dhara-tool-build.yml][tool-build-yml] | `pull_request` (tool paths) | `test-tool`, `build-tool` matrix |
 | [dhara-tool-build.yml][tool-build-yml] | `workflow_dispatch` (`force`) | `test-tool`, `build-tool` matrix |
 | [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `publish` |
 | [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `publish` |
@@ -24,7 +23,7 @@ flowchart TB
   subgraph tool_build ["dhara-tool-build.yml"]
     TT[test_tool once on linux]
     TB[build_tool matrix per OS]
-    CACHE[Actions cache by tool version]
+    CACHE[Actions cache by tool source hash]
     TT --> TB --> CACHE
   end
 
@@ -76,13 +75,11 @@ flowchart TB
 
 NuGet CD still **requires PR artifacts** from `publish-readiness` at merge second parent (`HEAD^2`). Path filters gate *attempt*; they do not replace the artifact contract.
 
-## Tool versioning and cache
+## Tool cache and versioning
 
-- **Source of truth:** `[workspace.package].version` in [`tooling/dhara_tool/Cargo.toml`](../tooling/dhara_tool/Cargo.toml) (independent of workspace library semver).
-- **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — must match `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` for tool-only bumps; activation propagates config into manifests on run (`--yes` in CI).
-- **Policy:** any change under `tooling/dhara_tool/**` must bump the tool version; cache key is `dhara-tool-{version}-{os-arch}` with no source hash.
-- **Cache scope:** caches saved on `development` / `main` pushes are scoped to that branch. PRs targeting `main` do not see `development`-only caches — `dhara-tool-build` also runs on `pull_request` → `main` (tool paths) to warm PR-visible caches. `restore-dhara-tool` saves the cache after a miss build so later jobs and re-runs can hit it.
-- **PR cache miss:** `restore-dhara-tool` builds `profile.dist` when the versioned cache is unavailable, then saves it for the same key.
+- **Cache key:** `dhara-tool-{source-hash}-{os-arch}` where `source-hash` is a SHA256 prefix over tracked files under `tooling/dhara_tool/**` plus root `Cargo.toml` and `Cargo.lock` ([`compute-dhara-tool-hash`](../.github/actions/compute-dhara-tool-hash/action.yml)). Rebuilds happen when tool sources or those manifests change — no version bump required for cache invalidation.
+- **Version metadata:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) and `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` still track operator releases; activation syncs manifests on run (`--yes` in CI).
+- **PR warming:** [`dhara-tool-build.yml`](../.github/workflows/dhara-tool-build.yml) runs on `pull_request` (tool paths) and pre-builds the dist matrix. [`restore-dhara-tool`](../.github/actions/restore-dhara-tool/action.yml) builds on cache miss and saves under the same hash key.
 - **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
 - **DAL coupling:** `dhara-tool-build` compiles against **crates.io** `dhara_storage_dal` (local `[patch.crates-io]` applies only in full workspace dev builds).
 
@@ -104,7 +101,7 @@ Local developers: `cargo run -p dhara_tool -- quality run` or [verify-local][ver
 
 ### `quality` (linux)
 
-Restores `dhara-tool-{version}-linux-x64` on `ubuntu-latest`, then (all invocations use `--yes`):
+Restores `dhara-tool-{source-hash}-linux-x64` on `ubuntu-latest`, then (all invocations use `--yes`):
 
 - `dhara_tool --yes quality fmt --check`
 - `dhara_tool --yes quality clippy`
@@ -122,7 +119,7 @@ Upload `native-stage-{windows,linux,linux-arm64,macos}` from `target/dist/artifa
 
 ### `publish-readiness` (linux)
 
-On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
+On `ubuntu-latest`, restores `dhara-tool-{source-hash}-linux-x64`, then:
 
 1. Download per-OS native artifacts into `target/dist/artifacts/native-inputs/`
 2. `dhara_tool native merge --output target/dist/artifacts/native-stage --input …` (four inputs)
@@ -147,7 +144,8 @@ On `ubuntu-latest`, restores `dhara-tool-{version}-linux-x64`, then:
 
 1. **`test-tool`** (ubuntu-latest) — `cargo test -p dhara_tool` once. Platform-specific behavior (path resolution, MSVC re-exec) is covered by pipeline jobs on real runners, not duplicated here.
 2. **`build-tool` matrix** (windows-x64, linux-x64, linux-arm64, osx-arm64), after tests pass:
-   - Restore cache for `dhara-tool-{version}-{os-arch}`.
+   - Hash tracked tool sources (`compute-dhara-tool-hash`).
+   - Restore cache for `dhara-tool-{source-hash}-{os-arch}`.
    - On cache hit → exit (no compile).
    - On miss → `cargo build -p dhara_tool --profile dist`, smoke `--version`, save cache.
 

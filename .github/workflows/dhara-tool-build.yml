@@ -1,23 +1,14 @@
 name: dhara-tool-build
 
 on:
-  push:
-    branches: [development, main]
-    paths:
-      - tooling/dhara_tool/**
-      - Cargo.toml
-      - dhara.config.toml
-      - .github/workflows/dhara-tool-build.yml
-      - .github/actions/restore-dhara-tool/**
-      - .github/actions/setup-linux-tool-deps/**
   pull_request:
-    branches: [main]
     paths:
       - tooling/dhara_tool/**
       - Cargo.toml
-      - dhara.config.toml
+      - Cargo.lock
       - .github/workflows/dhara-tool-build.yml
       - .github/actions/restore-dhara-tool/**
+      - .github/actions/compute-dhara-tool-hash/**
       - .github/actions/setup-linux-tool-deps/**
   workflow_dispatch:
     inputs:
@@ -85,28 +76,22 @@ jobs:
         with:
           lfs: true
 
-      - name: Read tool version
-        id: tool-version
-        shell: bash
-        run: |
-          set -euo pipefail
-          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+      - name: Compute dhara_tool source hash
+        id: tool-hash
+        uses: ./.github/actions/compute-dhara-tool-hash
 
       - name: Restore dhara_tool cache
         id: tool-cache
         uses: actions/cache/restore@v4
         with:
           path: target/dist
-          key: dhara-tool-${{ steps.tool-version.outputs.version }}-${{ matrix.os-arch }}
-          restore-keys: |
-            dhara-tool-${{ steps.tool-version.outputs.version }}-
+          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-${{ matrix.os-arch }}
 
       - name: Skip build when cache is warm
         if: steps.tool-cache.outputs.cache-hit == 'true' && (github.event_name != 'workflow_dispatch' || inputs.force != true)
         shell: bash
         run: |
-          echo "Using cached dhara_tool v${{ steps.tool-version.outputs.version }} for ${{ matrix.os-arch }}."
+          echo "Using cached dhara_tool (hash ${{ steps.tool-hash.outputs.hash }}) for ${{ matrix.os-arch }}."
           "${{ matrix.binary }}" --version
 
       - name: Install Rust stable
@@ -133,11 +118,10 @@ jobs:
         run: |
           set -euo pipefail
           "${{ matrix.binary }}" --version
-          test "$("${{ matrix.binary }}" --version)" = "${{ steps.tool-version.outputs.version }}"
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
         uses: actions/cache/save@v4
         with:
           path: target/dist
-          key: dhara-tool-${{ steps.tool-version.outputs.version }}-${{ matrix.os-arch }}
+          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-${{ matrix.os-arch }}
