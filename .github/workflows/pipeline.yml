@@ -513,7 +513,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package
+          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package \
+            --native-stage target/dist/artifacts/native-stage
 
       - name: Write release metadata
         shell: bash
