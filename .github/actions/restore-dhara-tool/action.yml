@@ -22,6 +22,10 @@ runs:
         restore-keys: |
           dhara-tool-${{ inputs.tool-version }}-
 
+    - name: Setup Linux build dependencies
+      if: steps.tool-cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
+      uses: ./.github/actions/setup-linux-tool-deps
+
     - name: Build dhara_tool on cache miss
       if: steps.tool-cache.outputs.cache-hit != 'true'
       shell: bash
@@ -29,6 +33,13 @@ runs:
         set -euo pipefail
         echo "Cache miss for dhara-tool-${{ inputs.tool-version }}-${{ inputs.os-arch }}; building profile.dist."
         cargo build -p dhara_tool --profile dist
+
+    - name: Save dhara_tool cache after build
+      if: steps.tool-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: target/dist
+        key: dhara-tool-${{ inputs.tool-version }}-${{ inputs.os-arch }}
 
     - name: Require dhara_tool binary
       shell: bash

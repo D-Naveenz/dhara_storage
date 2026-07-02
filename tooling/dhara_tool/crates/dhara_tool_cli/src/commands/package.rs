@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 
 use crate::command::{CommandResult, ToolContext};
 use dhara_tool_kernel::paths::resolve_path_against_repo;

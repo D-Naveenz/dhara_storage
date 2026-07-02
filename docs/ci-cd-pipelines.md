@@ -8,6 +8,7 @@ Human-readable map of the four GitHub Actions workflows and `dhara_tool` command
 |----------|-------|------|
 | [pipeline.yml][pipeline-yml] | `pull_request` | `quality`, `platform-*`, `publish-readiness` |
 | [dhara-tool-build.yml][tool-build-yml] | `push` to `development` / `main` (tool paths) | `test-tool`, `build-tool` matrix |
+| [dhara-tool-build.yml][tool-build-yml] | `pull_request` → `main` (tool paths) | `test-tool`, `build-tool` matrix |
 | [dhara-tool-build.yml][tool-build-yml] | `workflow_dispatch` (`force`) | `test-tool`, `build-tool` matrix |
 | [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `publish` |
 | [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `publish` |
@@ -78,9 +79,10 @@ NuGet CD still **requires PR artifacts** from `publish-readiness` at merge secon
 ## Tool versioning and cache
 
 - **Source of truth:** `[workspace.package].version` in [`tooling/dhara_tool/Cargo.toml`](../tooling/dhara_tool/Cargo.toml) (independent of workspace library semver).
-- **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — must match `tooling/dhara_tool/Cargo.toml` in git; activation propagates config into manifests on run (`--yes` in CI).
+- **CI pin:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) — must match `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` for tool-only bumps; activation propagates config into manifests on run (`--yes` in CI).
 - **Policy:** any change under `tooling/dhara_tool/**` must bump the tool version; cache key is `dhara-tool-{version}-{os-arch}` with no source hash.
-- **PR cache miss:** `restore-dhara-tool` builds `profile.dist` when the versioned cache is unavailable (common on PRs from non-`main` branches). `dhara-tool-build` still owns warming the cache on `development` / `main`.
+- **Cache scope:** caches saved on `development` / `main` pushes are scoped to that branch. PRs targeting `main` do not see `development`-only caches — `dhara-tool-build` also runs on `pull_request` → `main` (tool paths) to warm PR-visible caches. `restore-dhara-tool` saves the cache after a miss build so later jobs and re-runs can hit it.
+- **PR cache miss:** `restore-dhara-tool` builds `profile.dist` when the versioned cache is unavailable, then saves it for the same key.
 - **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
 - **DAL coupling:** `dhara-tool-build` compiles against **crates.io** `dhara_storage_dal` (local `[patch.crates-io]` applies only in full workspace dev builds).
 

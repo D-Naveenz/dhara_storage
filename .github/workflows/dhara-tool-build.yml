@@ -6,7 +6,19 @@ on:
     paths:
       - tooling/dhara_tool/**
       - Cargo.toml
+      - dhara.config.toml
       - .github/workflows/dhara-tool-build.yml
+      - .github/actions/restore-dhara-tool/**
+      - .github/actions/setup-linux-tool-deps/**
+  pull_request:
+    branches: [main]
+    paths:
+      - tooling/dhara_tool/**
+      - Cargo.toml
+      - dhara.config.toml
+      - .github/workflows/dhara-tool-build.yml
+      - .github/actions/restore-dhara-tool/**
+      - .github/actions/setup-linux-tool-deps/**
   workflow_dispatch:
     inputs:
       force:
@@ -20,6 +32,10 @@ env:
 
 permissions:
   contents: read
+
+concurrency:
+  group: dhara-tool-build-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-tool:
@@ -74,7 +90,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          version=$(grep -A1 '^\[workspace\.package\]' tooling/dhara_tool/Cargo.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          version=$(grep -A2 '^\[tool\]' dhara.config.toml | grep -E '^\s*version\s*=' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Restore dhara_tool cache
@@ -102,6 +118,10 @@ jobs:
       - name: Cache Cargo dependencies
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)
         uses: Swatinem/rust-cache@v2
+
+      - name: Setup Linux build dependencies
+        if: (steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)) && runner.os == 'Linux'
+        uses: ./.github/actions/setup-linux-tool-deps
 
       - name: Build dhara_tool (dist profile)
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force == true)

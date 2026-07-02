@@ -34,6 +34,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup Linux tool dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
       - name: Read pinned tool version
         id: tool
         shell: bash
