@@ -15,21 +15,21 @@ flowchart LR
     M[macos: osx-arm64]
   end
 
-  subgraph merge ["publish-readiness (windows)"]
+  subgraph merge ["publish-readiness (linux)"]
     DL[download native-stage-* artifacts]
-    MG[merge-native.ps1]
-    VP[verify package]
+    MG[dhara_tool native merge]
+    VP[dhara_tool verify package]
   end
 
   W & L & LA & M --> DL --> MG --> VP
   VP --> NUPKG[Dhara.Storage.nupkg]
 ```
 
-Each platform job runs `package stage-native` via a [staging script][tooling-scripts], uploads a `native-stage-{os}` artifact, and exits. The `publish-readiness` job downloads all four artifacts, merges their `runtimes/**` trees, and runs `verify package` with the combined stage as `-p:StagedNativeRoot`.
+Each platform job runs `dhara_tool package stage-native` (with `--msvc-env` on Windows), uploads a `native-stage-{os}` artifact from `target/dist/artifacts/native-stage`, and exits. The `publish-readiness` job downloads all four artifacts, runs `native merge` into the same default stage directory, then `verify package` (no `--native-stage` when the merged tree matches the dist binary default).
 
 ## Expected layout
 
-After merge, `tooling/artifacts/native-stage` must contain:
+After merge, `target/dist/artifacts/native-stage` (dist `tool_root`) must contain:
 
 ```text
 runtimes/
@@ -60,46 +60,22 @@ runtimes/
 
 **Lesson:** treat `linux-arm64` like a separate platform job on `ubuntu-24.04-arm`, not as a cross-target from the x64 Linux job. The [pipeline][pipeline-yml] defines `platform-linux` (x64) and `platform-linux-arm64` (arm64) accordingly.
 
-## CI scripts and git file modes
-
-| Script | Platform | Must be executable in git |
-|--------|----------|---------------------------|
-| [stage-native-linux.sh][stage-native-linux] | Linux x64 | yes (`100755`) |
-| [stage-native-macos.sh][stage-native-macos] | macOS | yes |
-| [merge-native.sh][merge-native-sh] | Bash merge | yes |
-| [verify-local.sh][verify-local-sh] | Local parity | yes |
-
-**Lesson:** shell scripts committed from Windows default to mode `100644`. Linux CI invokes `./tooling/scripts/stage-native-linux.sh` directly; without the executable bit, the job fails with `Permission denied` (exit 126). Set modes with:
-
-```bash
-git update-index --chmod=+x tooling/scripts/stage-native-linux.sh
-```
-
 ## Merging native artifacts
 
-[merge-native.ps1][merge-native-ps1] (used in `publish-readiness`) copies each RID directory from every input stage:
+`publish-readiness` merges RID directories with `dhara_tool native merge` (paths are repo-relative):
 
-```powershell
-./tooling/scripts/merge-native.ps1 `
-  -Output tooling/artifacts/native-stage `
-  -StagePaths @(
-    'tooling/artifacts/native-inputs/native-stage-windows',
-    'tooling/artifacts/native-inputs/native-stage-linux',
-    'tooling/artifacts/native-inputs/native-stage-linux-arm64',
-    'tooling/artifacts/native-inputs/native-stage-macos'
-  )
+```bash
+dhara_tool native merge \
+  --output target/dist/artifacts/native-stage \
+  --input target/dist/artifacts/native-inputs/native-stage-windows \
+  --input target/dist/artifacts/native-inputs/native-stage-linux \
+  --input target/dist/artifacts/native-inputs/native-stage-linux-arm64 \
+  --input target/dist/artifacts/native-inputs/native-stage-macos
+
+dhara_tool verify package
 ```
 
-Use a **PowerShell array** (`@(...)`) for `-StagePaths`. Passing multiple bare paths after a single parameter name does not bind to `[string[]]` — only the first path is captured.
-
-### PowerShell `$Input` is reserved
-
-**Lesson:** never name a script parameter `$Input`. PowerShell reserves `$Input` for pipeline data. A `foreach ($stage in $Input)` loop over a parameter literally named `Input` iterates an **empty** pipeline buffer, so the merge appears to succeed while copying nothing. The parameter was renamed to `$StagePaths`.
-
-Symptoms when merge silently no-ops:
-
-- `verify package` reports `staged native asset missing before pack: ...\runtimes\win-x64\native\dharastorage.dll`
-- Or `native asset missing from package: runtimes/win-x64/native/dharastorage.dll` after pack
+Repeat `--input` once per downloaded artifact directory (each must contain a `runtimes/` folder). When the dist binary lives in `target/dist/`, `verify package` picks up `{tool_root}/artifacts/native-stage` by default — no `--native-stage` needed after merge.
 
 ## Packing staged natives into the NuGet
 
@@ -107,7 +83,7 @@ When `StagedNativeRoot` is set, [Dhara.Storage.csproj][csproj] skips local `carg
 
 ### Pass an absolute repository-root path
 
-`dhara_tool` resolves relative stage paths against the repo root before calling `dotnet pack` ([`absolute_native_stage_root`][nuget-rs]). MSBuild globs in the csproj are evaluated relative to the **project file**, not the working directory; a bare relative `tooling/artifacts/native-stage` from CI will not match files.
+`dhara_tool` resolves relative `--native-stage` paths against the **repo root** before calling `dotnet pack` ([`absolute_native_stage_root`][nuget-rs]). `native merge` `--output` / `--input` paths use the same repo-root rule. MSBuild globs in the csproj are evaluated relative to the **project file**, not the working directory; pass an absolute `StagedNativeRoot` in local `dotnet pack` smoke tests.
 
 ### Use `_PackageFiles`, not static `ItemGroup`
 
@@ -116,13 +92,13 @@ Staged natives must be added in a `Pack` target as `_PackageFiles` with an expli
 ### Local smoke test
 
 ```powershell
-$stage = (Resolve-Path tooling/artifacts/native-stage).Path
-dotnet pack src/bindings/Dhara.Storage/Dhara.Storage.csproj `
+$stage = (Resolve-Path target/dist/artifacts/native-stage).Path
+dotnet pack src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj `
   -c Release -p:StagedNativeRoot=$stage `
-  --output tooling/output/test-nuget
+  --output target/dist/output/test-nuget
 ```
 
-Inspect the nupkg for `runtimes/win-x64/native/dharastorage.dll` (and the other four RIDs).
+Inspect the nupkg for `runtimes/win-x64/native/dharastorage.dll` (and the other four RIDs). Packed release artifacts land in `target/dist/output/nuget/` when using the dist binary.
 
 ## Platform quirks (runtime and tests)
 
@@ -136,13 +112,12 @@ Directory watch integration tests should **poll for the created file path** afte
 
 | Symptom | Likely cause | Check |
 |---------|--------------|-------|
-| `Permission denied` on Linux staging script | Shell script not executable in git | `git ls-files -s tooling/scripts/*.sh` → `100755` |
+| `staged native asset missing before pack` | Merge produced empty `native-stage` | Verify `native merge` inputs include `runtimes/` |
+| Tool cache miss / slow pipeline restore | `dhara-tool-build` not run on PR or sources changed | Open/update a PR with tool-path changes; `restore-dhara-tool` rebuilds on miss |
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
-| `staged native asset missing before pack` | Merge produced empty `native-stage` | `$Input` parameter bug; verify `-StagePaths @(...)` |
-| `native asset missing from package` (PR CI) | Pack target did not include staged DLLs | Absolute `StagedNativeRoot`; `_PackageFiles` target in csproj |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |
-| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage -p dhara_tool` |
+| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p dhara_tool` |
 
 ## Related docs
 
@@ -150,19 +125,16 @@ Directory watch integration tests should **poll for the created file path** afte
 - [Logging conventions][logging] — `package.stage-native` and `verify.package` audit lines
 - [dhara.config.toml][dhara-config] — `ci.native_runtimes` and rust target mappings
 
-[readme-nuget]: ../src/bindings/Dhara.Storage/README.md
+[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [ci-cd]: ci-cd-pipelines.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [tooling-scripts]: ../tooling/scripts/
-[nuget-rs]: ../tooling/dhara_tool/src/nuget.rs
-[native-rids-rs]: ../tooling/dhara_tool/src/native_rids.rs
+[nuget-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/nuget.rs
+[native-rids-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
-[stage-native-linux]: ../tooling/scripts/stage-native-linux.sh
-[stage-native-macos]: ../tooling/scripts/stage-native-macos.sh
-[merge-native-sh]: ../tooling/scripts/merge-native.sh
-[merge-native-ps1]: ../tooling/scripts/merge-native.ps1
+[tool-build-yml]: ../.github/workflows/dhara-tool-build.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
-[csproj]: ../src/bindings/Dhara.Storage/Dhara.Storage.csproj
+[csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
 [watch-rs]: ../src/core/dhara_storage/src/watch.rs
 [logging]: logging.md
 [dhara-config]: ../dhara.config.toml

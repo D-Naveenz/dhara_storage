@@ -1,0 +1,24 @@
+[package]
+name = "dhara_tool"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Unified operator CLI for Dhara definitions, verification, packaging, and release workflows."
+readme = "../../README.md"
+documentation = "https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool"
+keywords = ["tooling", "release", "nuget", "verification", "defs"]
+categories = ["command-line-utilities", "development-tools"]
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+dhara_tool_cli = { path = "../dhara_tool_cli" }
+dhara_tool_gui = { path = "../dhara_tool_gui" }
+dhara_tool_kernel = { path = "../dhara_tool_kernel" }
+
+[dev-dependencies]
+tempfile = "3.27"
+
+[build-dependencies]

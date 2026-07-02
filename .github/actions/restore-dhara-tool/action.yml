@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Restore dhara_tool
+description: Restore a dhara_tool dist binary from Actions cache keyed by tool source hash, building on cache miss
+
+inputs:
+  os-arch:
+    description: Cache suffix for the runner OS/arch (e.g. windows-x64)
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Compute dhara_tool source hash
+      id: tool-hash
+      uses: ./.github/actions/compute-dhara-tool-hash
+
+    - name: Restore dhara_tool cache
+      id: tool-cache
+      uses: actions/cache/restore@v4
+      with:
+        path: target/dist
+        key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-${{ inputs.os-arch }}
+
+    - name: Setup Linux build dependencies
+      if: steps.tool-cache.outputs.cache-hit != 'true' && runner.os == 'Linux'
+      uses: ./.github/actions/setup-linux-tool-deps
+
+    - name: Build dhara_tool on cache miss
+      if: steps.tool-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Cache miss for dhara-tool-${{ steps.tool-hash.outputs.hash }}-${{ inputs.os-arch }}; building profile.dist."
+        cargo build -p dhara_tool --profile dist
+
+    - name: Save dhara_tool cache after build
+      if: steps.tool-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: target/dist
+        key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-${{ inputs.os-arch }}
+
+    - name: Require dhara_tool binary
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          bin="target/dist/dhara_tool.exe"
+        else
+          bin="target/dist/dhara_tool"
+        fi
+        if [ ! -f "$bin" ]; then
+          echo "::error::dhara_tool (${{ inputs.os-arch }}) is missing after cache restore and dist build."
+          exit 1
+        fi
+        chmod +x "$bin" 2>/dev/null || true
+        built="$("$bin" --version)"
+        echo "Using dhara_tool v${built} (${{ inputs.os-arch }}, source hash ${{ steps.tool-hash.outputs.hash }})."

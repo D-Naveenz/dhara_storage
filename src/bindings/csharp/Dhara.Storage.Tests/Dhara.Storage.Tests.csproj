@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
+    <NativeConfiguration>debug</NativeConfiguration>
+    <NativeLibFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">dharastorage.dll</NativeLibFileName>
+    <NativeLibFileName Condition="$([MSBuild]::IsOSPlatform('OSX'))">libdharastorage.dylib</NativeLibFileName>
+    <NativeLibFileName Condition="'$(NativeLibFileName)' == ''">libdharastorage.so</NativeLibFileName>
+    <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
+    <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.6.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="xunit.v3" Version="3.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Dhara.Storage\Dhara.Storage.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <Target Name="BuildNativeLibrary" BeforeTargets="BeforeBuild">
+    <Exec Command="cargo build -p dharastorage-ffi" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+  </Target>
+
+  <Target Name="CopyNativeLibraryToOutput" AfterTargets="Build">
+    <Copy SourceFiles="$(NativeLibPath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

@@ -1,123 +1,188 @@
 # CI/CD Pipeline Flow
 
-Human-readable map of the [pipeline workflow][pipeline-yml], [tooling scripts][tooling-scripts], and where `dhara_tool` is used.
+Human-readable map of the four GitHub Actions workflows and `dhara_tool` command touchpoints.
 
 ## Triggers
 
-| Event | Jobs |
-|-------|------|
-| `pull_request` | `quality`, `platform-*`, `publish-readiness` |
-| `push` to `main` (non-docs only) | `push-changes`, `publish` |
-| `workflow_dispatch` | `publish` (manual release) |
+| Workflow | Event | Jobs |
+|----------|-------|------|
+| [pipeline.yml][pipeline-yml] | `pull_request` | `quality`, `platform-*`, `publish-readiness` |
+| [dhara-tool-build.yml][tool-build-yml] | `pull_request` (tool paths) | `test-tool`, `build-tool` matrix |
+| [dhara-tool-build.yml][tool-build-yml] | `workflow_dispatch` (`force`) | `test-tool`, `build-tool` matrix |
+| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `publish` |
+| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `publish` |
+| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `publish` |
+| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `publish` |
 
-**Concurrency:** PR runs cancel in-progress; `push` to `main` does not.
+**Concurrency:** PR pipeline runs cancel in-progress; merge publishes do not.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-  subgraph pr ["pull_request"]
-    Q[quality native cargo]
+  subgraph tool_build ["dhara-tool-build.yml"]
+    TT[test_tool once on linux]
+    TB[build_tool matrix per OS]
+    CACHE[Actions cache by tool source hash]
+    TT --> TB --> CACHE
+  end
+
+  subgraph pr ["pipeline.yml pull_request"]
+    WAIT[wait for dhara_tool build when tool paths change]
+    RST[restore cached dhara_tool]
+    Q[quality linux]
     PW[platform windows]
     PL[platform linux x64]
     PLA[platform linux arm64]
     PM[platform macos]
-    PR[publish readiness]
+    PR[publish_readiness linux]
+    CACHE --> RST
+    WAIT --> RST
+    RST --> Q & PW & PL & PLA & PM & PR
     Q --> PW & PL & PLA & PM --> PR
     PR --> ART[release artifacts]
   end
 
-  subgraph cd ["push main or dispatch"]
-    PUB[publish release run]
-    ART --> PUB
+  subgraph cd_cargo ["publish-crates.yml"]
+    FC[cargo_scope filter]
+    CR[cargo release linux]
+    FC --> CR
+  end
+
+  subgraph cd_nuget ["publish-nuget.yml"]
+    FN[nuget_scope filter]
+    NU[nuget release linux]
+    ART --> NU
+    FN --> NU
   end
 ```
+
+## Path-scoped merge publishes
+
+`dorny/paths-filter@v3` gates whether publish jobs run on `push` to `main`. `workflow_dispatch` always runs (escape hatch when automation skipped a merge).
+
+| Filter | Paths (illustrative) | Skips when merge only touches |
+|--------|----------------------|-------------------------------|
+| **cargo_scope** | `src/core/dhara_storage/**`, `src/core/dhara_storage_dal/**`, `dhara.config.toml`, root `Cargo.toml` / `Cargo.lock` | `tooling/**`, `docs/**`, bindings-only, markdown |
+| **nuget_scope** | `src/core/**`, `src/bindings/**`, `dhara.config.toml`, root manifests | `tooling/**`, `docs/**`, pure markdown |
+
+| Merge diff example | `publish-crates` | `publish-nuget` |
+|--------------------|------------------|-----------------|
+| Docs / README only | skip | skip |
+| `tooling/dhara_tool` only | skip | skip |
+| Core crate + defs dat | run | run |
+| C# bindings only | skip | run |
+| FFI (`dharastorage-ffi`) only | skip | run |
+| `dhara.config.toml` version bump | run | run |
+
+NuGet CD still **requires PR artifacts** from `publish-readiness` at merge second parent (`HEAD^2`). Path filters gate *attempt*; they do not replace the artifact contract.
+
+## Tool cache and versioning
+
+- **Cache key:** `dhara-tool-{source-hash}-{os-arch}` where `source-hash` is a SHA256 prefix over tracked files under `tooling/dhara_tool/**` plus root `Cargo.toml` and `Cargo.lock` ([`compute-dhara-tool-hash`](../.github/actions/compute-dhara-tool-hash/action.yml)). Rebuilds happen when tool sources or those manifests change — no version bump required for cache invalidation.
+- **Version metadata:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) and `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` still track operator releases; activation syncs manifests on run (`--yes` in CI).
+- **PR warming:** [`dhara-tool-build.yml`](../.github/workflows/dhara-tool-build.yml) runs on `pull_request` (tool paths) and pre-builds the dist matrix. When those paths change, [`pipeline.yml`](../.github/workflows/pipeline.yml) `wait-for-tool-build` blocks until that workflow succeeds before restoring the tool. [`restore-dhara-tool`](../.github/actions/restore-dhara-tool/action.yml) builds on cache miss and saves under the same hash key.
+- **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
+- **DAL coupling:** `dhara-tool-build` compiles against **crates.io** `dhara_storage_dal` (local `[patch.crates-io]` applies only in full workspace dev builds).
 
 ## Responsibility split
 
 | Work | Runner |
 |------|--------|
-| `cargo fmt`, `clippy`, `cargo doc` | Workflow (`quality` job) |
-| `cargo test`, `dotnet test` (Windows only) | Workflow (`platform-*` jobs) |
-| `package stage-native` | `dhara_tool` via staging scripts (`--profile ci`) |
-| Merge native stages | `tooling/scripts/merge-native.ps1` / `.sh` |
-| `verify package` | `dhara_tool` via `verify-package.ps1` |
-| `release run` | `dhara_tool` via `release-run-windows.ps1` with `--prepacked-nuget` on CD |
+| `quality fmt/clippy/doc` | `ubuntu-latest` + `linux-x64` cached `dhara_tool` |
+| `quality test-rust` / `test-dotnet` | Cached `dhara_tool` (`platform-*`; `test-dotnet` Windows only) |
+| `package stage-native` | Per-OS runner (`--msvc-env` on `platform-windows` only) |
+| `native merge` / `verify package` | `ubuntu-latest` + `linux-x64` cached `dhara_tool` (`publish-readiness`) |
+| `release run --skip-nuget` (CD) | `ubuntu-latest` + `linux-x64` cached `dhara_tool` (`publish-crates`) |
+| `release run --skip-cargo --prepacked-nuget` (CD) | `ubuntu-latest` + `linux-x64` + `nuget-production` (`publish-nuget`) |
+| `dharastorage` native compiles | Inside `package stage-native` (per OS, not cached) |
 
-Local developers use [verify-local][verify-local-ps1] / [`.sh`][verify-local-sh] for CI parity. GitHub Actions does **not** invoke a combined verify command in the tool.
+Local developers: `cargo run -p dhara_tool -- quality run` or [verify-local][verify-local-ps1] (forwards to `cargo run`).
 
 ## PR jobs
 
-### `quality` (windows)
+### `wait-for-tool-build`
 
-- `cargo fmt --check`, `clippy`, `cargo doc` for all workspace crates
-- No `dhara_tool` compile
+When the PR diff touches tool build inputs (same path set as `dhara-tool-build.yml`), polls until the `dhara-tool-build` workflow run for the PR head SHA completes successfully. Skips immediately when tool paths are unchanged.
+
+### `quality` (linux)
+
+Restores `dhara-tool-{source-hash}-linux-x64` on `ubuntu-latest`, then (all invocations use `--yes`):
+
+- `dhara_tool --yes quality fmt --check`
+- `dhara_tool --yes quality clippy`
+- `dhara_tool --yes quality doc`
 
 ### `platform-{windows,linux,linux-arm64,macos}`
 
-- Rust tests: `dhara_storage` (all-features), `dhara_storage_dal`, `dharastorage`
-- `dotnet test` on **Windows only**
-- Stage natives via `stage-native-windows.ps1` or `stage-native-{linux,macos}.sh`
-- **Linux x64** (`ubuntu-latest`): stages `linux-x64` only
-- **Linux arm64** (`ubuntu-24.04-arm`): stages `linux-arm64` only — see [native packaging][native-packaging]
-- Upload `native-stage-{windows,linux,linux-arm64,macos}` artifact
+Restores matching OS cache key, then:
 
-### `publish-readiness` (windows)
+- `dhara_tool quality test-rust`
+- `dhara_tool quality test-dotnet` (Windows only)
+- `dhara_tool package stage-native` (`--msvc-env` on Windows)
 
-1. Download per-OS native artifacts (`native-stage-*`)
-2. `merge-native.ps1` with `-StagePaths @(...)` → `tooling/artifacts/native-stage`
-3. `verify-package.ps1` → `verify package --native-stage …`
-4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention)
+Upload `native-stage-{windows,linux,linux-arm64,macos}` from `target/dist/artifacts/native-stage`.
 
-## CD job: `publish`
+### `publish-readiness` (linux)
 
-Runs on `workflow_dispatch` or `push` to `main` when non-doc paths changed.
+On `ubuntu-latest`, restores `dhara-tool-{source-hash}-linux-x64`, then:
 
-1. Resolve artifact commit: for a **merge commit**, use the second parent (`git rev-parse HEAD^2`) — the PR branch tip that ran `publish-readiness`. For a **direct push** to `main` after a merge (e.g. CD hotfix), fall back to the second parent of `github.event.before`. PR CI artifacts are keyed to that SHA, not the merge commit on `main`.
-2. Download `release-native-stage` and `release-nuget-package` for that commit via `dawidd6/action-download-artifact`
-3. Fail if artifacts missing (squash merges are unsupported — no second parent, no matching PR artifacts)
-4. `release-run-windows.ps1` with `--prepacked-nuget` (no rebuild, no re-verify)
-5. `cargo-release` + `nuget push` inside the tool
+1. Download per-OS native artifacts into `target/dist/artifacts/native-inputs/`
+2. `dhara_tool native merge --output target/dist/artifacts/native-stage --input …` (four inputs)
+3. `dhara_tool verify package` (default stage under dist `tool_root`)
+4. Upload `release-native-stage`, `release-nuget-package` (`target/dist/output/nuget/`), `release-metadata` (90-day retention)
 
-**Dispatch inputs:** `dry_run`, `publish_cargo`, `publish_nuget`, `verify_package` (optional full verify on dry-run).
+## CD: `publish-crates`
 
-## `dhara_tool` build profile in CI
+1. `detect-changes` — `cargo_scope` filter (or always on `workflow_dispatch`).
+2. Restore cached `linux-x64` `dhara_tool`.
+3. `dhara_tool release run --skip-nuget` (`CARGO_REGISTRY_TOKEN`).
 
-Root [Cargo.toml][workspace-cargo] defines `[profile.ci]` (release without LTO) for the operator CLI. Shipped `dharastorage` natives still use workspace `[profile.release]` with LTO.
+## CD: `publish-nuget`
+
+1. `detect-changes` — `nuget_scope` filter (or always on `workflow_dispatch`).
+2. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
+3. Download PR CI artifacts for that commit.
+4. Restore cached `linux-x64` `dhara_tool` on `ubuntu-latest`.
+5. `dhara_tool release run --skip-cargo --prepacked-nuget …` (`NUGET_API_KEY`, `nuget-production` environment).
+
+## `dhara-tool-build` workflow
+
+1. **`test-tool`** (ubuntu-latest) — `cargo test -p dhara_tool` once. Platform-specific behavior (path resolution, MSVC re-exec) is covered by pipeline jobs on real runners, not duplicated here.
+2. **`build-tool` matrix** (windows-x64, linux-x64, linux-arm64, osx-arm64), after tests pass:
+   - Hash tracked tool sources (`compute-dhara-tool-hash`).
+   - Restore cache for `dhara-tool-{source-hash}-{os-arch}`.
+   - On cache hit → exit (no compile).
+   - On miss → `cargo build -p dhara_tool --profile dist`, smoke `--version`, save cache.
+
+**Local parity:** [`ensure-dhara-tool-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] use the same version gate (`workspace.package.version` vs `target/dist/dhara_tool --version`). Rebuild only on missing binary or version mismatch; `-Force` / `--force` for manual refresh.
 
 ## Scripts
 
 | Script | Role |
 |--------|------|
-| [verify-local.ps1][verify-local-ps1] / [`.sh`][verify-local-sh] | Local CI parity: fmt, clippy, doc, Rust tests, dotnet test |
-| [merge-native.ps1][merge-native-ps1] / [`.sh`][merge-native-sh] | Merge `runtimes/**` trees |
-| [stage-native-windows.ps1][stage-native-windows] | vcvars + `package stage-native` |
-| [stage-native-linux.sh][stage-native-linux] / [stage-native-macos.sh][stage-native-macos] | Build ci-profile tool + `package stage-native` |
-| [verify-package.ps1][verify-package] | Build ci-profile tool + `verify package` |
-| [release-run-windows.ps1][release-run-windows] | vcvars + `release run` with dispatch flags |
+| [ensure-dhara-tool-dist.ps1][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] | Version-gated `profile.dist` build → `target/dist/` |
+| [verify-local.ps1][verify-local-ps1] / [`.sh`][verify-local-sh] | `ensure-dhara-tool-dist` → `target/dist/dhara_tool quality run` |
 
 ## Related docs
 
-- [Multi-platform native packaging][native-packaging] — RID staging rules, merge pitfalls, NuGet pack invariants
-- [Logging conventions][logging] — audit logs under `tooling/logs/`
-- [filedefs.dat / DSFD format][filedefs-dat] — DSFD `packageVersion` uses DAL semver
-- [dhara_tool README][readme-tool] — operator command surface
+- [Workspace architecture][architecture] — tool crate DAG, DAL coupling
+- [Multi-platform native packaging][native-packaging] — RID staging rules, artifact SHA pitfalls
+- [Logging conventions][logging] — audit logs under `{tool_root}/logs/` (e.g. `target/dist/logs/`)
+- [dhara_tool README][readme-tool] — full command surface
 - [Docs index][docs-index]
 
 [pipeline-yml]: ../.github/workflows/pipeline.yml
-[tooling-scripts]: ../tooling/scripts/
+[tool-build-yml]: ../.github/workflows/dhara-tool-build.yml
+[publish-crates-yml]: ../.github/workflows/publish-crates.yml
+[publish-nuget-yml]: ../.github/workflows/publish-nuget.yml
 [workspace-cargo]: ../Cargo.toml
 [verify-local-ps1]: ../tooling/scripts/verify-local.ps1
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
-[merge-native-ps1]: ../tooling/scripts/merge-native.ps1
-[merge-native-sh]: ../tooling/scripts/merge-native.sh
-[stage-native-windows]: ../tooling/scripts/stage-native-windows.ps1
-[stage-native-linux]: ../tooling/scripts/stage-native-linux.sh
-[stage-native-macos]: ../tooling/scripts/stage-native-macos.sh
-[verify-package]: ../tooling/scripts/verify-package.ps1
-[release-run-windows]: ../tooling/scripts/release-run-windows.ps1
+[ensure-dist-ps1]: ../tooling/scripts/ensure-dhara-tool-dist.ps1
+[ensure-dist-sh]: ../tooling/scripts/ensure-dhara-tool-dist.sh
 [logging]: logging.md
-[filedefs-dat]: filedefs-dat.md
 [native-packaging]: native-packaging.md
+[architecture]: architecture.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [docs-index]: README.md

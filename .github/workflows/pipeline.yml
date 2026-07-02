@@ -2,47 +2,83 @@ name: Pipeline
 
 on:
   pull_request:
-  push:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Validate release flow without publishing
-        required: true
-        default: false
-        type: boolean
-      publish_cargo:
-        description: Publish dhara_storage_dal and dhara_storage before NuGet
-        required: true
-        default: true
-        type: boolean
-      publish_nuget:
-        description: Publish the Dhara.Storage NuGet package after Cargo release
-        required: true
-        default: true
-        type: boolean
-      verify_package:
-        description: Re-run full verify package on dry-run when using pre-packed artifacts
-        required: true
-        default: false
-        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
-  DOTNET_CLI_HOME: ${{ github.workspace }}\.dotnet
+  DOTNET_CLI_HOME: ${{ github.workspace }}/.dotnet
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: pipeline-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  quality:
-    name: code quality (windows)
+  wait-for-tool-build:
+    name: wait for dhara_tool build
     if: github.event_name == 'pull_request'
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: tool-paths
+        with:
+          filters: |
+            tool:
+              - tooling/dhara_tool/**
+              - Cargo.toml
+              - Cargo.lock
+              - .github/workflows/dhara-tool-build.yml
+              - .github/actions/restore-dhara-tool/**
+              - .github/actions/compute-dhara-tool-hash/**
+              - .github/actions/setup-linux-tool-deps/**
+
+      - name: Wait for dhara-tool-build workflow
+        if: steps.tool-paths.outputs.tool == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const ref = context.payload.pull_request.head.sha;
+            const maxAttempts = 120;
+            const sleepMs = 15000;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'dhara-tool-build.yml',
+                head_sha: ref,
+                per_page: 1,
+              });
+
+              const run = data.workflow_runs[0];
+              if (!run) {
+                core.info(`No dhara-tool-build run yet for ${ref}; waiting...`);
+              } else if (run.status === 'completed') {
+                if (run.conclusion === 'success') {
+                  core.info(`dhara-tool-build completed successfully (run ${run.id}).`);
+                  return;
+                }
+                core.setFailed(`dhara-tool-build concluded with ${run.conclusion} (run ${run.id}).`);
+                return;
+              } else {
+                core.info(`dhara-tool-build run ${run.id} status: ${run.status}`);
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, sleepMs));
+            }
+
+            core.setFailed('Timed out waiting for dhara-tool-build workflow.');
+
+  quality:
+    name: code quality (linux)
+    if: github.event_name == 'pull_request'
+    needs: wait-for-tool-build
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -58,19 +94,22 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Check formatting
-        run: cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage -p dhara_tool --check
+      - name: Setup Linux tool dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
 
-      - name: Clippy (dhara_storage)
-        run: cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          os-arch: linux-x64
 
-      - name: Clippy (other crates)
-        run: cargo clippy -p dhara_storage_dal -p dharastorage -p dhara_tool --all-targets -- -D warnings
-
-      - name: Rustdoc
+      - name: Quality checks
+        shell: bash
         run: |
-          cargo doc -p dhara_storage --no-deps --all-features
-          cargo doc -p dhara_storage_dal -p dharastorage -p dhara_tool --no-deps
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality fmt --check
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality clippy
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality doc
 
   platform-windows:
     name: platform (windows)
@@ -97,27 +136,25 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          os-arch: windows-x64
+
+      - name: Platform tests and native staging
+        shell: bash
         run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
-
-      - name: .NET tests
-        run: dotnet test src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj
-
-      - name: Build dhara_tool (ci profile)
-        run: cargo build -p dhara_tool --profile ci
-
-      - name: Stage native assets
-        shell: pwsh
-        run: ./tooling/scripts/stage-native-windows.ps1 -ToolPath target/ci/dhara_tool.exe
+          set -euo pipefail
+          tool=target/dist/dhara_tool.exe
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-dotnet
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native --msvc-env
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
         with:
           name: native-stage-windows
-          path: tooling/artifacts/native-stage
+          path: target/dist/artifacts/native-stage
 
   platform-linux:
     name: platform (linux)
@@ -143,20 +180,24 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
-        run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          os-arch: linux-x64
 
-      - name: Stage native assets
-        run: ./tooling/scripts/stage-native-linux.sh
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
         with:
           name: native-stage-linux
-          path: tooling/artifacts/native-stage
+          path: target/dist/artifacts/native-stage
 
   platform-linux-arm64:
     name: platform (linux arm64)
@@ -182,20 +223,24 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
-        run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          os-arch: linux-arm64
 
-      - name: Stage native assets
-        run: ./tooling/scripts/stage-native-linux.sh
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
         with:
           name: native-stage-linux-arm64
-          path: tooling/artifacts/native-stage
+          path: target/dist/artifacts/native-stage
 
   platform-macos:
     name: platform (macos)
@@ -216,26 +261,30 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Rust tests
-        run: |
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          os-arch: osx-arm64
 
-      - name: Stage native assets
-        run: ./tooling/scripts/stage-native-macos.sh
+      - name: Platform tests and native staging
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" -r "$GITHUB_WORKSPACE" --yes quality test-rust
+          "$tool" -r "$GITHUB_WORKSPACE" --yes package stage-native
 
       - name: Upload native stage
         uses: actions/upload-artifact@v4
         with:
           name: native-stage-macos
-          path: tooling/artifacts/native-stage
+          path: target/dist/artifacts/native-stage
 
   publish-readiness:
-    name: NuGet publish readiness (windows)
+    name: NuGet publish readiness (linux)
     if: github.event_name == 'pull_request'
     needs: [platform-windows, platform-linux, platform-linux-arm64, platform-macos]
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -255,40 +304,48 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Restore dhara_tool
+        uses: ./.github/actions/restore-dhara-tool
+        with:
+          os-arch: linux-x64
+
       - name: Download native stages
         uses: actions/download-artifact@v4
         with:
           pattern: native-stage-*
-          path: tooling/artifacts/native-inputs
+          path: target/dist/artifacts/native-inputs
           merge-multiple: false
 
       - name: Merge native stages
-        shell: pwsh
+        shell: bash
         run: |
-          ./tooling/scripts/merge-native.ps1 `
-            -Output tooling/artifacts/native-stage `
-            -StagePaths @(
-              'tooling/artifacts/native-inputs/native-stage-windows',
-              'tooling/artifacts/native-inputs/native-stage-linux',
-              'tooling/artifacts/native-inputs/native-stage-linux-arm64',
-              'tooling/artifacts/native-inputs/native-stage-macos'
-            )
+          set -euo pipefail
+          tool=target/dist/dhara_tool
+          "$tool" -r "$GITHUB_WORKSPACE" --yes native merge \
+            --output target/dist/artifacts/native-stage \
+            --input target/dist/artifacts/native-inputs/native-stage-windows \
+            --input target/dist/artifacts/native-inputs/native-stage-linux \
+            --input target/dist/artifacts/native-inputs/native-stage-linux-arm64 \
+            --input target/dist/artifacts/native-inputs/native-stage-macos
 
       - name: Verify package
-        shell: pwsh
-        run: ./tooling/scripts/verify-package.ps1 -NativeStage tooling/artifacts/native-stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package
 
       - name: Write release metadata
-        shell: pwsh
+        shell: bash
         run: |
-          $version = (Select-String -Path dhara.config.toml -Pattern '^\s*workspace\s*=\s*"(.+)"' | ForEach-Object { $_.Matches[0].Groups[1].Value })
-          @{ version = $version; commit = "${{ github.sha }}" } | ConvertTo-Json | Set-Content tooling/artifacts/release-metadata.json
+          set -euo pipefail
+          version=$(grep -E '^\s*workspace\s*=' dhara.config.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          printf '{"version":"%s","commit":"%s"}\n' "$version" "${{ github.sha }}" > target/dist/artifacts/release-metadata.json
 
       - name: Upload release native stage
         uses: actions/upload-artifact@v4
         with:
           name: release-native-stage
-          path: tooling/artifacts/native-stage
+          path: target/dist/artifacts/native-stage
           retention-days: 90
 
       - name: Upload release NuGet package
@@ -296,162 +353,14 @@ jobs:
         with:
           name: release-nuget-package
           path: |
-            tooling/output/nuget/*.nupkg
-            tooling/output/nuget/*.snupkg
-            tooling/output/nuget/*.symbols.nupkg
+            target/dist/output/nuget/*.nupkg
+            target/dist/output/nuget/*.snupkg
+            target/dist/output/nuget/*.symbols.nupkg
           retention-days: 90
 
       - name: Upload release metadata
         uses: actions/upload-artifact@v4
         with:
           name: release-metadata
-          path: tooling/artifacts/release-metadata.json
+          path: target/dist/artifacts/release-metadata.json
           retention-days: 90
-
-  push-changes:
-    name: detect main push changes
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
-    outputs:
-      code: ${{ steps.filter.outputs.code }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            code:
-              - '**'
-              - '!**/*.md'
-              - '!docs/**'
-
-  publish:
-    name: release (windows)
-    needs: [push-changes]
-    if: >
-      always() && (
-        github.event_name == 'workflow_dispatch' ||
-        (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.push-changes.outputs.code == 'true')
-      )
-    runs-on: windows-latest
-    environment: nuget-production
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          lfs: true
-          persist-credentials: true
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Install cargo-release
-        run: cargo install cargo-release --version 1.1.2 --locked
-
-      - name: Configure git author
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Resolve PR CI artifact commit
-        id: artifact-commit
-        shell: bash
-        run: |
-          set -euo pipefail
-          merge_sha="${{ github.sha }}"
-          artifact_sha=""
-          if git rev-parse --verify "${merge_sha}^2" >/dev/null 2>&1; then
-            artifact_sha="$(git rev-parse "${merge_sha}^2")"
-            echo "Using merge second parent ${artifact_sha} for PR CI artifacts."
-          elif [ "${{ github.event_name }}" = "push" ] && [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
-            before="${{ github.event.before }}"
-            if git rev-parse --verify "${before}^2" >/dev/null 2>&1; then
-              artifact_sha="$(git rev-parse "${before}^2")"
-              echo "Using second parent ${artifact_sha} of previous main tip ${before} for PR CI artifacts."
-            fi
-          fi
-          if [ -z "${artifact_sha}" ]; then
-            artifact_sha="${merge_sha}"
-            echo "Using push commit ${artifact_sha} for artifacts."
-          fi
-          echo "sha=${artifact_sha}" >> "${GITHUB_OUTPUT}"
-
-      - name: Download PR CI native stage
-        id: native-artifact
-        continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: pipeline.yml
-          commit: ${{ steps.artifact-commit.outputs.sha }}
-          workflow_conclusion: success
-          name: release-native-stage
-          path: tooling/artifacts/native-stage
-
-      - name: Download NuGet package artifact
-        id: nupkg-artifact
-        continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: pipeline.yml
-          commit: ${{ steps.artifact-commit.outputs.sha }}
-          workflow_conclusion: success
-          name: release-nuget-package
-          path: tooling/output/nuget
-
-      - name: Require PR CI artifacts
-        shell: pwsh
-        run: |
-          $hasNative = Test-Path tooling/artifacts/native-stage/runtimes
-          $nupkg = Get-ChildItem -Path tooling/output/nuget -Filter *.nupkg -ErrorAction SilentlyContinue | Select-Object -First 1
-          if ($hasNative -and $nupkg) {
-            exit 0
-          }
-          Write-Error "No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure publish-readiness succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
-
-      - name: Resolve pre-packed NuGet path
-        id: nupkg
-        shell: pwsh
-        run: |
-          $package = Get-ChildItem -Path tooling/output/nuget -Filter *.nupkg | Select-Object -First 1
-          if (-not $package) {
-            Write-Error "NuGet package artifact was not downloaded."
-          }
-          "path=$($package.FullName)" >> $env:GITHUB_OUTPUT
-
-      - name: Publish DAL, runtime, and NuGet
-        shell: pwsh
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          $scriptArgs = @{
-            PrepackedNuget = '${{ steps.nupkg.outputs.path }}'
-          }
-          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
-            if ("${{ inputs.dry_run }}" -eq "true") { $scriptArgs.DryRun = $true }
-            if ("${{ inputs.publish_cargo }}" -ne "true") { $scriptArgs.SkipCargo = $true }
-            if ("${{ inputs.publish_nuget }}" -ne "true") { $scriptArgs.SkipNuget = $true }
-            if ("${{ inputs.verify_package }}" -eq "true") { $scriptArgs.VerifyPackage = $true }
-          }
-          ./tooling/scripts/release-run-windows.ps1 @scriptArgs
-
-      - name: Upload NuGet artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: Dhara.Storage-package
-          path: |
-            tooling/output/nuget/*.nupkg
-            tooling/output/nuget/*.snupkg
-            tooling/output/nuget/*.symbols.nupkg

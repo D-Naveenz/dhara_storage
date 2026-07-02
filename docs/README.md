@@ -13,6 +13,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [filedefs.dat / DSFD format][filedefs-dat] | Implementers | Binary layout, metadata footer, defs build pipeline |
 | [Typed C-compatible ABI][typed-abi] | FFI authors | `#[repr(C)]` rules, ownership, Rust ↔ C# marshalling |
 | [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `dhara_tool` touchpoints |
+| [Workspace architecture][architecture] | Agents, contributors | Tool crate DAG, bindings layout, publish split, DAL coupling |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
 ## Package READMEs (publish surfaces)
@@ -41,13 +42,14 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [root-readme]: ../README.md
 [readme-dhara-storage]: ../src/core/dhara_storage/README.md
 [readme-dal]: ../src/core/dhara_storage_dal/README.md
-[readme-dharastorage]: ../src/dharastorage/README.md
-[readme-nuget]: ../src/bindings/Dhara.Storage/README.md
+[readme-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
+[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [logging]: logging.md
 [filedefs-dat]: filedefs-dat.md
 [typed-abi]: typed-c-compatible-abi.md
 [ci-cd]: ci-cd-pipelines.md
+[architecture]: architecture.md
 [native-packaging]: native-packaging.md
 [agents]: ../AGENTS.md
 [dhara-config]: ../dhara.config.toml

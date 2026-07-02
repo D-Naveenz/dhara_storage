@@ -2,21 +2,28 @@
 members = [
     "src/core/dhara_storage_dal",
     "src/core/dhara_storage",
-    "src/dharastorage",
-    "tooling/dhara_tool",
+    "src/bindings/dharastorage-ffi",
+    "tooling/dhara_tool/crates/dhara_tool_kernel",
+    "tooling/dhara_tool/crates/dhara_tool_ops",
+    "tooling/dhara_tool/crates/dhara_tool_cli",
+    "tooling/dhara_tool/crates/dhara_tool_gui",
+    "tooling/dhara_tool/crates/dhara_tool",
 ]
 resolver = "3"
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/D-Naveenz/dhara_storage"
 homepage = "https://github.com/D-Naveenz/dhara_storage"
 
 [workspace.dependencies]
-dhara_storage_dal = { version = "0.8.0", path = "src/core/dhara_storage_dal" }
-dhara_storage = { version = "0.8.0", path = "src/core/dhara_storage" }
+dhara_storage_dal = { version = "0.9.0", path = "src/core/dhara_storage_dal" }
+dhara_storage = { version = "0.9.0", path = "src/core/dhara_storage" }
+
+[patch.crates-io]
+dhara_storage_dal = { path = "src/core/dhara_storage_dal" }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]
@@ -25,9 +32,11 @@ lto = true          # Enables Link-time Optimization.
 opt-level = "s"     # Prioritizes small binary size. Use `3` if you prefer speed.
 strip = true        # Ensures debug symbols are removed.
 
-[profile.ci]
+# Operator CLI — built rarely (version-bump / cache miss) via dhara-tool-build.yml
+[profile.dist]
 inherits = "release"
-lto = false
-codegen-units = 16
 opt-level = 3
-strip = true
+lto = true
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

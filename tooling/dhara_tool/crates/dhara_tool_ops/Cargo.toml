@@ -1,0 +1,21 @@
+[package]
+name = "dhara_tool_ops"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Operator workflows for the Dhara tool (quality, verify, release, NuGet)."
+publish = false
+
+[dependencies]
+anyhow = "1.0"
+dhara_tool_kernel = { path = "../dhara_tool_kernel" }
+semver = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+toml_edit = "0.25.12"
+tracing = "0.1"
+xmltree = "0.12.0"
+
+[dev-dependencies]
+tempfile = "3.27"

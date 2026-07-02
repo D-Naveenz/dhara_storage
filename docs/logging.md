@@ -11,7 +11,7 @@ Logs are written for **humans and AI agents**, not log aggregators. Prefer plain
 | Mode | When | Console | Command stdout | File log |
 |------|------|---------|----------------|----------|
 | **direct** | Subcommand present (CI, agents, scripts) | INFO (level 3) | Structured report printed | INFO (level 3); WARN with `--min`; DEBUG with `--trace` |
-| **interactive** | No subcommand in a TTY | INFO (level 3) | Captured in TUI panel | INFO (level 3); same file rules as direct |
+| **interactive** | No subcommand with a graphical display | INFO (level 3) | Captured in GUI terminal tab | INFO (level 3); same file rules as direct |
 
 ## Worker threads
 
@@ -29,9 +29,23 @@ Session INFO includes `workers={effective}`.
 
 ## Log files
 
-- Directory: `tooling/logs/`
+Generated operator logs live next to the running binary, not under a fixed `tooling/` tree.
+
+| Concept | Meaning |
+|---------|---------|
+| **`tool_root`** | Directory containing the `dhara_tool` executable (canonicalized). Anchors default logs, artifacts, and NuGet output. |
+| **`repo_root`** | Dhara Storage workspace root (`dhara.config.toml` + `tooling/dhara_tool/Cargo.toml`). Anchors config activation, embedded defs, and repo-relative CLI overrides. |
+
+| Profile | Typical `tool_root` | Default log directory |
+|---------|---------------------|------------------------|
+| Dist / CI cache | `target/dist/` | `target/dist/logs/` |
+| `cargo run` (dev) | `target/debug/` | `target/debug/logs/` |
+
+- Directory: `{tool_root}/logs/` (override with `--logs-dir`; relative overrides join `tool_root`)
 - Naming: `{date}_dhara_tool.log` (session 0), `{date}_dhara_tool_{n}.log` (session n > 0)
 - Each process invocation allocates the next session file for that day.
+
+Session DEBUG records `repo_root`, `tool_root`, `output_dir`, and `logs_dir` after resolution.
 
 ## Log levels (`log` / `tracing` numeric scale)
 
@@ -43,7 +57,7 @@ Error=1, Warn=2, **Info=3**, Debug=4, Trace=5. A configured threshold captures t
 | **`--min` / `-m`** | 3 (INFO) | 2 (WARN) |
 | **`--trace` / `-t`** | 3 (INFO) | 4 (DEBUG) |
 
-Console stays at INFO for now; TUI-specific console policy will change later.
+Console stays at INFO for now; interactive GUI output is shown in the Terminal tab instead of stderr.
 
 Default file log captures INFO audit lines. Use `--min` when only WARN+ should hit the file. Use `--trace` for DEBUG file detail (per-definition reduce trace, phase starts, flags/paths).
 
@@ -151,7 +165,7 @@ parse: 1234/21692
 reduce: 5500/21692
 ```
 
-Interactive TUI mode does not show this progress yet (see `tui/exec.rs` TODO).
+Interactive GUI mode shows the same progress in the action-bar progress indicator (via `logging/progress.rs` GUI channel).
 
 ## TrID file audit policy
 
@@ -216,14 +230,14 @@ Language-agnostic equivalent: `{timestamp} {LEVEL} {scope}: {single human-readab
 | `(1000/21692) reduce in progress` milestones | Phase finish INFO only |
 | Log path on INFO session line | Log path on DEBUG only |
 | Separate `logging initialized` + `command started` | One session open + one module begin |
-| `--silent` to mean “no TUI” | Automatic `interactive` / `direct` run modes |
+| `--silent` to mean “no GUI” | Automatic `interactive` / `direct` run modes |
 | INFO on every parsed XML file (21k lines) | INFO at parse phase finish only; console `(n/total)` throttled |
 
 ## Agent checklist
 
 When diagnosing a run from logs alone:
 
-1. Open the latest `tooling/logs/{date}_dhara_tool*.log` for today.
+1. Open the latest `{tool_root}/logs/{date}_dhara_tool*.log` for today (e.g. `target/dist/logs/` after `ensure-dhara-tool-dist`).
 2. Find `dhara_tool ... started` — note mode and workers.
 3. Find `{module} started` or `{module} finished` / `failed`.
 4. For TrID work, grep `phase ` for timings and `TrID transform —` for final stats.
@@ -244,7 +258,7 @@ grep "exiting" logfile
 
 - [dhara_tool README][readme-tool] — commands, flags, output layout
 - [filedefs.dat / DSFD format][filedefs-dat] — TrID build phases referenced in audit logs
-- [CI/CD pipelines][ci-cd] — direct mode in CI vs interactive TUI locally
+- [CI/CD pipelines][ci-cd] — direct mode in CI vs interactive GUI locally
 - [Docs index][docs-index]
 
 [readme-tool]: ../tooling/dhara_tool/README.md
