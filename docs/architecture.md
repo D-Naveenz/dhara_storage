@@ -74,8 +74,9 @@ flowchart LR
   end
 
   subgraph gui [dhara_tool_gui]
-    widgets[widgets / panels]
-    screens[screens / app]
+    widgets[widgets]
+    screens[screens]
+    app[app.rs]
   end
 
   kernel --> ops
@@ -102,11 +103,14 @@ flowchart LR
 
 | Tier | Location | When to use |
 |------|----------|-------------|
-| **Primitives** | `gui/widgets/` — `Panel`, `Field`, `Stepper`, tree row chrome | Reusable visual/interaction building blocks |
-| **Screens** | `gui/screens/` or top-level `gui/app.rs` | Compose primitives into a full view |
-| **Promotion** | Move to `widgets/` when used twice+ or >~80 lines of shared layout | Avoid premature abstraction |
+| **Primitives** | `gui/widgets/` — `panel`, `button`, `field`, `input`, `select`, `tabs`, `scroll_area`, `separator`, `progress`, `stepper`, `path_field` | Reusable iced wrappers and layout tokens |
+| **Promoted** | `gui/widgets/` — `tab_view`, `tree_row`, `action_bar`, `modal_overlay` | Shared compositions used across screens |
+| **Screens** | `gui/screens/` — `shell`, `nav`, `options`, `terminal`, `history`, `activation`, `repo_setup` | Full views; `app.rs` wires update/subscription only |
+| **Promotion rule** | Move to `widgets/` when used twice+ or >~80 lines of shared layout | Avoid premature abstraction |
 
 Primitives stay **iced-first** (no business logic); screens call into `dhara_tool_ops` via `ToolContext` and `dhara_tool_cli::runner`.
+
+`dhara_tool_cli::registry` is split by command section (`config`, `defs`, `quality`, `package`, `release`) with shared `ui` metadata helpers.
 
 ## Path resolution and config
 

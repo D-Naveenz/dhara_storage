@@ -1,7 +1,5 @@
 pub mod app;
 pub mod boot;
-pub mod form;
-pub mod panels;
 pub mod screens;
 pub mod state;
 pub mod style;

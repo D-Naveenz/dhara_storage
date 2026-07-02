@@ -1,13 +1,18 @@
-use iced::widget::{checkbox, column, pick_list, text, text_input};
+use iced::widget::{checkbox, column, text};
 use iced::{Element, Length};
 
 use dhara_tool_cli::command::{CommandSpec, FieldKind};
 use dhara_tool_cli::forms::{CommandForm, FormValue};
 
-use super::app::Message;
-use super::widgets::path_field::browsable_path_field;
+use super::super::app::Message;
+use super::super::widgets::{
+    field::labeled_field,
+    input::text_field,
+    path_field::browsable_path_field,
+    select::dropdown,
+};
 
-pub fn view_options_form<'a>(
+pub fn view_options<'a>(
     command: &'a CommandSpec,
     form: &'a CommandForm,
 ) -> Element<'a, Message> {
@@ -18,23 +23,22 @@ pub fn view_options_form<'a>(
     }
 
     for (index, field) in command.ui.fields.iter().enumerate() {
-        let label = text(format!("{}:", field.label)).size(14);
         let help = if field.help.is_empty() {
             None
         } else {
-            Some(text(field.help).size(12))
+            Some(field.help)
         };
 
         let control: Element<'a, Message> = match (&field.kind, form.values.get(index)) {
-            (FieldKind::Text | FieldKind::Path, Some(FormValue::Text(value))) => text_input("", value)
-                .on_input(move |input| Message::FormTextChanged {
+            (FieldKind::Text | FieldKind::Path, Some(FormValue::Text(value))) => text_field(
+                value,
+                "",
+                move |input| Message::FormTextChanged {
                     command_id: command.id,
                     field_index: index,
                     value: input,
-                })
-                .padding(6)
-                .width(Length::Fill)
-                .into(),
+                },
+            ),
             (FieldKind::BrowsablePath { .. }, Some(FormValue::Text(value))) => {
                 browsable_path_field(
                     value,
@@ -62,30 +66,25 @@ pub fn view_options_form<'a>(
                 let current = options.get(*selected).copied();
                 let options_owned: Vec<String> =
                     options.iter().map(|option| (*option).to_owned()).collect();
-                pick_list(options_owned, current.map(str::to_owned), move |choice| {
-                    Message::FormSelectChanged {
+                dropdown(
+                    options_owned,
+                    current.map(str::to_owned),
+                    "Select...",
+                    move |choice| Message::FormSelectChanged {
                         command_id: command.id,
                         field_index: index,
                         value: choice,
-                    }
-                })
-                .placeholder("Select...")
-                .width(Length::Fill)
-                .into()
+                    },
+                )
             }
             _ => text("").into(),
         };
 
-        let mut field_column = column![label].spacing(4);
-        if let FieldKind::Boolean = field.kind {
-            field_column = field_column.push(control);
+        if matches!(field.kind, FieldKind::Boolean) {
+            fields = fields.push(control);
         } else {
-            field_column = field_column.push(control);
+            fields = fields.push(labeled_field(field.label, help, control));
         }
-        if let Some(help) = help {
-            field_column = field_column.push(help);
-        }
-        fields = fields.push(field_column);
     }
 
     if command.ui.fields.is_empty() {

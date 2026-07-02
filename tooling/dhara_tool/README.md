@@ -26,11 +26,14 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 | `dhara_storage_dal` | DSFD encode/decode for defs commands |
 
 ```
-dhara_tool/src/
-├── commands/        # config, defs, quality, native, verify, package, release, version
-├── gui/             # interactive mode (iced)
-├── ui/              # shared form schema and command runner
-└── logging/         # audit log setup
+tooling/dhara_tool/
+├── crates/
+│   ├── dhara_tool_kernel/   # paths, config, logging, defs I/O
+│   ├── dhara_tool_ops/      # quality, verify, release, native merge
+│   ├── dhara_tool_cli/      # registry, commands, forms, runner
+│   ├── dhara_tool_gui/      # iced widgets, screens, app orchestration
+│   └── dhara_tool/          # binary entry (CLI + GUI boot)
+└── assets/                  # GUI chrome (e.g. chevron SVG)
 
 {exe_path}/              # directory containing the running binary
 ├── logs/                # audit logs ({date}_dhara_tool*.log)
@@ -92,7 +95,7 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 | `package` | `pack`, `stage-native` (`--msvc-env` on Windows), `publish` |
 | `release` | `run` |
 
-**Tool versioning:** bump `[tool].version` in [dhara.config.toml][dhara-config] and `package.version` in this crate's `Cargo.toml` together for tool-only changes. After `version bump`, the next run offers to sync root `Cargo.toml` and the NuGet csproj from config. CI uses `--yes` to apply drift without prompting.
+**Tool versioning:** bump `[tool].version` in [dhara.config.toml][dhara-config] and `[workspace.package].version` in [tooling/dhara_tool/Cargo.toml](Cargo.toml) together for tool-only changes (member crates inherit via `version.workspace = true`). After `version bump`, the next run offers to sync root `Cargo.toml` and the NuGet csproj from config. CI uses `--yes` to apply drift without prompting.
 
 **Dist vs dev:** production-shaped binary lives at `target/dist/dhara_tool` (`[profile.dist]`). [`ensure-dhara-tool-dist`][ensure-dist-ps1] rebuilds only when the binary is missing or `--version` ≠ manifest. Use `cargo run -p dhara_tool` for day-to-day tool edits without invalidating dist.
 

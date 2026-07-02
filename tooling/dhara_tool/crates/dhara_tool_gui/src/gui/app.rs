@@ -4,8 +4,7 @@ use std::sync::mpsc::{self, Receiver};
 
 use anyhow::Result;
 use iced::time;
-use iced::widget::{column, container, row, stack};
-use iced::{Length, Subscription, Task, Theme};
+use iced::{Subscription, Task, Theme};
 
 use dhara_tool_cli::command::{CommandRegistry, FieldKind, RunMode, ToolContext};
 use dhara_tool_cli::forms::FormValue;
@@ -19,12 +18,8 @@ use dhara_tool_kernel::{
 };
 
 use super::boot::GuiBootParams;
-use super::panels::{
-    view_action_bar, view_activation_overlay, view_tab_bar, view_tab_content, view_tree_nav,
-};
-use super::screens::{RepoSetupPrompt, view_repo_setup_overlay};
+use super::screens::{RepoSetupPrompt, view_main_shell, view_repo_setup_overlay};
 use super::state::{ActivationPrompt, AppState, MainTab};
-use super::style::tab_content_panel;
 
 pub struct DharaApp {
     pub state: AppState,
@@ -197,7 +192,6 @@ fn pick_config_file() -> Option<PathBuf> {
         .set_title("Select dhara.config.toml")
         .add_filter("Dhara config", &["toml"])
         .pick_file()
-        .map(|path| path)
 }
 
 fn update(app: &mut DharaApp, message: Message) -> Task<Message> {
@@ -360,13 +354,12 @@ fn update(app: &mut DharaApp, message: Message) -> Task<Message> {
             app.state.main_tab = MainTab::History;
         }
         Message::ActivationConfirm => {
-            if let Some(context) = app.context.as_ref() {
-                if let Err(error) = app
+            if let Some(context) = app.context.as_ref()
+                && let Err(error) = app
                     .state
                     .apply_activation_confirm(&context.repo_root)
-                {
-                    app.state.status_message = error.to_string();
-                }
+            {
+                app.state.status_message = error.to_string();
             }
         }
         Message::ActivationDecline => {
@@ -419,43 +412,7 @@ fn view(app: &DharaApp) -> iced::Element<'_, Message> {
         return view_repo_setup_overlay(prompt);
     }
 
-    let tab_stack = column![
-        view_tab_bar(app.state.main_tab),
-        container(view_tab_content(&app.state, &app.registry))
-            .height(Length::Fill)
-            .width(Length::Fill)
-            .style(|theme: &Theme| tab_content_panel(theme)),
-    ]
-    .spacing(0)
-    .height(Length::Fill);
-
-    let right_column = column![tab_stack, view_action_bar(&app.state, &app.registry)]
-        .spacing(8)
-        .width(Length::FillPortion(5))
-        .height(Length::Fill);
-
-    let body = row![
-        container(view_tree_nav(&app.state, &app.registry))
-            .width(Length::FillPortion(2))
-            .height(Length::Fill),
-        right_column,
-    ]
-    .spacing(8)
-    .padding(12)
-    .height(Length::Fill);
-
-    let main = container(body)
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-    if let Some(overlay) = view_activation_overlay(&app.state) {
-        stack![main, overlay]
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
-    } else {
-        main.into()
-    }
+    view_main_shell(app)
 }
 
 #[cfg(test)]

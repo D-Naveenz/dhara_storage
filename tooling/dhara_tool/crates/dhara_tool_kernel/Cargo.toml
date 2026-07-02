@@ -1,6 +1,6 @@
 [package]
 name = "dhara_tool_kernel"
-version = "0.8.10"
+version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

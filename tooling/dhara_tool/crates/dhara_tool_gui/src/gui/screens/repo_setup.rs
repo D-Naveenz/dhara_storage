@@ -1,6 +1,7 @@
-use iced::widget::{button, column, container, row, text};
-use iced::{Element, Length, Theme};
+use iced::widget::{button, column, row, text};
+use iced::Element;
 
+use crate::gui::widgets::modal_overlay::modal_overlay;
 use crate::gui::widgets::path_field::browsable_path_field;
 
 use super::super::app::Message;
@@ -45,29 +46,5 @@ pub fn view_repo_setup_overlay<'a>(prompt: &'a RepoSetupPrompt) -> Element<'a, M
         .spacing(8),
     );
 
-    container(
-        container(lines)
-            .padding(16)
-            .style(|theme: &Theme| container::Style {
-                background: Some(iced::Background::Color(theme.palette().background)),
-                border: iced::Border {
-                    color: theme.palette().primary,
-                    width: 1.0,
-                    radius: 6.0.into(),
-                },
-                ..Default::default()
-            }),
-    )
-    .center_x(Length::Fill)
-    .center_y(Length::Fill)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(|theme: &Theme| container::Style {
-        background: Some(iced::Background::Color(iced::Color {
-            a: 0.65,
-            ..theme.palette().background
-        })),
-        ..Default::default()
-    })
-    .into()
+    modal_overlay(lines.into())
 }

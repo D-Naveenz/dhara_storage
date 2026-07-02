@@ -1,19 +1,16 @@
 use std::env;
 use std::io::{self, BufRead, IsTerminal, Write};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 
 use dhara_tool_cli::{
     CommandRegistry, DharaStorageCapability, RunMode, ToolCapability, ToolContext,
 };
-use dhara_tool_gui::{can_launch_gui, run_gui, GuiBootParams};
+use dhara_tool_gui::{GuiBootParams, can_launch_gui, run_gui};
 use dhara_tool_kernel::{
-    activation::run_activation,
-    ensure_workspace_state, log_session_end,
-    paths::resolve_exe_root,
-    resolve_and_persist_repository, stale_cached_repository, try_cached_repository,
-    workers,
+    activation::run_activation, ensure_workspace_state, log_session_end, paths::resolve_exe_root,
+    resolve_and_persist_repository, stale_cached_repository, try_cached_repository, workers,
 };
 
 pub fn run() -> Result<()> {
@@ -32,7 +29,8 @@ pub fn run() -> Result<()> {
         return Ok(());
     }
 
-    let exe_root = resolve_exe_root(env::current_exe().context("failed to resolve current executable")?)?;
+    let exe_root =
+        resolve_exe_root(env::current_exe().context("failed to resolve current executable")?)?;
 
     let run_mode = if !cli.command.is_empty() {
         RunMode::Direct
@@ -141,23 +139,16 @@ fn build_context(
 }
 
 /// Resolves from `-r` or valid cache only (no prompt).
-fn try_early_repository(
-    exe_root: &PathBuf,
-    cli_override: Option<PathBuf>,
-) -> Result<Option<PathBuf>> {
+fn try_early_repository(exe_root: &Path, cli_override: Option<PathBuf>) -> Result<Option<PathBuf>> {
     if let Some(path) = cli_override {
-        return Ok(Some(resolve_and_persist_repository(
-            exe_root,
-            path,
-            true,
-        )?));
+        return Ok(Some(resolve_and_persist_repository(exe_root, path, true)?));
     }
 
     Ok(try_cached_repository(exe_root))
 }
 
 fn resolve_repository_for_direct(
-    exe_root: &PathBuf,
+    exe_root: &Path,
     cli_override: Option<PathBuf>,
 ) -> Result<PathBuf> {
     if let Some(repo) = try_early_repository(exe_root, cli_override)? {
@@ -177,10 +168,7 @@ fn resolve_repository_for_direct(
 
 fn prompt_repository_path() -> Result<PathBuf> {
     let mut stderr = io::stderr();
-    write!(
-        stderr,
-        "Repository path (folder or dhara.config.toml): "
-    )?;
+    write!(stderr, "Repository path (folder or dhara.config.toml): ")?;
     stderr.flush()?;
 
     let mut line = String::new();
@@ -267,8 +255,7 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 index += 1;
             }
             "-r" | "--repository" => {
-                parsed.repository =
-                    Some(PathBuf::from(next_value(&args, index, "--repository")?));
+                parsed.repository = Some(PathBuf::from(next_value(&args, index, "--repository")?));
                 index += 2;
             }
             "-w" | "--workers" => {
@@ -294,8 +281,7 @@ fn parse_root_args(args: Vec<String>) -> Result<RootArgs> {
                 index += 2;
             }
             _ if token.starts_with("--repository=") => {
-                parsed.repository =
-                    Some(PathBuf::from(token.trim_start_matches("--repository=")));
+                parsed.repository = Some(PathBuf::from(token.trim_start_matches("--repository=")));
                 index += 1;
             }
             _ if token.starts_with("-r=") => {
@@ -374,9 +360,7 @@ mod tests {
 
     use dhara_tool_kernel::{CONFIG_PATH, resolve_and_persist_repository, try_cached_repository};
 
-    use super::{
-        LaunchMode, determine_launch_mode, parse_root_args, try_early_repository,
-    };
+    use super::{LaunchMode, determine_launch_mode, parse_root_args, try_early_repository};
 
     #[test]
     fn no_command_with_gui_uses_interactive() {
@@ -432,7 +416,9 @@ mod tests {
         fs::create_dir_all(&exe).unwrap();
         fs::write(root.join(CONFIG_PATH), "[versions]\n").unwrap();
 
-        let resolved = try_early_repository(&exe, Some(root.clone())).unwrap().unwrap();
+        let resolved = try_early_repository(&exe, Some(root.clone()))
+            .unwrap()
+            .unwrap();
         assert!(try_cached_repository(&exe).is_some());
         assert_eq!(
             resolved,
