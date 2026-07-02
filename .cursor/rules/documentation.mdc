@@ -23,9 +23,9 @@ This monorepo has multiple READMEs; each is a real publish or discovery surface:
 | [`README.md`][root-readme] | **GitHub** — workspace overview, clone, local dev |
 | [`src/core/dhara_storage/README.md`][crate-dhara-storage] | **crates.io** (`readme` in Cargo.toml) |
 | [`src/core/dhara_storage_dal/README.md`][crate-dal] | **crates.io** |
-| [`src/dharastorage/README.md`][crate-dharastorage] | **crates.io** |
+| [`src/bindings/dharastorage-ffi/README.md`][crate-dharastorage] | **crates.io** (`readme` in Cargo.toml) |
 | [`tooling/dhara_tool/README.md`][crate-tool] | **crates.io** |
-| [`src/bindings/Dhara.Storage/README.md`][nuget-readme] | **NuGet** (`PackageReadmeFile` / `dhara.config.toml`) |
+| [`src/bindings/csharp/Dhara.Storage/README.md`][nuget-readme] | **NuGet** (`PackageReadmeFile` / `dhara.config.toml`) |
 
 When editing a project README, **scope content to that package** — install, API, and examples for that crate or NuGet package only. Link to the root README or `docs/` for workspace-wide context; do not paste the whole monorepo story into every package README.
 
@@ -54,7 +54,7 @@ When editing the **root** README, orient GitHub visitors: what the workspace is,
 [root-readme]: ../README.md
 [crate-dhara-storage]: ../src/core/dhara_storage/README.md
 [crate-dal]: ../src/core/dhara_storage_dal/README.md
-[crate-dharastorage]: ../src/dharastorage/README.md
+[crate-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
 [crate-tool]: ../tooling/dhara_tool/README.md
-[nuget-readme]: ../src/bindings/Dhara.Storage/README.md
+[nuget-readme]: ../src/bindings/csharp/Dhara.Storage/README.md
 [docs-index]: ../docs/README.md

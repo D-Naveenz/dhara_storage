@@ -14,8 +14,8 @@ The builder normalizes the date to ISO `YYYY-MM-DD` in the output `filedefs.dat`
   compiled binary, similar to an MSBuild "Copy to Output Directory" step.
 - When the CLI runs without an explicit `--input`, it looks here first and
   prefers `triddefs_xml.7z` when it exists.
-- Launching `dhara_tool` without a subcommand opens the interactive Dhara TUI
-  when a real terminal is available, and the defs commands in that TUI use this
+- Launching `dhara_tool` without a subcommand opens the interactive GUI when a
+  graphical display is available, and the defs commands in that GUI use this
   copied `package/` directory as their default source location.
 
 Source: [TrIDNet - File Identifier](https://mark0.net/soft-tridnet-e.html)

@@ -79,4 +79,4 @@ Logs are for **humans and agents**, not aggregators. Write plain sentences, one 
 
 ### When diagnosing
 
-Read `tooling/logs/{date}_dhara_tool*.log` → `started` → `{module} started/finished` → `phase ` / `TrID transform` → `exiting`.
+Read `{tool_root}/logs/{date}_dhara_tool*.log` (e.g. `target/dist/logs/` for the dist binary) → `started` → `{module} started/finished` → `phase ` / `TrID transform` → `exiting`.

@@ -205,7 +205,7 @@ Use typed ABI for hot structured result paths such as listings, file information
 - [CI/CD pipelines][ci-cd] — native package verification on Windows CI
 - [Docs index][docs-index]
 
-[readme-dharastorage]: ../src/dharastorage/README.md
-[readme-nuget]: ../src/bindings/Dhara.Storage/README.md
+[readme-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
+[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md

@@ -1,0 +1,700 @@
+use std::fs;
+use std::path::{Path, PathBuf};
+
+use anyhow::{Context, Result, bail};
+use tracing::debug;
+
+use dhara_tool_kernel::CommandResult;
+use dhara_tool_kernel::{
+    logging::log_module_step_debug,
+    paths::{default_artifacts_dir, resolve_output_dir},
+    repo_config::{DharaRepoConfig, load_env, verify_release},
+    subprocess::{
+        inspect_package_entries, run_command, run_command_expect_failure,
+        run_command_with_env_redacted, write_nuget_config,
+    },
+};
+
+use crate::native_rids::{
+    buildable_runtimes_on_host, native_lib_filename, package_native_path, platform, platform_target,
+};
+
+#[derive(Debug, Clone)]
+pub struct PackageOptions {
+    pub configuration: String,
+    pub version_override: Option<String>,
+    pub source_override: Option<String>,
+    pub api_key_env_override: Option<String>,
+    pub output_dir: Option<PathBuf>,
+    pub execute_publish: bool,
+    pub native_stage_override: Option<PathBuf>,
+    pub prepacked_nuget_override: Option<PathBuf>,
+}
+
+pub fn pack(
+    repo_root: &Path,
+    tool_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    log_module_step_debug(&format!(
+        "packing NuGet package (configuration={}, version={})",
+        options.configuration,
+        options.version_override.as_deref().unwrap_or("from config")
+    ));
+    verify_release(repo_root)?;
+
+    let version = effective_version(config, &options.version_override);
+    let artifacts_root = artifacts_root(tool_root)?;
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
+    let native_stage_root = if let Some(stage) = options
+        .native_stage_override
+        .clone()
+        .or_else(native_stage_from_env)
+    {
+        absolute_native_stage_root(repo_root, &stage)
+    } else {
+        let stage = artifacts_root.join("native-stage");
+        reset_directory(&stage)?;
+        stage_native_assets(repo_root, config, options, &stage)?;
+        stage
+    };
+    let nuget_output = output_root.join("nuget");
+    reset_directory(&nuget_output)?;
+
+    validate_staged_native_assets(&native_stage_root, config)?;
+
+    run_command(
+        "dotnet",
+        &[
+            "pack".to_owned(),
+            config.ci.package_project.clone(),
+            "--configuration".to_owned(),
+            options.configuration.clone(),
+            "--include-symbols".to_owned(),
+            "-p:ContinuousIntegrationBuild=true".to_owned(),
+            "-p:Platform=AnyCPU".to_owned(),
+            "-p:PlatformTarget=AnyCPU".to_owned(),
+            format!("-p:Version={version}"),
+            format!("-p:StagedNativeRoot={}", native_stage_root.display()),
+            "--output".to_owned(),
+            nuget_output.display().to_string(),
+        ],
+        repo_root,
+    )?;
+
+    let package_path = nuget_output.join(format!("{}.{}.nupkg", config.nuget.package_id, version));
+    inspect_package_contents(&package_path, config)?;
+    log_module_step_debug(&format!(
+        "packed NuGet package at {}",
+        package_path.display()
+    ));
+
+    Ok(CommandResult::with_message(format!(
+        "Packed {}",
+        package_path.display()
+    )))
+}
+
+pub fn verify(
+    repo_root: &Path,
+    tool_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    log_module_step_debug(&format!(
+        "verifying NuGet package (configuration={})",
+        options.configuration
+    ));
+    pack(repo_root, tool_root, config, options)?;
+
+    let version = effective_version(config, &options.version_override);
+    let artifacts_root = artifacts_root(tool_root)?;
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
+    let package_path = output_root
+        .join("nuget")
+        .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
+    let local_config = artifacts_root.join("local-package.nuget.config");
+    let dependency_source = effective_source(repo_root, config, options)?;
+    write_nuget_config(
+        &local_config,
+        &[
+            package_path
+                .parent()
+                .context("package path should have a parent")?
+                .to_path_buf(),
+            PathBuf::from(&dependency_source),
+        ],
+    )?;
+
+    restore_smoke_consumer(
+        repo_root,
+        config,
+        &version,
+        &local_config,
+        Some(&config.ci.host_runtime_smoke),
+        false,
+    )?;
+    run_smoke_consumer(repo_root, config, &version)?;
+    verify_unsupported_runtime_rejected(repo_root, config, &version, &local_config)?;
+    restore_smoke_consumer(
+        repo_root,
+        config,
+        &version,
+        &local_config,
+        Some(&config.ci.aot_runtime_smoke),
+        true,
+    )?;
+    publish_aot_smoke_consumer(
+        repo_root,
+        config,
+        &version,
+        &artifacts_root.join("smoke-aot"),
+        &config.ci.aot_runtime_smoke,
+    )?;
+    log_module_step_debug(&format!(
+        "completed NuGet verification at {}",
+        package_path.display()
+    ));
+    Ok(CommandResult::with_message(
+        "Package verified successfully.",
+    ))
+}
+
+pub fn publish(
+    repo_root: &Path,
+    tool_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    log_module_step_debug(&format!(
+        "publishing NuGet package (execute={})",
+        options.execute_publish
+    ));
+    verify(repo_root, tool_root, config, options)?;
+
+    if !options.execute_publish {
+        return Ok(CommandResult::with_message(
+            "Dry run complete. Package was verified but not published.",
+        ));
+    }
+
+    let version = effective_version(config, &options.version_override);
+    let source = effective_source(repo_root, config, options)?;
+    let api_key_env = options
+        .api_key_env_override
+        .clone()
+        .unwrap_or_else(|| config.publish.api_key_env.clone());
+    let api_key = secret_from_env(repo_root, &api_key_env)?;
+
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
+    let package_path = output_root
+        .join("nuget")
+        .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
+
+    run_command_with_env_redacted(
+        "dotnet",
+        &[
+            "nuget".to_owned(),
+            "push".to_owned(),
+            package_path.display().to_string(),
+            "--api-key".to_owned(),
+            api_key.clone(),
+            "--source".to_owned(),
+            source.clone(),
+            "--skip-duplicate".to_owned(),
+        ],
+        repo_root,
+        &[],
+        &[api_key.as_str()],
+    )?;
+
+    log_module_step_debug(&format!(
+        "published NuGet package to {} via {}",
+        package_path.display(),
+        source
+    ));
+
+    Ok(CommandResult::with_message(
+        "Published package successfully.",
+    ))
+}
+
+pub fn publish_packed(
+    repo_root: &Path,
+    tool_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    log_module_step_debug("publishing pre-packed NuGet package");
+
+    let version = effective_version(config, &options.version_override);
+    let source = effective_source(repo_root, config, options)?;
+    let api_key_env = options
+        .api_key_env_override
+        .clone()
+        .unwrap_or_else(|| config.publish.api_key_env.clone());
+    let api_key = secret_from_env(repo_root, &api_key_env)?;
+
+    let output_root = output_root(tool_root, options.output_dir.as_ref())?;
+    let package_path = if let Some(path) = options.prepacked_nuget_override.as_ref() {
+        path.clone()
+    } else {
+        output_root
+            .join("nuget")
+            .join(format!("{}.{}.nupkg", config.nuget.package_id, version))
+    };
+    if !package_path.exists() {
+        bail!("NuGet package does not exist: {}", package_path.display());
+    }
+
+    run_command_with_env_redacted(
+        "dotnet",
+        &[
+            "nuget".to_owned(),
+            "push".to_owned(),
+            package_path.display().to_string(),
+            "--api-key".to_owned(),
+            api_key.clone(),
+            "--source".to_owned(),
+            source.clone(),
+            "--skip-duplicate".to_owned(),
+        ],
+        repo_root,
+        &[],
+        &[api_key.as_str()],
+    )?;
+
+    log_module_step_debug(&format!(
+        "published pre-packed NuGet package to {} via {}",
+        package_path.display(),
+        source
+    ));
+
+    Ok(CommandResult::with_message(
+        "Published package successfully.",
+    ))
+}
+
+fn stage_native_assets(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+    stage_root: &Path,
+) -> Result<()> {
+    let profile_flag = if options.configuration.eq_ignore_ascii_case("Release") {
+        "--release"
+    } else {
+        bail!("only Release packaging is currently supported");
+    };
+
+    let runtimes = buildable_runtimes_on_host(&config.ci.native_runtimes);
+    if runtimes.is_empty() {
+        bail!("no native runtimes are buildable on the current host");
+    }
+
+    for rid in runtimes {
+        let target = config
+            .targets
+            .rust_targets
+            .get(&rid)
+            .with_context(|| format!("missing rust target mapping for runtime '{rid}'"))?;
+        let lib_name = native_lib_filename(&rid)?;
+        debug!(
+            target: "dhara_tool::package_flow",
+            runtime = %rid,
+            rust_target = %target,
+            stage_root = %stage_root.display(),
+            "staging native asset"
+        );
+        run_command(
+            "cargo",
+            &[
+                "build".to_owned(),
+                "-p".to_owned(),
+                "dharastorage-ffi".to_owned(),
+                profile_flag.to_owned(),
+                "--target".to_owned(),
+                target.clone(),
+            ],
+            repo_root,
+        )?;
+
+        let source_path = repo_root
+            .join("target")
+            .join(target)
+            .join("release")
+            .join(lib_name);
+        let destination_path = stage_root
+            .join("runtimes")
+            .join(&rid)
+            .join("native")
+            .join(lib_name);
+        if let Some(parent) = destination_path.parent() {
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create {}", parent.display()))?;
+        }
+        fs::copy(&source_path, &destination_path).with_context(|| {
+            format!(
+                "failed to copy native asset from '{}' to '{}'",
+                source_path.display(),
+                destination_path.display()
+            )
+        })?;
+    }
+
+    Ok(())
+}
+
+/// Stages native libraries buildable on the current host into `{tool_root}/artifacts/native-stage`.
+pub fn stage_native_for_host(
+    repo_root: &Path,
+    tool_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<CommandResult> {
+    let artifacts_root = artifacts_root(tool_root)?;
+    let stage_root = artifacts_root.join("native-stage");
+    reset_directory(&stage_root)?;
+    stage_native_assets(repo_root, config, options, &stage_root)?;
+    Ok(CommandResult::with_message(format!(
+        "Staged host native assets at {}",
+        stage_root.display()
+    )))
+}
+
+fn inspect_package_contents(package_path: &Path, config: &DharaRepoConfig) -> Result<()> {
+    let entries = inspect_package_entries(package_path)?;
+    debug!(
+        target: "dhara_tool::package_flow",
+        package_path = %package_path.display(),
+        entry_count = entries.len(),
+        "inspecting package contents"
+    );
+    if !entries
+        .iter()
+        .any(|entry| entry == "lib/net10.0/Dhara.Storage.dll")
+    {
+        bail!("managed assembly missing from package");
+    }
+
+    for rid in &config.ci.native_runtimes {
+        let expected = package_native_path(rid)?;
+        if !entries.iter().any(|entry| entry == &expected) {
+            bail!("native asset missing from package: {expected}");
+        }
+    }
+    if !entries.iter().any(|entry| entry == "README.md") {
+        bail!("README.md missing from package");
+    }
+    if let Some(icon) = &config.nuget.icon {
+        let icon_name = Path::new(icon)
+            .file_name()
+            .and_then(|value| value.to_str())
+            .with_context(|| format!("package icon path must end with a file name: {icon}"))?;
+        if !entries.iter().any(|entry| entry == icon_name) {
+            bail!("package icon missing from package: {icon_name}");
+        }
+    }
+    if !entries
+        .iter()
+        .any(|entry| entry == "build/Dhara.Storage.targets")
+    {
+        bail!("build/Dhara.Storage.targets missing from package");
+    }
+    Ok(())
+}
+
+fn restore_smoke_consumer(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    version: &str,
+    nuget_config: &Path,
+    runtime: Option<&str>,
+    publish_aot: bool,
+) -> Result<()> {
+    log_module_step_debug(&format!(
+        "restoring smoke consumer {} (runtime={}, aot={publish_aot})",
+        config.ci.smoke_project,
+        runtime.unwrap_or("default")
+    ));
+    remove_package_cache(repo_root, &config.nuget.package_id, version)?;
+    reset_smoke_consumer_outputs(repo_root, config)?;
+    let mut args = vec![
+        "restore".to_owned(),
+        config.ci.smoke_project.clone(),
+        format!("-p:DharaStoragePackageVersion={version}"),
+        format!("--configfile={}", nuget_config.display()),
+        "--force-evaluate".to_owned(),
+    ];
+    if let Some(runtime) = runtime {
+        args.push("--runtime".to_owned());
+        args.push(runtime.to_owned());
+        push_dotnet_platform_args(&mut args, runtime)?;
+    }
+    if publish_aot {
+        args.push("-p:PublishAot=true".to_owned());
+    }
+    run_command("dotnet", &args, repo_root)
+}
+
+fn run_smoke_consumer(repo_root: &Path, config: &DharaRepoConfig, version: &str) -> Result<()> {
+    log_module_step_debug(&format!(
+        "running smoke consumer {} (version={version})",
+        config.ci.smoke_project
+    ));
+    let mut run_args = vec![
+        "run".to_owned(),
+        "--project".to_owned(),
+        config.ci.smoke_project.clone(),
+        "--configuration".to_owned(),
+        "Release".to_owned(),
+        "--runtime".to_owned(),
+        config.ci.host_runtime_smoke.clone(),
+        "--no-restore".to_owned(),
+        format!("-p:DharaStoragePackageVersion={version}"),
+    ];
+    push_dotnet_platform_args(&mut run_args, &config.ci.host_runtime_smoke)?;
+    run_command("dotnet", &run_args, repo_root)
+}
+
+fn verify_unsupported_runtime_rejected(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    version: &str,
+    nuget_config: &Path,
+) -> Result<()> {
+    log_module_step_debug(&format!(
+        "verifying unsupported runtime rejection for {} (win-x86)",
+        config.ci.smoke_project
+    ));
+    remove_package_cache(repo_root, &config.nuget.package_id, version)?;
+    run_command_expect_failure(
+        "dotnet",
+        &[
+            "build".to_owned(),
+            config.ci.smoke_project.clone(),
+            "--configuration".to_owned(),
+            "Release".to_owned(),
+            "--runtime".to_owned(),
+            "win-x86".to_owned(),
+            "-p:Platform=x86".to_owned(),
+            "-p:PlatformTarget=x86".to_owned(),
+            format!("--configfile={}", nuget_config.display()),
+            format!("-p:DharaStoragePackageVersion={version}"),
+        ],
+        repo_root,
+        "does not support 32-bit runtime identifier",
+    )
+}
+
+fn publish_aot_smoke_consumer(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    version: &str,
+    output_dir: &Path,
+    runtime: &str,
+) -> Result<()> {
+    log_module_step_debug(&format!(
+        "publishing AOT smoke consumer {} (runtime={runtime}, output={})",
+        config.ci.smoke_project,
+        output_dir.display()
+    ));
+    reset_directory(output_dir)?;
+    let mut publish_args = vec![
+        "publish".to_owned(),
+        config.ci.smoke_project.clone(),
+        "--configuration".to_owned(),
+        "Release".to_owned(),
+        "--runtime".to_owned(),
+        runtime.to_owned(),
+        "--self-contained".to_owned(),
+        "true".to_owned(),
+        "--no-restore".to_owned(),
+        "-p:PublishAot=true".to_owned(),
+        format!("-p:DharaStoragePackageVersion={version}"),
+        "--output".to_owned(),
+        output_dir.display().to_string(),
+    ];
+    push_dotnet_platform_args(&mut publish_args, runtime)?;
+    run_command("dotnet", &publish_args, repo_root)?;
+
+    let executable = smoke_consumer_executable(output_dir);
+    run_command(
+        executable
+            .to_str()
+            .context("published smoke consumer path was not valid utf-8")?,
+        &[],
+        repo_root,
+    )
+}
+
+fn remove_package_cache(repo_root: &Path, package_id: &str, version: &str) -> Result<()> {
+    let mut package_roots = Vec::new();
+    if let Some(path) = std::env::var_os("NUGET_PACKAGES") {
+        package_roots.push(PathBuf::from(path));
+    }
+    if let Some(path) = std::env::var_os("DOTNET_CLI_HOME") {
+        package_roots.push(PathBuf::from(path).join(".nuget").join("packages"));
+    }
+    if let Some(home) = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME")) {
+        package_roots.push(PathBuf::from(home).join(".nuget").join("packages"));
+    }
+    package_roots.push(repo_root.join(".dotnet").join(".nuget").join("packages"));
+
+    package_roots.sort();
+    package_roots.dedup();
+
+    for package_root in package_roots {
+        let package_path = package_root
+            .join(package_id.to_ascii_lowercase())
+            .join(version);
+        if package_path.exists() {
+            fs::remove_dir_all(&package_path).with_context(|| {
+                format!(
+                    "failed to remove stale package cache at {}",
+                    package_path.display()
+                )
+            })?;
+        }
+    }
+    Ok(())
+}
+
+fn reset_smoke_consumer_outputs(repo_root: &Path, config: &DharaRepoConfig) -> Result<()> {
+    let project_path = repo_root.join(&config.ci.smoke_project);
+    let project_dir = project_path.parent().with_context(|| {
+        format!(
+            "smoke project path must have a parent: {}",
+            project_path.display()
+        )
+    })?;
+    for directory in ["bin", "obj"] {
+        let path = project_dir.join(directory);
+        if path.exists() {
+            fs::remove_dir_all(&path)
+                .with_context(|| format!("failed to remove {}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+fn push_dotnet_platform_args(args: &mut Vec<String>, runtime: &str) -> Result<()> {
+    if let Some(value) = platform(runtime)? {
+        args.push(format!("-p:Platform={value}"));
+    }
+    if let Some(value) = platform_target(runtime)? {
+        args.push(format!("-p:PlatformTarget={value}"));
+    }
+    Ok(())
+}
+
+fn smoke_consumer_executable(output_dir: &Path) -> PathBuf {
+    if cfg!(windows) {
+        output_dir.join("Dhara.Storage.ConsumerSmoke.exe")
+    } else {
+        output_dir.join("Dhara.Storage.ConsumerSmoke")
+    }
+}
+
+fn effective_version(config: &DharaRepoConfig, override_value: &Option<String>) -> String {
+    override_value
+        .clone()
+        .unwrap_or_else(|| config.versions.workspace.clone())
+}
+
+fn effective_source(
+    repo_root: &Path,
+    config: &DharaRepoConfig,
+    options: &PackageOptions,
+) -> Result<String> {
+    if let Some(source) = options.source_override.clone().and_then(non_empty_option) {
+        return Ok(source);
+    }
+
+    if let Some(source) = env_file_value(repo_root, "NUGET_SOURCE")? {
+        return Ok(source);
+    }
+
+    if let Ok(source) = std::env::var("NUGET_SOURCE")
+        && !source.trim().is_empty()
+    {
+        return Ok(source);
+    }
+
+    Ok(config.nuget.source.clone())
+}
+
+fn secret_from_env(repo_root: &Path, key: &str) -> Result<String> {
+    if let Some(value) = env_file_value(repo_root, key)? {
+        return Ok(value);
+    }
+
+    std::env::var(key)
+        .ok()
+        .and_then(non_empty_option)
+        .with_context(|| format!("{key} is not set in the environment or .env.local"))
+}
+
+fn env_file_value(repo_root: &Path, key: &str) -> Result<Option<String>> {
+    Ok(load_env(repo_root)?.remove(key).and_then(non_empty_option))
+}
+
+fn non_empty_option(value: String) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_owned())
+    }
+}
+
+fn validate_staged_native_assets(stage_root: &Path, config: &DharaRepoConfig) -> Result<()> {
+    for rid in &config.ci.native_runtimes {
+        let lib_name = native_lib_filename(rid)?;
+        let path = stage_root
+            .join("runtimes")
+            .join(rid)
+            .join("native")
+            .join(lib_name);
+        if !path.is_file() {
+            bail!(
+                "staged native asset missing before pack: {}",
+                path.display()
+            );
+        }
+    }
+    Ok(())
+}
+
+fn absolute_native_stage_root(repo_root: &Path, stage: &Path) -> PathBuf {
+    if stage.is_absolute() {
+        stage.to_path_buf()
+    } else {
+        repo_root.join(stage)
+    }
+}
+
+fn artifacts_root(tool_root: &Path) -> Result<PathBuf> {
+    let root = default_artifacts_dir(tool_root);
+    fs::create_dir_all(&root).with_context(|| format!("failed to create {}", root.display()))?;
+    Ok(root)
+}
+
+fn output_root(tool_root: &Path, override_value: Option<&PathBuf>) -> Result<PathBuf> {
+    let root = resolve_output_dir(tool_root, override_value.map(PathBuf::as_path));
+    fs::create_dir_all(&root).with_context(|| format!("failed to create {}", root.display()))?;
+    Ok(root)
+}
+
+fn reset_directory(path: &Path) -> Result<()> {
+    if path.exists() {
+        fs::remove_dir_all(path).with_context(|| format!("failed to remove {}", path.display()))?;
+    }
+    fs::create_dir_all(path).with_context(|| format!("failed to create {}", path.display()))?;
+    Ok(())
+}
+
+fn native_stage_from_env() -> Option<PathBuf> {
+    std::env::var_os("DHARA_NATIVE_STAGE_OVERRIDE").map(PathBuf::from)
+}

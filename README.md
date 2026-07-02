@@ -6,7 +6,7 @@
 
 Dhara Storage is a Rust-first storage and file-analysis workspace with a Windows-first delivery story.
 It ships a native runtime, a C ABI layer, a .NET NuGet package, and operator tooling from one repo.
-Current release line: **0.8.0** (shared across crates and NuGet).
+Current release line: **0.9.0** (workspace crates and NuGet; `dhara_tool` is independently versioned at **0.8.9**).
 
 ## ✨ Key Features
 
@@ -15,7 +15,7 @@ Current release line: **0.8.0** (shared across crates and NuGet).
 - **Debounced watching** — stable directory change notifications
 - **Layered delivery** — Rust core → C ABI → `net10.0` managed wrapper
 - **Multi-RID NuGet** — `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`
-- **Operator CLI** — config sync, native staging, package verify, and release flows
+- **Operator CLI** — config activation, native staging, package verify, and release flows
 
 ## 📦 Tech Stack & Architecture
 
@@ -25,7 +25,7 @@ Current release line: **0.8.0** (shared across crates and NuGet).
 | Definitions DAL | FlatBuffers, embedded `filedefs.dat` |
 | Native interop | `cdylib` C ABI (`dharastorage`) |
 | Managed bindings | .NET 10 (`Dhara.Storage`) |
-| Operator surface | `dhara_tool` (Clap + Ratatui TUI) |
+| Operator surface | `dhara_tool` (Clap + iced GUI) |
 | CI / release | GitHub Actions, `dhara.config.toml` |
 
 ```
@@ -34,11 +34,12 @@ dhara_storage/
 │   ├── core/
 │   │   ├── dhara_storage/       # Rust runtime (crates.io)
 │   │   └── dhara_storage_dal/   # FlatBuffers DAL (crates.io)
-│   ├── dharastorage/            # C ABI for FFI hosts
-│   └── bindings/Dhara.Storage/  # NuGet package source
+│   ├── bindings/
+│   │   ├── dharastorage-ffi/    # C ABI (`dharastorage` cdylib)
+│   │   └── csharp/              # Dhara.Storage NuGet source
 ├── tooling/
-│   ├── dhara_tool/              # Operator CLI
-│   ├── scripts/                 # verify-local, stage-native, merge
+│   ├── dhara_tool/              # Operator CLI (nested workspace)
+│   ├── scripts/                 # ensure-dhara-tool-dist, verify-local (dist quality run)
 │   └── output/                  # staged packages (gitignored)
 ├── docs/                        # technical reference
 ├── dhara.config.toml            # shared version + publish metadata
@@ -91,7 +92,7 @@ Local secrets belong in `.env.local`, not in git. Run `cargo run -p dhara_tool -
 
 ```toml
 [dependencies]
-dhara_storage = "0.8.0"
+dhara_storage = "0.9.0"
 ```
 
 ```rust
@@ -105,7 +106,7 @@ let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
 **.NET** — install [Dhara.Storage][readme-nuget]:
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.8.0
+dotnet add package Dhara.Storage --version 0.9.0
 ```
 
 **Operator** — verify package shape and dry-run release:
@@ -130,7 +131,7 @@ cargo run -p dhara_tool -- release run --dry-run
 # Per-crate Rust tests
 cargo test -p dhara_storage --all-features
 cargo test -p dhara_storage_dal
-cargo test -p dharastorage
+cargo test -p dharastorage-ffi
 
 # NuGet package verification (after native staging)
 cargo run -p dhara_tool -- verify package
@@ -148,8 +149,8 @@ Licensed under [Apache-2.0][license]. See per-crate `Cargo.toml` and the NuGet p
 
 [readme-dhara-storage]: src/core/dhara_storage/README.md
 [readme-dal]: src/core/dhara_storage_dal/README.md
-[readme-dharastorage]: src/dharastorage/README.md
-[readme-nuget]: src/bindings/Dhara.Storage/README.md
+[readme-dharastorage]: src/bindings/dharastorage-ffi/README.md
+[readme-nuget]: src/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: tooling/dhara_tool/README.md
 [verify-local]: tooling/scripts/verify-local.ps1
 [env-example]: .env.example
