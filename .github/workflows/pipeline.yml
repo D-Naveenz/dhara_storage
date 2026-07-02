@@ -510,11 +510,11 @@ jobs:
             done
           done
 
-      - name: Verify package
+      - name: Pack NuGet package
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package \
+          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes package pack \
             --native-stage target/dist/artifacts/native-stage
 
       - name: Write release metadata
@@ -547,3 +547,80 @@ jobs:
           name: release-metadata
           path: target/dist/artifacts/release-metadata.json
           retention-days: 90
+
+  nuget-verify:
+    name: NuGet verify (windows)
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
+    needs: nuget-package
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: stable
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Compute dhara_tool source hash
+        id: tool-hash
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256_file() {
+            if command -v sha256sum >/dev/null 2>&1; then
+              sha256sum "$@"
+            else
+              shasum -a 256 "$@"
+            fi
+          }
+          hash=$(
+            {
+              git ls-files 'tooling/dhara_tool'
+              git ls-files 'Cargo.toml' 'Cargo.lock'
+            } | sort -u | while read -r file; do
+              [ -f "$file" ] && sha256_file "$file"
+            done | sha256_file | awk '{print substr($1, 1, 16)}'
+          )
+          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
+
+      - name: Restore dhara_tool cache
+        id: tool-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: target/dist
+          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
+
+      - name: Build dhara_tool on cache miss
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
+        run: cargo build -p dhara_tool --profile dist
+
+      - name: Save dhara_tool cache
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
+        uses: actions/cache/save@v4
+        with:
+          path: target/dist
+          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
+
+      - name: Download merged native stage
+        uses: actions/download-artifact@v4
+        with:
+          name: release-native-stage
+          path: target/dist/artifacts/native-stage
+
+      - name: Verify package
+        shell: bash
+        run: |
+          set -euo pipefail
+          target/dist/dhara_tool.exe -r "$GITHUB_WORKSPACE" --yes verify package \
+            --native-stage target/dist/artifacts/native-stage

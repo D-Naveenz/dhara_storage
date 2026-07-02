@@ -6,7 +6,7 @@ Human-readable map of GitHub Actions workflows and where `dhara_tool` is used ve
 
 | Workflow | Event | Jobs |
 |----------|-------|------|
-| [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)` |
+| [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (windows)` |
 | [pipeline.yml][pipeline-yml] | `workflow_dispatch` (`force_tool_rebuild`) | Same jobs |
 | [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` |
 | [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` |
@@ -26,8 +26,10 @@ flowchart TB
     PLA["platform (linux arm64)"]
     PM["platform (macos)"]
     PACK["NuGet package (linux)"]
+    VER["NuGet verify (windows)"]
     Q --> PW & PL & PLA & PM
     PW & PL & PLA & PM --> PACK
+    PACK --> VER
     PACK --> ART[release artifacts]
   end
 
@@ -57,7 +59,8 @@ flowchart TB
 | Native staging (Windows) | `dhara_tool package stage-native --msvc-env` (MSVC re-exec stays in tool) |
 | `dhara_tool` dist build | `cargo build -p dhara_tool --profile dist` on cache miss per OS |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
-| `verify package` | `dhara_tool verify package` on `NuGet package (linux)` only |
+| `package pack` | `dhara_tool package pack` on `NuGet package (linux)` with merged `--native-stage` |
+| `verify package` | `dhara_tool verify package` on `NuGet verify (windows)` — smoke/AOT require `win-x64` host |
 | Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
 | NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
 
@@ -110,8 +113,16 @@ After all platform jobs:
 
 1. Restore or build `linux-x64` `dhara_tool` (with Linux GUI deps on build).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
-3. `dhara_tool verify package --native-stage target/dist/artifacts/native-stage`
+3. `dhara_tool package pack --native-stage target/dist/artifacts/native-stage`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
+
+### `NuGet verify (windows)`
+
+After `NuGet package (linux)`:
+
+1. Restore or build `windows-x64` `dhara_tool`.
+2. Download `release-native-stage` artifact.
+3. `dhara_tool verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `win-x64`).
 
 ## CD: `publish-crates`
 
