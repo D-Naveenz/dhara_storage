@@ -9,15 +9,75 @@ env:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: pipeline-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  wait-for-tool-build:
+    name: wait for dhara_tool build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: dorny/paths-filter@v3
+        id: tool-paths
+        with:
+          filters: |
+            tool:
+              - tooling/dhara_tool/**
+              - Cargo.toml
+              - Cargo.lock
+              - .github/workflows/dhara-tool-build.yml
+              - .github/actions/restore-dhara-tool/**
+              - .github/actions/compute-dhara-tool-hash/**
+              - .github/actions/setup-linux-tool-deps/**
+
+      - name: Wait for dhara-tool-build workflow
+        if: steps.tool-paths.outputs.tool == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const ref = context.payload.pull_request.head.sha;
+            const maxAttempts = 120;
+            const sleepMs = 15000;
+
+            for (let attempt = 0; attempt < maxAttempts; attempt++) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: 'dhara-tool-build.yml',
+                head_sha: ref,
+                per_page: 1,
+              });
+
+              const run = data.workflow_runs[0];
+              if (!run) {
+                core.info(`No dhara-tool-build run yet for ${ref}; waiting...`);
+              } else if (run.status === 'completed') {
+                if (run.conclusion === 'success') {
+                  core.info(`dhara-tool-build completed successfully (run ${run.id}).`);
+                  return;
+                }
+                core.setFailed(`dhara-tool-build concluded with ${run.conclusion} (run ${run.id}).`);
+                return;
+              } else {
+                core.info(`dhara-tool-build run ${run.id} status: ${run.status}`);
+              }
+
+              await new Promise((resolve) => setTimeout(resolve, sleepMs));
+            }
+
+            core.setFailed('Timed out waiting for dhara-tool-build workflow.');
+
   quality:
     name: code quality (linux)
     if: github.event_name == 'pull_request'
+    needs: wait-for-tool-build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout

@@ -28,6 +28,7 @@ flowchart TB
   end
 
   subgraph pr ["pipeline.yml pull_request"]
+    WAIT[wait for dhara_tool build when tool paths change]
     RST[restore cached dhara_tool]
     Q[quality linux]
     PW[platform windows]
@@ -36,6 +37,7 @@ flowchart TB
     PM[platform macos]
     PR[publish_readiness linux]
     CACHE --> RST
+    WAIT --> RST
     RST --> Q & PW & PL & PLA & PM & PR
     Q --> PW & PL & PLA & PM --> PR
     PR --> ART[release artifacts]
@@ -79,7 +81,7 @@ NuGet CD still **requires PR artifacts** from `publish-readiness` at merge secon
 
 - **Cache key:** `dhara-tool-{source-hash}-{os-arch}` where `source-hash` is a SHA256 prefix over tracked files under `tooling/dhara_tool/**` plus root `Cargo.toml` and `Cargo.lock` ([`compute-dhara-tool-hash`](../.github/actions/compute-dhara-tool-hash/action.yml)). Rebuilds happen when tool sources or those manifests change — no version bump required for cache invalidation.
 - **Version metadata:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) and `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` still track operator releases; activation syncs manifests on run (`--yes` in CI).
-- **PR warming:** [`dhara-tool-build.yml`](../.github/workflows/dhara-tool-build.yml) runs on `pull_request` (tool paths) and pre-builds the dist matrix. [`restore-dhara-tool`](../.github/actions/restore-dhara-tool/action.yml) builds on cache miss and saves under the same hash key.
+- **PR warming:** [`dhara-tool-build.yml`](../.github/workflows/dhara-tool-build.yml) runs on `pull_request` (tool paths) and pre-builds the dist matrix. When those paths change, [`pipeline.yml`](../.github/workflows/pipeline.yml) `wait-for-tool-build` blocks until that workflow succeeds before restoring the tool. [`restore-dhara-tool`](../.github/actions/restore-dhara-tool/action.yml) builds on cache miss and saves under the same hash key.
 - **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), built with `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
 - **DAL coupling:** `dhara-tool-build` compiles against **crates.io** `dhara_storage_dal` (local `[patch.crates-io]` applies only in full workspace dev builds).
 
@@ -98,6 +100,10 @@ NuGet CD still **requires PR artifacts** from `publish-readiness` at merge secon
 Local developers: `cargo run -p dhara_tool -- quality run` or [verify-local][verify-local-ps1] (forwards to `cargo run`).
 
 ## PR jobs
+
+### `wait-for-tool-build`
+
+When the PR diff touches tool build inputs (same path set as `dhara-tool-build.yml`), polls until the `dhara-tool-build` workflow run for the PR head SHA completes successfully. Skips immediately when tool paths are unchanged.
 
 ### `quality` (linux)
 
