@@ -1,5 +1,9 @@
-use std::fs::{self, File, OpenOptions};
-use std::io::{Cursor, Write};
+use std::fs::{self, File};
+#[cfg(windows)]
+use std::fs::OpenOptions;
+use std::io::Cursor;
+#[cfg(windows)]
+use std::io::Write;
 use std::path::PathBuf;
 
 use dhara_storage::{
