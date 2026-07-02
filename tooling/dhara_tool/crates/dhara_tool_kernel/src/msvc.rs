@@ -17,16 +17,23 @@ pub fn run_with_msvc_env(command: &str) -> Result<()> {
         );
     }
 
+    let script = format!(
+        "@echo off\r\ncall \"{vcvars}\" x64_arm64\r\nif errorlevel 1 exit /b %errorlevel%\r\n{command}\r\n",
+        vcvars = vcvars.display(),
+        command = command,
+    );
+    let batch = std::env::temp_dir().join(format!("dhara_tool_msvc_{}.cmd", std::process::id()));
+    std::fs::write(&batch, script)
+        .with_context(|| format!("failed to write {}", batch.display()))?;
+
     let status = Command::new("cmd.exe")
         .arg("/d")
         .arg("/c")
-        .arg(format!(
-            "call \"{}\" x64_arm64 && {}",
-            vcvars.display(),
-            command
-        ))
+        .arg(&batch)
         .status()
         .context("failed to spawn cmd.exe for MSVC environment")?;
+
+    let _ = std::fs::remove_file(&batch);
 
     if !status.success() {
         bail!("MSVC command failed with status {status}: {command}");
@@ -70,6 +77,7 @@ fn locate_visual_studio_install() -> Result<std::path::PathBuf> {
     let install = String::from_utf8(output.stdout)
         .context("vswhere output was not valid UTF-8")?
         .trim()
+        .trim_matches('"')
         .to_owned();
     if install.is_empty() {
         bail!("Visual Studio with x64 and ARM64 MSVC build tools was not found");
