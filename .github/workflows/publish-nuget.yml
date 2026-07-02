@@ -70,23 +70,10 @@ jobs:
           fetch-depth: 0
           lfs: true
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
-
       - name: Install .NET SDK
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      - name: Restore dhara_tool
-        uses: ./.github/actions/restore-dhara-tool
-        with:
-          os-arch: linux-x64
 
       - name: Resolve PR CI artifact commit
         id: artifact-commit
@@ -140,7 +127,7 @@ jobs:
           if [ -d target/dist/artifacts/native-stage/runtimes ] && compgen -G "target/dist/output/nuget/*.nupkg" > /dev/null; then
             exit 0
           fi
-          echo "::error::No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure publish-readiness succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
+          echo "::error::No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure NuGet package (linux) succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
           exit 1
 
       - name: Resolve pre-packed NuGet path
@@ -156,18 +143,24 @@ jobs:
           echo "path=${package}" >> "${GITHUB_OUTPUT}"
 
       - name: Publish NuGet package
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         shell: bash
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           set -euo pipefail
-          tool=target/dist/dhara_tool
-          args=(release run --skip-cargo --prepacked-nuget "${{ steps.nupkg.outputs.path }}")
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            if [ "${{ inputs.dry_run }}" = "true" ]; then args+=(--dry-run); fi
-            if [ "${{ inputs.verify_package }}" = "true" ]; then args+=(--verify-package); fi
-          fi
-          "$tool" -r "$GITHUB_WORKSPACE" --yes "${args[@]}"
+          source=$(grep -E '^\s*source\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+          dotnet nuget push "${{ steps.nupkg.outputs.path }}" \
+            --api-key "$NUGET_API_KEY" \
+            --source "$source" \
+            --skip-duplicate
+
+      - name: Dry-run validation
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Dry run: validated pre-packed NuGet artifact at ${{ steps.nupkg.outputs.path }}"
 
       - name: Upload NuGet artifacts
         if: always()

@@ -80,20 +80,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Restore dhara_tool
-        uses: ./.github/actions/restore-dhara-tool
-        with:
-          os-arch: linux-x64
-
       - name: Publish crates
         shell: bash
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
-          tool=target/dist/dhara_tool
-          args=(release run --skip-nuget)
+          args=(
+            release --workspace --isolated
+            --tag-name 'v{{version}}' --no-confirm
+          )
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            args+=(--dry-run)
+            args+=(--allow-branch '*' --no-verify)
+          else
+            args+=(--allow-branch main --execute)
           fi
-          "$tool" -r "$GITHUB_WORKSPACE" --yes "${args[@]}"
+          cargo "${args[@]}"

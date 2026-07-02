@@ -151,7 +151,7 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 | `dhara_tool` | `[tool].version` + `tooling/dhara_tool/Cargo.toml` | Independent tool releases |
 | Tool's `dhara_storage_dal` dep | Semver pin in `dhara_tool_kernel/Cargo.toml` | Patch when publishing hotfix DAL |
 
-CI `dhara-tool-build` resolves DAL from the registry (patch applies only in full workspace builds on developer machines).
+CI `pipeline.yml` platform jobs build `dhara_tool` from source on cache miss (patch applies in full workspace builds on developer machines).
 
 ## Related docs
 

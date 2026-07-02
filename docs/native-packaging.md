@@ -113,7 +113,8 @@ Directory watch integration tests should **poll for the created file path** afte
 | Symptom | Likely cause | Check |
 |---------|--------------|-------|
 | `staged native asset missing before pack` | Merge produced empty `native-stage` | Verify `native merge` inputs include `runtimes/` |
-| Tool cache miss / slow pipeline restore | `dhara-tool-build` not run on PR or sources changed | Open/update a PR with tool-path changes; `restore-dhara-tool` rebuilds on miss |
+| Tool cache miss on Linux | `dhara_tool` built without GUI deps | Ensure `setup-linux-tool-deps` runs before any Linux `cargo build -p dhara_tool` in CI |
+| NuGet CD missing artifacts | `NuGet package (linux)` did not run on merged PR tip | Use merge commits; confirm `release-native-stage` / `release-nuget-package` artifacts exist for `HEAD^2` |
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |
@@ -132,7 +133,6 @@ Directory watch integration tests should **poll for the created file path** afte
 [nuget-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/nuget.rs
 [native-rids-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
-[tool-build-yml]: ../.github/workflows/dhara-tool-build.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
 [csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
 [watch-rs]: ../src/core/dhara_storage/src/watch.rs

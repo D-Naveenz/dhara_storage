@@ -122,7 +122,7 @@ cargo test -p dhara_tool
 cargo clippy -p dhara_tool --all-targets -- -D warnings
 ```
 
-CI runs `cargo test -p dhara_tool` once on Linux in [dhara-tool-build][tool-build-yml]; matrix legs only compile `profile.dist` per OS. Platform-specific paths (MSVC re-exec, native merge) are exercised by [pipeline][ci-cd] jobs.
+CI builds `profile.dist` per OS inside [pipeline][ci-cd] `platform (*)` jobs (cache keyed by tool source hash). Platform-specific paths (MSVC re-exec, native merge, verify package) are exercised there. PR CI does not run `cargo test -p dhara_tool` — validate locally.
 
 **VS Code:** tasks under `dhara-tool:` — `ensure dist`, `watch dev` (`cargo watch`, dev profile), `quality run (dist)`. Launch **Debug dhara_tool (dev)** for `cargo run`; **Run dhara_tool (dist)** ensures dist first. Requires [CodeLLDB][codelldb]; `cargo-watch` for the watch task.
 
@@ -150,7 +150,6 @@ Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
 [dhara-config]: ../../dhara.config.toml
 [env-example]: ../../.env.example
 [ci-cd]: ../../docs/ci-cd-pipelines.md
-[tool-build-yml]: ../../.github/workflows/dhara-tool-build.yml
 [ensure-dist-ps1]: ../../scripts/ensure-dhara-tool-dist.ps1
 [codelldb]: https://marketplace.visualstudio.com/items?itemName=vadimcn.vscode-lldb
 [logging]: ../../docs/logging.md

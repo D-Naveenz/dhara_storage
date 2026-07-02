@@ -32,7 +32,7 @@ lto = true          # Enables Link-time Optimization.
 opt-level = "s"     # Prioritizes small binary size. Use `3` if you prefer speed.
 strip = true        # Ensures debug symbols are removed.
 
-# Operator CLI — built rarely (version-bump / cache miss) via dhara-tool-build.yml
+# Operator CLI — built on cache miss in pipeline platform jobs; profile.dist in root Cargo.toml
 [profile.dist]
 inherits = "release"
 opt-level = 3
