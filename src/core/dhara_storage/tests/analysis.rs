@@ -1,6 +1,6 @@
-use std::fs::{self, File};
 #[cfg(windows)]
 use std::fs::OpenOptions;
+use std::fs::{self, File};
 use std::io::Cursor;
 #[cfg(windows)]
 use std::io::Write;
