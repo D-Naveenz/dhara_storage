@@ -41,6 +41,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup Linux GUI dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
       - name: Quality checks
         shell: bash
         run: |
@@ -162,6 +165,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup Linux GUI dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
       - name: Compute dhara_tool source hash
         id: tool-hash
         shell: bash
@@ -190,10 +196,6 @@ jobs:
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
-
-      - name: Setup Linux tool build dependencies
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: ./.github/actions/setup-linux-tool-deps
 
       - name: Build dhara_tool on cache miss
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
@@ -252,6 +254,9 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
+      - name: Setup Linux GUI dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
       - name: Compute dhara_tool source hash
         id: tool-hash
         shell: bash
@@ -280,10 +285,6 @@ jobs:
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-arm64
-
-      - name: Setup Linux tool build dependencies
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: ./.github/actions/setup-linux-tool-deps
 
       - name: Build dhara_tool on cache miss
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)

@@ -49,7 +49,7 @@ flowchart TB
 
 | Work | CI implementation |
 |------|-------------------|
-| `fmt` / `clippy` / `doc` (core + FFI) | Direct `cargo` on `ubuntu-latest` — **no tool**, **no GUI libs** |
+| `fmt` / `clippy` / `doc` (core + FFI) | Direct `cargo` on `ubuntu-latest` — **no tool**; [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib (`dhara_storage` / `file_icon_provider`) |
 | `fmt` on `dhara_tool` | Direct `cargo fmt` only (no clippy/doc for tool in CI) |
 | `cargo test` (core crates) | Direct `cargo test` in each `platform (*)` job |
 | `dotnet test` | Direct `dotnet test` on `platform (windows)` only |
@@ -61,7 +61,7 @@ flowchart TB
 | Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
 | NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
 
-**Linux GUI rule:** whenever CI **builds** `dhara_tool` on Linux, run [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) first (glib, gtk, pkg-config, wayland). Restoring a cached dist binary does not require those packages.
+**Linux GUI rule:** on Linux jobs that **link** `dhara_storage` (clippy/tests with default deps) or **build** `dhara_tool`, run [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) first (glib, gtk, pkg-config, wayland). Restoring a cached dist binary alone does not require those packages.
 
 ## Tool cache
 
@@ -85,7 +85,7 @@ NuGet CD still **requires PR artifacts** from `NuGet package (linux)` at merge s
 
 ### `code quality (linux)`
 
-Direct commands (no `dhara_tool`):
+Direct commands (no `dhara_tool`); [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib:
 
 - `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p dhara_tool --check`
 - `cargo clippy` on `dhara_storage` (all targets/features), then `dhara_storage_dal` + `dharastorage-ffi`
@@ -95,11 +95,12 @@ Direct commands (no `dhara_tool`):
 
 After `code quality (linux)`:
 
-1. Compute tool source hash; restore `target/dist` from Actions cache.
-2. On cache miss: build `dhara_tool` (`setup-linux-tool-deps` on Linux only); save cache.
-3. Direct Rust tests; `dotnet test` on Windows only.
-4. Stage native assets (tool on Windows with `--msvc-env`; direct `cargo build` elsewhere).
-5. Upload `native-stage-{windows,linux,linux-arm64,macos}`.
+1. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) on Linux (always — tests link `dhara_storage`).
+2. Compute tool source hash; restore `target/dist` from Actions cache.
+3. On cache miss: build `dhara_tool`; save cache.
+4. Direct Rust tests; `dotnet test` on Windows only.
+5. Stage native assets (tool on Windows with `--msvc-env`; direct `cargo build` elsewhere).
+6. Upload `native-stage-{windows,linux,linux-arm64,macos}`.
 
 CI does **not** run `cargo test -p dhara_tool`; developers validate the tool locally.
 
@@ -109,7 +110,7 @@ After all platform jobs:
 
 1. Restore or build `linux-x64` `dhara_tool` (with Linux GUI deps on build).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
-3. `dhara_tool verify package`
+3. `dhara_tool verify package --native-stage target/dist/artifacts/native-stage`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
 
 ## CD: `publish-crates`
