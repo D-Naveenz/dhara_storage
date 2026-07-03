@@ -1,231 +1,272 @@
 pub mod modals;
 
-use dhara_tool_cli::command::{CommandRegistry, CommandSpec};
-use dhara_tool_cli::interactive::{AppState, DiagnosticSeverity, MainTab, VisibleTreeRow};
-use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph, Tabs, Wrap};
+use dhara_tool_cli::command::{CommandRegistry, CommandSpec, FieldKind};
+use dhara_tool_cli::forms::FormValue;
+use dhara_tool_cli::interactive::{AppState, DiagnosticSeverity, MainTab};
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Style;
+use ratatui::text::Line;
+use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
+use ratatui_interact::components::{
+    CheckBox, CheckBoxState, InputState, ScrollableContent, ScrollableContentState, Tab,
+    TabView, TabViewAction, TabViewState,
+};
+use ratatui_interact::theme::Theme;
+use ratatui_interact::traits::ClickRegionRegistry;
 
-use crate::theme;
+use crate::focus::TuiFocus;
+use crate::theme as dhara_theme;
 
 const TAB_LABELS: [&str; 4] = ["Info", "Options", "Troubleshooting", "System"];
 
-pub fn render_tasks_panel(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    _state: &AppState,
-    rows: &[VisibleTreeRow],
-    selected_row: usize,
-    focused: bool,
-) {
-    let items: Vec<ListItem<'_>> = rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| {
-            let indent = "  ".repeat(row.depth);
-            let marker = if row.has_children {
-                if row.expanded { "▼ " } else { "▶ " }
-            } else {
-                "  "
-            };
-            let label = format!("{indent}{marker}{}", row.node.label);
-            let style = if index == selected_row {
-                theme::selected_style()
-            } else {
-                Style::default().fg(theme::TEXT)
-            };
-            ListItem::new(label).style(style)
-        })
-        .collect();
-
-    let list = List::new(items).block(
-        Block::default()
-            .title(" Tasks ")
-            .borders(Borders::ALL)
-            .border_style(if focused {
-                theme::border_style().fg(theme::ACCENT)
-            } else {
-                theme::border_style()
-            }),
-    );
-    frame.render_widget(list, area);
+pub struct CenterPanelClicks {
+    pub registry: ClickRegionRegistry<TabViewAction>,
 }
 
-pub fn render_tabs(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    state: &AppState,
-    focused: bool,
-) {
-    let selected = match state.main_tab {
-        MainTab::Info => 0,
-        MainTab::Options => 1,
-        MainTab::Troubleshooting => 2,
-        MainTab::SystemConfigs => 3,
-    };
-    let titles: Vec<Line<'_>> = TAB_LABELS
-        .iter()
-        .map(|title| Line::from(Span::raw(*title)))
-        .collect();
-    let tabs = Tabs::new(titles)
-        .block(
-            Block::default().borders(Borders::ALL).border_style(if focused {
-                theme::border_style().fg(theme::ACCENT)
-            } else {
-                theme::border_style()
-            }),
-        )
-        .select(selected)
-        .style(Style::default().fg(theme::MUTED))
-        .highlight_style(theme::selected_style());
-    frame.render_widget(tabs, area);
+pub fn sync_tab_view_from_state(tab_state: &mut TabViewState, main_tab: MainTab) {
+    tab_state.select(tab_index(main_tab));
 }
 
-pub fn render_tab_content(
+pub fn sync_state_from_tab_view(tab_state: &TabViewState) -> MainTab {
+    tab_from_index(tab_state.selected_index)
+}
+
+pub fn render_center_panel(
     frame: &mut Frame<'_>,
     area: Rect,
     state: &AppState,
     registry: &CommandRegistry,
+    theme: &Theme,
+    tab_state: &mut TabViewState,
+    shell_focus: &crate::focus::ShellFocus,
+    info_scroll: &mut ScrollableContentState,
+    trouble_scroll: &mut ScrollableContentState,
+    system_scroll: &mut ScrollableContentState,
     form_field: usize,
-    scroll: usize,
-) {
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(theme::border_style());
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    editing_form: bool,
+    option_input: &InputState,
+    option_checkbox: &CheckBoxState,
+) -> CenterPanelClicks {
+    sync_tab_view_from_state(tab_state, state.main_tab);
+    tab_state.focused = shell_focus.is_focused(&TuiFocus::MainTabs)
+        || shell_focus.is_focused(&TuiFocus::TabContent);
 
-    match state.main_tab {
-        MainTab::Info => render_info(frame, inner, state, registry),
-        MainTab::Options => render_options(frame, inner, state, registry, form_field),
-        MainTab::Troubleshooting => render_troubleshooting(frame, inner, state, scroll),
-        MainTab::SystemConfigs => render_system_configs(frame, inner, state),
+    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(area);
+    let tabs: Vec<Tab<'_>> = TAB_LABELS.iter().map(|label| Tab::new(label)).collect();
+
+    let mut click_registry = ClickRegionRegistry::new();
+    let tab_view = TabView::new(&tabs, tab_state)
+        .theme(theme)
+        .content(|_, _, _| {});
+    tab_view.render_with_registry(chunks[0], frame.buffer_mut(), &mut click_registry);
+
+    let selected_tab = tab_state.selected_index;
+    let content_focused = shell_focus.is_focused(&TuiFocus::TabContent);
+    info_scroll.set_focused(content_focused && selected_tab == 0);
+    trouble_scroll.set_focused(content_focused && selected_tab == 2);
+    system_scroll.set_focused(content_focused && selected_tab == 3);
+
+    match selected_tab {
+        0 => render_info_tab(chunks[1], frame.buffer_mut(), state, registry, info_scroll, theme),
+        1 => render_options_tab(
+            chunks[1],
+            frame.buffer_mut(),
+            state,
+            registry,
+            form_field,
+            editing_form,
+            option_input,
+            option_checkbox,
+            theme,
+            content_focused,
+        ),
+        2 => render_trouble_tab(chunks[1], frame.buffer_mut(), state, trouble_scroll, theme),
+        3 => render_system_tab(chunks[1], frame.buffer_mut(), state, system_scroll, theme),
+        _ => {}
+    }
+
+    CenterPanelClicks {
+        registry: click_registry,
     }
 }
 
-fn render_info(frame: &mut Frame<'_>, area: Rect, state: &AppState, registry: &CommandRegistry) {
+fn render_info_tab(
+    area: Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    state: &AppState,
+    registry: &CommandRegistry,
+    scroll: &mut ScrollableContentState,
+    theme: &Theme,
+) {
     let Some(command) = state.selected_command(registry) else {
-        frame.render_widget(Paragraph::new("Select a task from the tree."), area);
+        Paragraph::new("Select a task from the tree.").render(area, buf);
         return;
     };
 
     let mut lines = vec![
-        Line::from(vec![
-            Span::styled("What: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(command.ui.description),
-        ]),
-        Line::from(vec![
-            Span::styled("Summary: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(command.summary),
-        ]),
-        Line::from(""),
-        Line::from(vec![
-            Span::styled("How: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(format!(
-                "{} {}",
-                command.path_string(),
-                command.args_summary
-            )),
-        ]),
+        format!("What: {}", command.ui.description),
+        format!("Summary: {}", command.summary),
+        String::new(),
+        format!("How: {} {}", command.path_string(), command.args_summary),
     ];
-
     if !command.ui.fields.is_empty() {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "Fields:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )));
+        lines.push(String::new());
+        lines.push("Fields:".to_owned());
         for field in &command.ui.fields {
-            lines.push(Line::from(format!("  {} — {}", field.label, field.help)));
+            lines.push(format!("  {} — {}", field.label, field.help));
         }
     }
 
-    let text: Vec<Line<'_>> = lines;
-    frame.render_widget(Paragraph::new(text).wrap(Wrap { trim: true }), area);
+    scroll.set_lines(lines);
+    ScrollableContent::new(scroll)
+        .title("Info")
+        .theme(theme)
+        .render(area, buf);
 }
 
-fn render_options(
-    frame: &mut Frame<'_>,
+fn render_options_tab(
     area: Rect,
+    buf: &mut ratatui::buffer::Buffer,
     state: &AppState,
     registry: &CommandRegistry,
     form_field: usize,
+    editing_form: bool,
+    option_input: &InputState,
+    _option_checkbox: &CheckBoxState,
+    theme: &Theme,
+    content_focused: bool,
 ) {
     let Some(command) = state.selected_command(registry) else {
-        frame.render_widget(Paragraph::new("Select a task to edit options."), area);
+        Paragraph::new("Select a task to edit options.").render(area, buf);
         return;
     };
     let Some(form) = state.forms.get(command.id) else {
-        frame.render_widget(Paragraph::new("Loading form…"), area);
+        Paragraph::new("Loading form…").render(area, buf);
         return;
     };
 
-    let mut lines = Vec::new();
-    for (index, field) in command.ui.fields.iter().enumerate() {
-        let value = form.display_value(command, index);
-        let prefix = if index == form_field { "▸ " } else { "  " };
-        let style = if index == form_field {
-            theme::selected_style()
-        } else {
-            Style::default().fg(theme::TEXT)
-        };
-        lines.push(Line::styled(
-            format!("{prefix}{}: {value}", field.label),
-            style,
-        ));
-    }
-
-    if lines.is_empty() {
-        lines.push(Line::from("No options for this task. Press r to run."));
-    } else {
-        lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "Enter: edit | ←→: cycle select | Type to edit text",
-            Style::default().fg(theme::MUTED),
-        )));
-    }
-
-    frame.render_widget(Paragraph::new(lines), area);
-}
-
-fn render_troubleshooting(frame: &mut Frame<'_>, area: Rect, state: &AppState, scroll: usize) {
-    if state.troubleshooting_lines.is_empty() {
-        frame.render_widget(
-            Paragraph::new("Warnings and errors appear here during a run."),
-            area,
-        );
+    if command.ui.fields.is_empty() {
+        Paragraph::new("No options for this task. Press Run or r.").render(area, buf);
         return;
     }
 
-    let lines: Vec<Line<'_>> = state
-        .troubleshooting_lines
-        .iter()
-        .skip(scroll)
-        .map(|line| {
-            let (prefix, color) = match line.severity {
-                DiagnosticSeverity::Warn => ("WARN", theme::WARNING),
-                DiagnosticSeverity::Error => ("ERR ", theme::ERROR),
-            };
-            Line::from(vec![
-                Span::styled(format!("[{prefix}] "), Style::default().fg(color)),
-                Span::raw(line.text.as_str()),
-            ])
-        })
-        .collect();
-    frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }), area);
+    let mut y = area.y;
+    for (index, field) in command.ui.fields.iter().enumerate() {
+        if y >= area.y + area.height {
+            break;
+        }
+        let row = Rect::new(area.x, y, area.width, 1);
+        let selected = index == form_field;
+        let style = if selected && content_focused {
+            dhara_theme::selected_style()
+        } else {
+            Style::default().fg(dhara_theme::TEXT)
+        };
+
+        match (&form.values[index], &field.kind) {
+            (FormValue::Boolean(value), FieldKind::Boolean) if selected && editing_form => {
+                let mut cb = CheckBoxState::new(*value);
+                cb.set_focused(true);
+                CheckBox::new(&field.label, &cb).theme(theme).render(row, buf);
+            }
+            (FormValue::Boolean(value), FieldKind::Boolean) => {
+                let label = format!(
+                    "{} {}",
+                    if selected { "▸" } else { " " },
+                    if *value { "[x]" } else { "[ ]" }
+                );
+                Paragraph::new(Line::styled(label, style)).render(row, buf);
+            }
+            (
+                FormValue::Text(_),
+                FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. },
+            ) if selected && editing_form => {
+                let text = option_input.text();
+                let prefix = "▸ ";
+                Paragraph::new(Line::styled(
+                    format!("{prefix}{}: {text}", field.label),
+                    dhara_theme::selected_style(),
+                ))
+                .render(row, buf);
+            }
+            (
+                FormValue::Text(text),
+                FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. },
+            ) => {
+                let prefix = if selected { "▸ " } else { "  " };
+                Paragraph::new(Line::styled(
+                    format!("{prefix}{}: {text}", field.label),
+                    style,
+                ))
+                .render(row, buf);
+            }
+            (FormValue::Select(sel), FieldKind::Select(options)) => {
+                let value = options.get(*sel).copied().unwrap_or("");
+                let prefix = if selected { "▸ " } else { "  " };
+                Paragraph::new(Line::styled(
+                    format!("{prefix}{}: {value}", field.label),
+                    style,
+                ))
+                .render(row, buf);
+            }
+            _ => {
+                Paragraph::new(Line::styled(
+                    format!("  {}: (unsupported)", field.label),
+                    style,
+                ))
+                .render(row, buf);
+            }
+        }
+        y += 1;
+    }
 }
 
-fn render_system_configs(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
+fn render_trouble_tab(
+    area: Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    state: &AppState,
+    scroll: &mut ScrollableContentState,
+    theme: &Theme,
+) {
+    if state.troubleshooting_lines.is_empty() {
+        Paragraph::new("Warnings and errors appear here during a run.").render(area, buf);
+        return;
+    }
+    let lines: Vec<String> = state
+        .troubleshooting_lines
+        .iter()
+        .map(|line| {
+            let prefix = match line.severity {
+                DiagnosticSeverity::Warn => "WARN",
+                DiagnosticSeverity::Error => "ERR ",
+            };
+            format!("[{prefix}] {}", line.text)
+        })
+        .collect();
+    scroll.set_lines(lines);
+    ScrollableContent::new(scroll)
+        .title("Troubleshooting")
+        .theme(theme)
+        .render(area, buf);
+}
+
+fn render_system_tab(
+    area: Rect,
+    buf: &mut ratatui::buffer::Buffer,
+    state: &AppState,
+    scroll: &mut ScrollableContentState,
+    theme: &Theme,
+) {
     let text = state
         .system_configs_text
         .as_deref()
         .unwrap_or("Open this tab to load configuration.");
-    frame.render_widget(
-        Paragraph::new(text).wrap(Wrap { trim: false }),
-        area,
-    );
+    scroll.set_lines(text.lines().map(str::to_owned).collect());
+    ScrollableContent::new(scroll)
+        .title("System configs")
+        .theme(theme)
+        .render(area, buf);
 }
 
 pub fn tab_from_index(index: usize) -> MainTab {
@@ -237,21 +278,12 @@ pub fn tab_from_index(index: usize) -> MainTab {
     }
 }
 
-pub fn select_task_row(
-    state: &mut AppState,
-    registry: &CommandRegistry,
-    rows: &[VisibleTreeRow],
-    row_index: usize,
-) {
-    let Some(row) = rows.get(row_index) else {
-        return;
-    };
-    if row.has_children {
-        state
-            .tree_view
-            .toggle_expanded(&row.node.path_key);
-    } else if let Some(command_id) = row.node.command_id {
-        state.select_command(registry, command_id);
+pub fn tab_index(tab: MainTab) -> usize {
+    match tab {
+        MainTab::Info => 0,
+        MainTab::Options => 1,
+        MainTab::Troubleshooting => 2,
+        MainTab::SystemConfigs => 3,
     }
 }
 
@@ -262,4 +294,65 @@ pub fn cycle_form_field(command: &CommandSpec, form_field: &mut usize, delta: is
     }
     let next = (*form_field as isize + delta).rem_euclid(count as isize) as usize;
     *form_field = next;
+}
+
+pub fn sync_option_widgets_from_form(
+    state: &AppState,
+    registry: &CommandRegistry,
+    form_field: usize,
+    option_input: &mut InputState,
+    option_checkbox: &mut CheckBoxState,
+) {
+    let Some(command) = state.selected_command(registry) else {
+        return;
+    };
+    let Some(form) = state.forms.get(command.id) else {
+        return;
+    };
+    let Some(field) = command.ui.fields.get(form_field) else {
+        return;
+    };
+    match (&form.values[form_field], &field.kind) {
+        (
+            FormValue::Text(text),
+            FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. },
+        ) => {
+            *option_input = InputState::new(text);
+        }
+        (FormValue::Boolean(value), FieldKind::Boolean) => {
+            *option_checkbox = CheckBoxState::new(*value);
+        }
+        _ => {}
+    }
+}
+
+pub fn apply_option_widgets_to_form(
+    state: &mut AppState,
+    registry: &CommandRegistry,
+    form_field: usize,
+    option_input: &InputState,
+    option_checkbox: &CheckBoxState,
+) {
+    let _ = option_checkbox;
+    let Some(command) = state.selected_command(registry).cloned() else {
+        return;
+    };
+    let Some(form) = state.forms.get_mut(command.id) else {
+        return;
+    };
+    let Some(field) = command.ui.fields.get(form_field) else {
+        return;
+    };
+    match (&mut form.values[form_field], &field.kind) {
+        (
+            FormValue::Text(value),
+            FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. },
+        ) => {
+            *value = option_input.text().to_owned();
+        }
+        (FormValue::Boolean(value), FieldKind::Boolean) => {
+            *value = option_checkbox.checked;
+        }
+        _ => {}
+    }
 }

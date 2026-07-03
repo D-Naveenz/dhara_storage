@@ -1,5 +1,7 @@
+mod adapters;
 mod app;
 mod boot;
+mod command_bar;
 mod focus;
 mod screens;
 mod theme;

@@ -1,44 +1,56 @@
 use dhara_tool_kernel::RunPhase;
-use ratatui::layout::Rect;
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Gauge, Paragraph};
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Style;
+use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
+use ratatui_interact::components::{
+    Button, ButtonState, ButtonVariant, Progress, ProgressStyle, Spinner, SpinnerState,
+};
+use ratatui_interact::theme::Theme;
+use ratatui_interact::traits::ClickRegionRegistry;
 
 use dhara_tool_cli::interactive::AppState;
 
-use crate::theme;
-
-const ACTION_LABELS: &[&str] = &["Run", "Cancel", "Reset"];
+use crate::focus::TuiFocus;
+use crate::theme as dhara_theme;
 
 pub fn render_action_panel(
     frame: &mut Frame<'_>,
     area: Rect,
     state: &AppState,
-    focused: bool,
-    action_button: usize,
+    theme: &Theme,
+    shell_focus: &crate::focus::ShellFocus,
+    run_btn: &mut ButtonState,
+    cancel_btn: &mut ButtonState,
+    reset_btn: &mut ButtonState,
+    spinner: &mut SpinnerState,
+    shell_clicks: &mut ClickRegionRegistry<TuiFocus>,
 ) {
+    let focused_region = shell_focus.current().copied();
     let block = Block::default()
         .title(" Actions ")
         .borders(Borders::ALL)
-        .border_style(if focused {
-            theme::border_style().fg(theme::ACCENT)
+        .border_style(if matches!(
+            focused_region,
+            Some(TuiFocus::ActionRun | TuiFocus::ActionCancel | TuiFocus::ActionReset)
+        ) {
+            dhara_theme::border_style().fg(dhara_theme::ACCENT)
         } else {
-            theme::border_style()
+            dhara_theme::border_style()
         })
-        .style(theme::panel_style());
+        .style(dhara_theme::panel_style());
     let inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let layout = ratatui::layout::Layout::vertical([
-        ratatui::layout::Constraint::Length(3),
-        ratatui::layout::Constraint::Length(2),
-        ratatui::layout::Constraint::Length(1),
-        ratatui::layout::Constraint::Min(1),
+    let layout = Layout::vertical([
+        Constraint::Length(3),
+        Constraint::Length(2),
+        Constraint::Length(1),
+        Constraint::Min(3),
     ])
     .split(inner);
 
-    render_progress(frame, layout[0], state);
+    render_progress(frame, layout[0], state, theme, spinner);
     render_step_label(frame, layout[1], state);
     render_status(frame, layout[2], state);
 
@@ -47,70 +59,116 @@ pub fn render_action_panel(
         .active_run
         .as_ref()
         .is_some_and(|run| run.cancelable);
-    let can_reset = state.selected_command_id().is_some();
+    let can_reset = state
+        .tree_view
+        .selected_command_id
+        .is_some();
 
-    let mut labels = Vec::new();
-    for (index, label) in ACTION_LABELS.iter().enumerate() {
-        let enabled = match *label {
-            "Run" => !running,
-            "Cancel" => running && cancelable,
-            "Reset" => can_reset && !running,
-            _ => false,
-        };
-        let style = if focused && action_button == index && enabled {
-            theme::selected_style()
-        } else if enabled {
-            Style::default().fg(theme::TEXT)
-        } else {
-            Style::default().fg(theme::MUTED).add_modifier(Modifier::DIM)
-        };
-        labels.push(Span::styled(format!(" {label} "), style));
-        labels.push(Span::raw(" "));
+    run_btn.set_enabled(!running);
+    cancel_btn.set_enabled(running && cancelable);
+    reset_btn.set_enabled(can_reset && !running);
+
+    run_btn.set_focused(shell_focus.is_focused(&TuiFocus::ActionRun));
+    cancel_btn.set_focused(shell_focus.is_focused(&TuiFocus::ActionCancel));
+    reset_btn.set_focused(shell_focus.is_focused(&TuiFocus::ActionReset));
+
+    let mut registry = ClickRegionRegistry::new();
+    let button_row = Layout::horizontal([
+        Constraint::Ratio(1, 3),
+        Constraint::Ratio(1, 3),
+        Constraint::Ratio(1, 3),
+    ])
+    .split(layout[3]);
+
+    let run = Button::new("Run", run_btn)
+        .variant(ButtonVariant::Block)
+        .theme(theme);
+    let cancel = Button::new("Cancel", cancel_btn)
+        .variant(ButtonVariant::Block)
+        .theme(theme);
+    let reset = Button::new("Reset", reset_btn)
+        .variant(ButtonVariant::Block)
+        .theme(theme);
+
+    if run_btn.enabled {
+        let region = run.render_stateful(button_row[0], frame.buffer_mut());
+        if region.area.width > 0 {
+            registry.register(region.area, TuiFocus::ActionRun);
+        }
+    } else {
+        run.render(button_row[0], frame.buffer_mut());
+    }
+    if cancel_btn.enabled {
+        let region = cancel.render_stateful(button_row[1], frame.buffer_mut());
+        if region.area.width > 0 {
+            registry.register(region.area, TuiFocus::ActionCancel);
+        }
+    } else {
+        cancel.render(button_row[1], frame.buffer_mut());
+    }
+    if reset_btn.enabled {
+        let region = reset.render_stateful(button_row[2], frame.buffer_mut());
+        if region.area.width > 0 {
+            registry.register(region.area, TuiFocus::ActionReset);
+        }
+    } else {
+        reset.render(button_row[2], frame.buffer_mut());
     }
 
-    frame.render_widget(Paragraph::new(Line::from(labels)), layout[3]);
+    for region in registry.regions() {
+        shell_clicks.register(region.area, region.data.clone());
+    }
 }
 
-fn render_progress(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let (ratio, label, percent_text) = match state.progress.as_ref() {
-        Some(snapshot) => match snapshot.phase {
-            RunPhase::Analyzing => (
-                0.0,
-                snapshot.analyzing_message.clone(),
-                "...".to_owned(),
-            ),
-            RunPhase::Running | RunPhase::Complete => (
-                snapshot.overall,
-                snapshot.step_label.clone(),
-                format!("{}%", snapshot.percent),
-            ),
-        },
-        None => (0.0, String::new(), "0%".to_owned()),
-    };
-
-    let gauge = Gauge::default()
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title(" Progress ")
-                .border_style(theme::border_style()),
-        )
-        .gauge_style(Style::default().fg(theme::ACCENT).bg(theme::PANEL_BG))
-        .ratio(ratio as f64)
-        .label(label);
-    frame.render_widget(gauge, area);
-
-    let percent_area = Rect {
-        x: area.x + area.width / 2 - percent_text.len() as u16 / 2,
-        y: area.y + 1,
-        width: percent_text.len() as u16,
-        height: 1,
-    };
-    if percent_area.width > 0 && percent_area.x + percent_area.width <= area.x + area.width {
-        frame.render_widget(
-            Paragraph::new(percent_text).style(Style::default().fg(theme::TEXT).add_modifier(Modifier::BOLD)),
-            percent_area,
-        );
+fn render_progress(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    state: &AppState,
+    theme: &Theme,
+    spinner: &mut SpinnerState,
+) {
+    match state.progress.as_ref() {
+        Some(snapshot) if snapshot.phase == RunPhase::Analyzing => {
+            spinner.tick();
+            let label = if snapshot.analyzing_message.is_empty() {
+                "Analyzing…"
+            } else {
+                snapshot.analyzing_message.as_str()
+            };
+            let spin = Spinner::new(spinner)
+                .label(label)
+                .theme(theme);
+            spin.render(area, frame.buffer_mut());
+        }
+        Some(snapshot) => {
+            let mut style = ProgressStyle::from(theme);
+            if snapshot.phase == RunPhase::Complete {
+                style.filled_color = dhara_theme::SUCCESS;
+            }
+            let progress = Progress::new(f64::from(snapshot.overall))
+                .label(&snapshot.step_label)
+                .style(style);
+            progress.render(area, frame.buffer_mut());
+            let percent = format!("{}%", snapshot.percent);
+            let percent_area = Rect {
+                x: area.x + area.width.saturating_sub(percent.len() as u16 + 2),
+                y: area.y,
+                width: percent.len() as u16,
+                height: 1,
+            };
+            if percent_area.width > 0 && percent_area.x + percent_area.width <= area.x + area.width
+            {
+                Paragraph::new(percent)
+                    .style(Style::default().fg(dhara_theme::TEXT))
+                    .render(percent_area, frame.buffer_mut());
+            }
+        }
+        None => {
+            Progress::new(0.0)
+                .label("Ready")
+                .theme(theme)
+                .render(area, frame.buffer_mut());
+        }
     }
 }
 
@@ -126,26 +184,13 @@ fn render_step_label(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
             }
         })
         .unwrap_or_default();
-    frame.render_widget(
-        Paragraph::new(text).style(Style::default().fg(theme::MUTED)),
-        area,
-    );
+    Paragraph::new(text)
+        .style(Style::default().fg(dhara_theme::MUTED))
+        .render(area, frame.buffer_mut());
 }
 
 fn render_status(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    frame.render_widget(
-        Paragraph::new(state.status_message.as_str())
-            .style(theme::status_style_for_tone(state.status_tone)),
-        area,
-    );
-}
-
-trait AppStateExt {
-    fn selected_command_id(&self) -> Option<&'static str>;
-}
-
-impl AppStateExt for AppState {
-    fn selected_command_id(&self) -> Option<&'static str> {
-        self.tree_view.selected_command_id
-    }
+    Paragraph::new(state.status_message.as_str())
+        .style(dhara_theme::status_style_for_tone(state.status_tone))
+        .render(area, frame.buffer_mut());
 }

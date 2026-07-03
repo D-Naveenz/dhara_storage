@@ -1,4 +1,5 @@
 use ratatui::style::{Color, Modifier, Style};
+use ratatui_interact::theme::{ColorPalette, Theme};
 
 pub const PANEL_BG: Color = Color::Rgb(32, 32, 38);
 pub const BORDER: Color = Color::Rgb(64, 64, 72);
@@ -35,4 +36,41 @@ pub fn status_style_for_tone(tone: dhara_tool_cli::StatusTone) -> Style {
         dhara_tool_cli::StatusTone::Warning => WARNING,
     };
     Style::default().fg(color)
+}
+
+pub fn interact_theme() -> Theme {
+    Theme {
+        name: "Dhara".to_owned(),
+        palette: ColorPalette {
+            primary: ACCENT,
+            secondary: ACCENT,
+            text: TEXT,
+            text_dim: MUTED,
+            text_disabled: MUTED,
+            text_placeholder: MUTED,
+            text_muted: MUTED,
+            bg: PANEL_BG,
+            surface: PANEL_BG,
+            surface_raised: Color::Rgb(40, 40, 46),
+            border_focused: ACCENT,
+            border: BORDER,
+            border_disabled: BORDER,
+            border_accent: ACCENT,
+            separator: BORDER,
+            highlight_fg: Color::White,
+            highlight_bg: SELECTED_BG,
+            menu_highlight_fg: Color::White,
+            menu_highlight_bg: SELECTED_BG,
+            pressed_fg: Color::White,
+            pressed_bg: Color::Rgb(70, 110, 150),
+            success: SUCCESS,
+            warning: WARNING,
+            error: ERROR,
+            info: ACCENT,
+            diff_add_fg: SUCCESS,
+            diff_add_bg: Color::Rgb(30, 50, 35),
+            diff_del_fg: ERROR,
+            diff_del_bg: Color::Rgb(50, 30, 30),
+        },
+    }
 }

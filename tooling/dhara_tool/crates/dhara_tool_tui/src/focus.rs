@@ -1,37 +1,50 @@
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum FocusRegion {
-    #[default]
-    Tasks,
-    Tabs,
+use ratatui_interact::state::FocusManager;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TuiFocus {
+    TaskTree,
+    MainTabs,
     TabContent,
-    ActionButtons,
-    Modal,
+    ActionRun,
+    ActionCancel,
+    ActionReset,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct FocusState {
-    pub region: FocusRegion,
-    pub action_button: usize,
+pub struct ShellFocus {
+    pub manager: FocusManager<TuiFocus>,
 }
 
-impl FocusState {
-    pub fn next_region(&mut self) {
-        self.region = match self.region {
-            FocusRegion::Tasks => FocusRegion::Tabs,
-            FocusRegion::Tabs => FocusRegion::TabContent,
-            FocusRegion::TabContent => FocusRegion::ActionButtons,
-            FocusRegion::ActionButtons => FocusRegion::Tasks,
-            FocusRegion::Modal => FocusRegion::Modal,
-        };
+impl Default for ShellFocus {
+    fn default() -> Self {
+        let mut manager = FocusManager::new();
+        manager.register(TuiFocus::TaskTree);
+        manager.register(TuiFocus::MainTabs);
+        manager.register(TuiFocus::TabContent);
+        manager.register(TuiFocus::ActionRun);
+        manager.register(TuiFocus::ActionCancel);
+        manager.register(TuiFocus::ActionReset);
+        Self { manager }
+    }
+}
+
+impl ShellFocus {
+    pub fn current(&self) -> Option<&TuiFocus> {
+        self.manager.current()
     }
 
-    pub fn prev_region(&mut self) {
-        self.region = match self.region {
-            FocusRegion::Tasks => FocusRegion::ActionButtons,
-            FocusRegion::Tabs => FocusRegion::Tasks,
-            FocusRegion::TabContent => FocusRegion::Tabs,
-            FocusRegion::ActionButtons => FocusRegion::TabContent,
-            FocusRegion::Modal => FocusRegion::Modal,
-        };
+    pub fn is_focused(&self, target: &TuiFocus) -> bool {
+        self.manager.current() == Some(target)
+    }
+
+    pub fn focus(&mut self, target: TuiFocus) {
+        self.manager.set(target);
+    }
+
+    pub fn next(&mut self) {
+        self.manager.next();
+    }
+
+    pub fn prev(&mut self) {
+        self.manager.prev();
     }
 }
