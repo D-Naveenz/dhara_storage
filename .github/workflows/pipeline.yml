@@ -103,7 +103,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
@@ -114,7 +114,7 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
@@ -192,7 +192,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
@@ -203,7 +203,7 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
@@ -281,7 +281,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-arm64
@@ -292,7 +292,7 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-arm64
@@ -367,7 +367,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-osx-arm64
@@ -378,7 +378,7 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-osx-arm64
@@ -458,7 +458,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
@@ -473,7 +473,7 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
@@ -596,7 +596,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
@@ -607,7 +607,7 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
