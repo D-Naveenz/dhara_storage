@@ -141,7 +141,7 @@ jobs:
           target/dist/dhara_tool.exe -r "$GITHUB_WORKSPACE" --yes package stage-native --msvc-env
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-windows
           path: target/dist/artifacts/native-stage
@@ -230,7 +230,7 @@ jobs:
           cp "target/$target/release/$lib" "$dest"
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-linux
           path: target/dist/artifacts/native-stage
@@ -319,7 +319,7 @@ jobs:
           cp "target/$target/release/$lib" "$dest"
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-linux-arm64
           path: target/dist/artifacts/native-stage
@@ -405,7 +405,7 @@ jobs:
           cp "target/$target/release/$lib" "$dest"
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-macos
           path: target/dist/artifacts/native-stage
@@ -525,14 +525,14 @@ jobs:
           printf '{"version":"%s","commit":"%s"}\n' "$version" "${{ github.sha }}" > target/dist/artifacts/release-metadata.json
 
       - name: Upload release native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-native-stage
           path: target/dist/artifacts/native-stage
           retention-days: 90
 
       - name: Upload release NuGet package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-nuget-package
           path: |
@@ -542,7 +542,7 @@ jobs:
           retention-days: 90
 
       - name: Upload release metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-metadata
           path: target/dist/artifacts/release-metadata.json
