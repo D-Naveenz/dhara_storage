@@ -1,10 +1,9 @@
 use dhara_tool_kernel::RunPhase;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
-    Button, ButtonState, ButtonVariant, Progress, ProgressStyle, Spinner, SpinnerState,
+    Button, ButtonState, ButtonVariant, Progress, ProgressStyle, SpinnerState,
 };
 use ratatui_interact::theme::Theme;
 use ratatui_interact::traits::ClickRegionRegistry;
@@ -18,6 +17,7 @@ fn dhara_progress_style(theme: &Theme) -> ProgressStyle {
     let mut style = ProgressStyle::from(theme);
     style.bordered = false;
     style.unfilled_color = dhara_theme::PANEL_BG;
+    style.label_style = style.label_style.remove_modifier(ratatui::style::Modifier::BOLD);
     style
 }
 
@@ -30,7 +30,7 @@ pub fn render_action_panel(
     run_btn: &mut ButtonState,
     cancel_btn: &mut ButtonState,
     reset_btn: &mut ButtonState,
-    spinner: &mut SpinnerState,
+    _spinner: &mut SpinnerState,
     shell_clicks: &mut ClickRegionRegistry<TuiFocus>,
 ) {
     let focused_region = shell_focus.current().copied();
@@ -51,15 +51,13 @@ pub fn render_action_panel(
 
     let layout = Layout::vertical([
         Constraint::Length(3),
-        Constraint::Length(2),
         Constraint::Length(1),
         Constraint::Min(3),
     ])
     .split(inner);
 
-    render_progress(frame, layout[0], state, theme, spinner);
-    render_step_label(frame, layout[1], state);
-    render_status(frame, layout[2], state);
+    render_progress(frame, layout[0], state, theme);
+    render_status(frame, layout[1], state);
 
     let running = state.active_run.is_some();
     let cancelable = state
@@ -84,7 +82,7 @@ pub fn render_action_panel(
         Constraint::Ratio(1, 3),
         Constraint::Ratio(1, 3),
     ])
-    .split(layout[3]);
+    .split(layout[2]);
 
     let buf = frame.buffer_mut();
     Button::new("Run", run_btn)
@@ -101,77 +99,47 @@ pub fn render_action_panel(
         .render_with_registry(button_row[2], buf, shell_clicks, TuiFocus::ActionReset);
 }
 
-fn render_progress(
-    frame: &mut Frame<'_>,
-    area: Rect,
-    state: &AppState,
-    theme: &Theme,
-    spinner: &mut SpinnerState,
-) {
-    match state.progress.as_ref() {
-        Some(snapshot) if snapshot.phase == RunPhase::Analyzing => {
-            spinner.tick();
-            let label = if snapshot.analyzing_message.is_empty() {
-                "Analyzing…"
-            } else {
-                snapshot.analyzing_message.as_str()
-            };
-            let spin = Spinner::new(spinner)
-                .label(label)
-                .theme(theme);
-            spin.render(area, frame.buffer_mut());
-        }
-        Some(snapshot) => {
-            let mut style = dhara_progress_style(theme);
-            if snapshot.phase == RunPhase::Complete {
-                style.filled_color = dhara_theme::SUCCESS;
-            }
-            let progress = Progress::new(f64::from(snapshot.overall))
-                .label(&snapshot.step_label)
-                .style(style);
-            progress.render(area, frame.buffer_mut());
-            let percent = format!("{}%", snapshot.percent);
-            let percent_area = Rect {
-                x: area.x + area.width.saturating_sub(percent.len() as u16 + 2),
-                y: area.y,
-                width: percent.len() as u16,
-                height: 1,
-            };
-            if percent_area.width > 0 && percent_area.x + percent_area.width <= area.x + area.width
-            {
-                Paragraph::new(percent)
-                    .style(Style::default().fg(dhara_theme::TEXT))
-                    .render(percent_area, frame.buffer_mut());
-            }
-        }
-        None => {
-            Progress::new(0.0)
-                .label("Ready")
-                .style(dhara_progress_style(theme))
-                .render(area, frame.buffer_mut());
-        }
-    }
-}
+fn render_progress(frame: &mut Frame<'_>, area: Rect, state: &AppState, theme: &Theme) {
+    let ratio = match state.progress.as_ref() {
+        Some(snapshot) if snapshot.phase == RunPhase::Analyzing => 0.0,
+        Some(snapshot) => f64::from(snapshot.overall),
+        None => 0.0,
+    };
 
-fn render_step_label(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let text = state
+    let mut style = dhara_progress_style(theme);
+    if state
         .progress
         .as_ref()
-        .map(|snapshot| {
-            if snapshot.phase == RunPhase::Analyzing {
-                snapshot.analyzing_message.clone()
-            } else {
-                snapshot.step_label.clone()
-            }
-        })
-        .unwrap_or_default();
-    Paragraph::new(text)
-        .style(Style::default().fg(dhara_theme::MUTED))
-        .render(area, frame.buffer_mut());
+        .is_some_and(|snapshot| snapshot.phase == RunPhase::Complete)
+    {
+        style.filled_color = dhara_theme::SUCCESS;
+    }
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(dhara_theme::border_style());
+    let inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    Progress::new(ratio)
+        .style(style)
+        .render(inner, frame.buffer_mut());
+}
+
+fn status_line(state: &AppState) -> &str {
+    if let Some(snapshot) = state.progress.as_ref() {
+        if snapshot.phase == RunPhase::Analyzing && !snapshot.analyzing_message.is_empty() {
+            return snapshot.analyzing_message.as_str();
+        }
+        if !snapshot.step_label.is_empty() {
+            return snapshot.step_label.as_str();
+        }
+    }
+    state.status_message.as_str()
 }
 
 fn render_status(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    Paragraph::new(state.status_message.as_str())
+    Paragraph::new(status_line(state))
         .style(dhara_theme::status_style_for_tone(state.status_tone))
         .render(area, frame.buffer_mut());
 }

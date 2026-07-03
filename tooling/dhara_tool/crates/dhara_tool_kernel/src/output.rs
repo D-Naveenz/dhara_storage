@@ -93,6 +93,10 @@ fn emit(stream: OutputStream, line: String) {
         return;
     }
 
+    if crate::logging::interactive_mode_enabled() {
+        return;
+    }
+
     match stream {
         OutputStream::Stdout => println!("{line}"),
         OutputStream::Stderr => eprintln!("{line}"),

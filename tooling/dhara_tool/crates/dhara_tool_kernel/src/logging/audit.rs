@@ -4,7 +4,7 @@ use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use chrono::{Local, NaiveDate};
-use tracing::{debug, error, info, warn};
+use tracing::{Level, debug, error, info, warn};
 use tracing_appender::non_blocking::WorkerGuard;
 use tracing_subscriber::Layer;
 use tracing_subscriber::filter::LevelFilter;
@@ -14,6 +14,7 @@ use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::context::{CommandResult, RunMode, ToolContext};
+use crate::output::{emit_stderr_line, emit_warn_line};
 use crate::paths::{resolve_defs_output_dir, resolve_logs_dir, resolve_output_dir};
 
 use crate::filedefs::{TridBuildProgress, TridTransformReport};
@@ -75,7 +76,8 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
 
     let (writer, guard) = tracing_appender::non_blocking(file);
 
-    let (console_max_level, file_max_level) = resolve_log_levels(options.min, options.trace);
+    let (console_max_level, file_max_level) =
+        resolve_log_levels(options.min, options.trace, options.run_mode);
 
     let console_layer = fmt::layer()
         .with_target(false)
@@ -96,10 +98,18 @@ pub fn init_logging(options: LoggingOptions) -> Result<LoggingRuntime, std::io::
         .compact()
         .with_filter(file_max_level);
 
-    let init_result = tracing_subscriber::registry()
-        .with(console_layer)
-        .with(file_layer)
-        .try_init();
+    let init_result = if options.run_mode == RunMode::Interactive {
+        tracing_subscriber::registry()
+            .with(console_layer)
+            .with(file_layer)
+            .with(InteractiveDiagnosticLayer)
+            .try_init()
+    } else {
+        tracing_subscriber::registry()
+            .with(console_layer)
+            .with(file_layer)
+            .try_init()
+    };
 
     if let Err(error) = init_result
         && !tracing::dispatcher::has_been_set()
@@ -122,9 +132,14 @@ fn io_error_from_set_global_default(
     std::io::Error::other(error)
 }
 
-/// Console stays at INFO (level 3). File level depends on `--min` / `--trace`.
-fn resolve_log_levels(min: bool, trace: bool) -> (LevelFilter, LevelFilter) {
-    let console = LevelFilter::INFO;
+/// Console stays at INFO in direct mode. Interactive mode suppresses the console
+/// entirely; WARN/ERROR are routed to the TUI troubleshooting panel.
+fn resolve_log_levels(min: bool, trace: bool, run_mode: RunMode) -> (LevelFilter, LevelFilter) {
+    let console = if run_mode == RunMode::Interactive {
+        LevelFilter::OFF
+    } else {
+        LevelFilter::INFO
+    };
     let file = if trace {
         LevelFilter::DEBUG
     } else if min {
@@ -133,6 +148,68 @@ fn resolve_log_levels(min: bool, trace: bool) -> (LevelFilter, LevelFilter) {
         LevelFilter::INFO
     };
     (console, file)
+}
+
+struct InteractiveDiagnosticLayer;
+
+struct DiagnosticMessage {
+    text: String,
+}
+
+impl Default for DiagnosticMessage {
+    fn default() -> Self {
+        Self {
+            text: String::new(),
+        }
+    }
+}
+
+impl tracing::field::Visit for DiagnosticMessage {
+    fn record_str(&mut self, field: &tracing::field::Field, value: &str) {
+        if field.name() == "message" {
+            self.text = value.to_owned();
+        }
+    }
+
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        if field.name() == "message" && self.text.is_empty() {
+            self.text = format!("{value:?}");
+            if self.text.len() >= 2
+                && self.text.starts_with('"')
+                && self.text.ends_with('"')
+            {
+                self.text = self.text[1..self.text.len() - 1].to_owned();
+            }
+        }
+    }
+}
+
+impl<S> Layer<S> for InteractiveDiagnosticLayer
+where
+    S: tracing::Subscriber,
+{
+    fn on_event(
+        &self,
+        event: &tracing::Event<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) {
+        let level = event.metadata().level();
+        if !matches!(level, &Level::WARN | &Level::ERROR) {
+            return;
+        }
+
+        let mut message = DiagnosticMessage::default();
+        event.record(&mut message);
+        if message.text.is_empty() {
+            return;
+        }
+
+        match level {
+            &Level::WARN => emit_warn_line(message.text),
+            &Level::ERROR => emit_stderr_line(message.text),
+            _ => {}
+        }
+    }
 }
 
 pub fn log_session_begin(log_path: &Path, options: &LoggingOptions) {
@@ -460,6 +537,7 @@ mod tests {
     use super::{
         format_duration, log_file_name_for, next_log_session, parse_log_session, resolve_log_levels,
     };
+    use crate::context::RunMode;
     use std::time::Duration;
 
     #[test]
@@ -512,21 +590,28 @@ mod tests {
 
     #[test]
     fn default_log_levels_use_info_on_console_and_file() {
-        let (console, file) = resolve_log_levels(false, false);
+        let (console, file) = resolve_log_levels(false, false, RunMode::Direct);
         assert_eq!(console, LevelFilter::INFO);
         assert_eq!(file, LevelFilter::INFO);
     }
 
     #[test]
+    fn interactive_mode_suppresses_console_logging() {
+        let (console, file) = resolve_log_levels(false, false, RunMode::Interactive);
+        assert_eq!(console, LevelFilter::OFF);
+        assert_eq!(file, LevelFilter::INFO);
+    }
+
+    #[test]
     fn min_lowers_file_log_to_warn_only() {
-        let (console, file) = resolve_log_levels(true, false);
+        let (console, file) = resolve_log_levels(true, false, RunMode::Direct);
         assert_eq!(console, LevelFilter::INFO);
         assert_eq!(file, LevelFilter::WARN);
     }
 
     #[test]
     fn trace_raises_file_log_to_debug() {
-        let (console, file) = resolve_log_levels(false, true);
+        let (console, file) = resolve_log_levels(false, true, RunMode::Direct);
         assert_eq!(console, LevelFilter::INFO);
         assert_eq!(file, LevelFilter::DEBUG);
     }
