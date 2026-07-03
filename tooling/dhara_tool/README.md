@@ -14,26 +14,25 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 - **Native merge** — combine per-OS `runtimes/**` trees before pack
 - **Package verify** — checks merged native layout before publish
 - **Release orchestration** — crates.io + NuGet publish with dry-run support
-- **Interactive GUI** — launch without a subcommand when a graphical display is available
+- **Interactive TUI** — launch without a subcommand on an interactive terminal (TTY)
 
 ## 📦 Tech Stack & Architecture
 
 | Piece | Role |
 |-------|------|
 | Clap | Subcommand parsing (direct mode) |
-| iced | Interactive operator GUI |
+| ratatui + ratatui-interact | Interactive operator TUI |
 | Rayon | Parallel TrID parse/reduce |
 | `dhara_storage_dal` | DSFD encode/decode for defs commands |
 
 ```
 tooling/dhara_tool/
 ├── crates/
-│   ├── dhara_tool_kernel/   # paths, config, logging, defs I/O
+│   ├── dhara_tool_kernel/   # paths, config, logging, defs I/O, operation_progress
 │   ├── dhara_tool_ops/      # quality, verify, release, native merge
-│   ├── dhara_tool_cli/      # registry, commands, forms, runner
-│   ├── dhara_tool_gui/      # iced widgets, screens, app orchestration
-│   └── dhara_tool/          # binary entry (CLI + GUI boot)
-└── assets/                  # GUI chrome (e.g. chevron SVG)
+│   ├── dhara_tool_cli/      # registry, commands, forms, runner, interactive state
+│   ├── dhara_tool_tui/      # ratatui screens, widgets, event loop
+│   └── dhara_tool/          # binary entry (CLI + TUI boot)
 
 {exe_path}/              # directory containing the running binary
 ├── logs/                # audit logs ({date}_dhara_tool*.log)
@@ -44,7 +43,7 @@ tooling/dhara_tool/
 
 With the dist binary (`target/dist/dhara_tool`), `exe_path` is `target/dist/`. `cargo run` uses `target/debug/` instead. Workspace sources (TrID inputs, embedded defs) stay under the repository — see [logging reference][logging].
 
-**Repository resolution:** `-r` / `--repository` overrides `{exe_path}/runtime.toml`; otherwise cache, then CLI prompt or GUI repository picker on first launch.
+**Repository resolution:** `-r` / `--repository` overrides `{exe_path}/runtime.toml`; otherwise cache, then CLI prompt or TUI repository picker on first launch.
 
 CI vs tool split: [CI/CD reference][ci-cd]. Audit log rules: [logging reference][logging].
 

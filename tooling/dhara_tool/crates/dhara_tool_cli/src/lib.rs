@@ -1,6 +1,7 @@
 pub mod command;
 pub mod commands;
 pub mod forms;
+pub mod interactive;
 pub mod registry;
 pub mod runner;
 
@@ -10,5 +11,9 @@ pub use command::{
     ToolContext,
 };
 pub use forms::{CommandForm, FormValue};
+pub use interactive::{
+    ActivationPrompt, AppState, DiagnosticLine, DiagnosticSeverity, MainTab, NavTree, StatusTone,
+    TreeNode, TreeViewState, VisibleTreeRow,
+};
 pub use registry::DharaStorageCapability;
 pub use runner::{RunCompletion, RunHandle, cancel_run, start_run};

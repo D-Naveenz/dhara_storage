@@ -8,7 +8,7 @@ use crate::repo_config::{ConfigDriftItem, apply_config_drift, detect_config_drif
 
 /// Applies manifest drift immediately when `yes` is set.
 ///
-/// Returns pending drift items for the TUI modal when interactive confirmation is required.
+/// Returns pending drift items for the interactive activation modal when confirmation is required.
 pub fn run_activation(
     repo_root: &Path,
     yes: bool,

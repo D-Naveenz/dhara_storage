@@ -7,7 +7,7 @@ use anyhow::{Context, Result, bail};
 use dhara_tool_cli::{
     CommandRegistry, DharaStorageCapability, RunMode, ToolCapability, ToolContext,
 };
-use dhara_tool_gui::{GuiBootParams, can_launch_gui, run_gui};
+use dhara_tool_tui::{TuiBootParams, can_launch_tui, run_tui};
 use dhara_tool_kernel::{
     activation::run_activation, ensure_workspace_state, log_session_end, paths::resolve_exe_root,
     resolve_and_persist_repository, stale_cached_repository, try_cached_repository, workers,
@@ -34,7 +34,7 @@ pub fn run() -> Result<()> {
 
     let run_mode = if !cli.command.is_empty() {
         RunMode::Direct
-    } else if can_launch_gui() {
+    } else if can_launch_tui() {
         RunMode::Interactive
     } else {
         RunMode::Direct
@@ -42,7 +42,7 @@ pub fn run() -> Result<()> {
 
     let effective_workers = workers::init_global_thread_pool(cli.workers)?;
 
-    let boot = GuiBootParams {
+    let boot = TuiBootParams {
         min: cli.min,
         trace: cli.trace,
         workers: effective_workers,
@@ -52,10 +52,10 @@ pub fn run() -> Result<()> {
         logs_dir: cli.logs_dir.clone(),
     };
 
-    let launch = determine_launch_mode(!cli.command.is_empty(), can_launch_gui());
+    let launch = determine_launch_mode(!cli.command.is_empty(), can_launch_tui());
 
     match launch {
-        LaunchMode::InteractiveGui => {
+        LaunchMode::InteractiveTui => {
             if let Some(repo_root) = try_early_repository(&exe_root, cli.repository.clone())? {
                 let pending_activation =
                     run_activation(&repo_root, cli.yes, run_mode)?.unwrap_or_default();
@@ -67,7 +67,7 @@ pub fn run() -> Result<()> {
                     effective_workers,
                 );
                 ensure_workspace_state(&context);
-                run_gui(
+                run_tui(
                     &registry,
                     exe_root,
                     boot,
@@ -77,7 +77,7 @@ pub fn run() -> Result<()> {
                 )?;
             } else {
                 let stale_hint = stale_cached_repository(&exe_root);
-                run_gui(&registry, exe_root, boot, None, Vec::new(), stale_hint)?;
+                run_tui(&registry, exe_root, boot, None, Vec::new(), stale_hint)?;
             }
         }
         LaunchMode::PlainHelp => print!("{}", help_text(&registry)),
@@ -185,16 +185,16 @@ fn prompt_repository_path() -> Result<PathBuf> {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum LaunchMode {
-    InteractiveGui,
+    InteractiveTui,
     PlainHelp,
     DirectCommand,
 }
 
-fn determine_launch_mode(has_command: bool, interactive_gui: bool) -> LaunchMode {
+fn determine_launch_mode(has_command: bool, interactive_tui: bool) -> LaunchMode {
     if has_command {
         LaunchMode::DirectCommand
-    } else if interactive_gui {
-        LaunchMode::InteractiveGui
+    } else if interactive_tui {
+        LaunchMode::InteractiveTui
     } else {
         LaunchMode::PlainHelp
     }
@@ -330,7 +330,7 @@ fn help_text(registry: &CommandRegistry) -> String {
     format!(
         "Usage: dhara_tool [global-options] <command> [command-options]\n\n\
          Launch modes:\n\
-           interactive  no subcommand with a graphical display — opens the operator GUI\n\
+           interactive  no subcommand on a TTY — opens the operator TUI\n\
            direct       subcommand present — runs immediately (CI, agents, scripts)\n\n\
          Global options (may appear before or after the command):\n\
            -r, --repository <path>  repository directory or dhara.config.toml (overrides runtime cache)\n\
@@ -346,7 +346,7 @@ fn help_text(registry: &CommandRegistry) -> String {
          Repository resolution:\n\
            1. -r/--repository when provided\n\
            2. exe_path/runtime.toml when valid\n\
-           3. interactive prompt (TTY) or GUI repository picker\n\n\
+           3. interactive prompt (TTY) or TUI repository picker\n\n\
          {}",
         registry.help_text()
     )
@@ -363,15 +363,15 @@ mod tests {
     use super::{LaunchMode, determine_launch_mode, parse_root_args, try_early_repository};
 
     #[test]
-    fn no_command_with_gui_uses_interactive() {
+    fn no_command_with_tui_uses_interactive() {
         assert_eq!(
             determine_launch_mode(false, true),
-            LaunchMode::InteractiveGui
+            LaunchMode::InteractiveTui
         );
     }
 
     #[test]
-    fn no_command_without_gui_uses_plain_help() {
+    fn no_command_without_tui_uses_plain_help() {
         assert_eq!(determine_launch_mode(false, false), LaunchMode::PlainHelp);
     }
 

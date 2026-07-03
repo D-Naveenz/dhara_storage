@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use std::io::{IsTerminal, Write};
 use std::sync::Mutex;
 use std::sync::OnceLock;
-use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
 use tracing::{debug, info};
@@ -39,7 +38,7 @@ pub fn init_progress_settings(context: &ToolContext) {
     let _ = PROGRESS_SETTINGS.set(ProgressSettings::from_context(context));
 }
 
-fn settings() -> ProgressSettings {
+pub(crate) fn progress_settings() -> ProgressSettings {
     PROGRESS_SETTINGS
         .get()
         .copied()
@@ -62,30 +61,6 @@ pub fn reset_build_progress_logging() {
 }
 
 static PROGRESS_DISPATCH_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-static GUI_PROGRESS_TX: OnceLock<Mutex<Option<Sender<TridBuildProgress>>>> = OnceLock::new();
-
-pub fn register_gui_progress_sender(sender: Sender<TridBuildProgress>) {
-    let slot = GUI_PROGRESS_TX.get_or_init(|| Mutex::new(None));
-    *slot.lock().expect("gui progress lock poisoned") = Some(sender);
-}
-
-pub fn unregister_gui_progress_sender() {
-    if let Some(slot) = GUI_PROGRESS_TX.get() {
-        *slot.lock().expect("gui progress lock poisoned") = None;
-    }
-}
-
-fn forward_gui_progress(update: &TridBuildProgress) {
-    if settings().run_mode != RunMode::Interactive {
-        return;
-    }
-    let Some(slot) = GUI_PROGRESS_TX.get() else {
-        return;
-    };
-    if let Some(sender) = slot.lock().expect("gui progress lock poisoned").as_ref() {
-        let _ = sender.send(update.clone());
-    }
-}
 
 fn with_progress_lock<R>(operation: impl FnOnce() -> R) -> R {
     let lock = PROGRESS_DISPATCH_LOCK.get_or_init(|| Mutex::new(()));
@@ -102,13 +77,13 @@ pub fn emit_trid_progress(update: TridBuildProgress) {
 pub fn dispatch_trid_progress(update: &TridBuildProgress) {
     with_progress_lock(|| {
         write_console_progress(update);
-        forward_gui_progress(update);
+        crate::operation_progress::apply_trid_progress(update);
         log_audit_progress(update);
     });
 }
 
 fn write_console_progress(update: &TridBuildProgress) {
-    if !settings().console_enabled() {
+    if !progress_settings().console_enabled() {
         return;
     }
 
@@ -176,7 +151,7 @@ fn log_audit_progress(update: &TridBuildProgress) {
 }
 
 fn maybe_log_reduce_trace(update: &TridBuildProgress) {
-    if !settings().trace {
+    if !progress_settings().trace {
         return;
     }
     if update.stage != TridBuildStage::ReduceDefinitions {

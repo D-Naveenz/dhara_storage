@@ -1,37 +1,45 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use dhara_tool_cli::command::{CommandRegistry, CommandResult, CommandSpec, ToolContext};
-use dhara_tool_cli::forms::CommandForm;
 use dhara_tool_kernel::{
-    OutputStream, WorkspaceSnapshot,
-    filedefs::TridBuildProgress,
+    OutputStream, ProgressSnapshot, WorkspaceSnapshot,
     repo_config::{ConfigDriftItem, apply_config_drift},
     workspace::DefsPackageStatus,
 };
-use dhara_tool_cli::runner::{RunCompletion, RunHandle, cancel_run, start_run};
+
+use crate::command::{CommandRegistry, CommandSpec, ToolContext};
+use crate::forms::CommandForm;
+use crate::runner::{RunCompletion, RunHandle, cancel_run, start_run};
 
 use super::tree::{NavTree, TreeViewState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MainTab {
+    Info,
     Options,
-    Terminal,
-    History,
+    Troubleshooting,
+    SystemConfigs,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusTone {
+    Ready,
+    Running,
+    Success,
+    Failed,
+    Warning,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OutputLine {
-    pub is_error: bool,
+pub enum DiagnosticSeverity {
+    Warn,
+    Error,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagnosticLine {
+    pub severity: DiagnosticSeverity,
     pub text: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HistoryEntry {
-    pub label: String,
-    pub status: String,
-    pub output: Vec<OutputLine>,
-    pub result: Option<CommandResult>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,12 +53,6 @@ impl ActivationPrompt {
     }
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct ProgressState {
-    pub value: f32,
-    pub label: String,
-}
-
 pub struct AppState {
     pub repository_label: String,
     pub workspace: WorkspaceSnapshot,
@@ -58,14 +60,14 @@ pub struct AppState {
     pub tree_view: TreeViewState,
     pub main_tab: MainTab,
     pub forms: BTreeMap<&'static str, CommandForm>,
-    pub session_history: Vec<HistoryEntry>,
-    pub selected_history_index: Option<usize>,
     pub active_run: Option<RunHandle>,
-    pub active_output: Vec<OutputLine>,
-    pub progress: Option<ProgressState>,
+    pub troubleshooting_lines: Vec<DiagnosticLine>,
+    pub progress: Option<ProgressSnapshot>,
     pub status_message: String,
+    pub status_tone: StatusTone,
     pub should_quit: bool,
     pub activation_prompt: Option<ActivationPrompt>,
+    pub system_configs_text: Option<String>,
 }
 
 impl Default for AppState {
@@ -89,16 +91,16 @@ impl AppState {
             workspace,
             nav_tree: NavTree::from_registry(registry),
             tree_view: TreeViewState::new(registry),
-            main_tab: MainTab::Options,
+            main_tab: MainTab::Info,
             forms: BTreeMap::new(),
-            session_history: Vec::new(),
-            selected_history_index: None,
             active_run: None,
-            active_output: Vec::new(),
+            troubleshooting_lines: Vec::new(),
             progress: None,
             status_message: "Ready.".to_owned(),
+            status_tone: StatusTone::Ready,
             should_quit: false,
             activation_prompt: None,
+            system_configs_text: None,
         }
     }
 
@@ -142,6 +144,7 @@ impl AppState {
         self.forms
             .insert(command.id, CommandForm::from_command(command));
         self.status_message = format!("Reset options for {}", command.path_string());
+        self.status_tone = StatusTone::Ready;
     }
 
     pub fn select_command(&mut self, registry: &CommandRegistry, command_id: &'static str) {
@@ -150,30 +153,35 @@ impl AppState {
         };
         self.tree_view.select_command(command_id);
         self.ensure_form(command);
-        self.main_tab = MainTab::Options;
+        self.main_tab = MainTab::Info;
         self.status_message = format!("Selected {}", command.path_string());
+        self.status_tone = StatusTone::Ready;
     }
 
     pub fn run_selected(&mut self, registry: &CommandRegistry, context: &ToolContext) {
         if self.active_run.is_some() {
             self.status_message = "A command is already running.".to_owned();
+            self.status_tone = StatusTone::Warning;
             return;
         }
 
         let Some(command) = self.selected_command(registry).cloned() else {
             self.status_message = "No command selected.".to_owned();
+            self.status_tone = StatusTone::Warning;
             return;
         };
 
         self.ensure_form(&command);
         let Some(form) = self.forms.get(command.id) else {
             self.status_message = "Unable to initialize command form.".to_owned();
+            self.status_tone = StatusTone::Warning;
             return;
         };
         let args = match form.build_args(&command) {
             Ok(args) => args,
             Err(error) => {
                 self.status_message = error.to_string();
+                self.status_tone = StatusTone::Warning;
                 return;
             }
         };
@@ -185,12 +193,10 @@ impl AppState {
             .collect::<Vec<_>>();
         command_path.extend(args);
 
-        self.active_output.clear();
-        self.progress = Some(ProgressState {
-            value: 0.0,
-            label: format!("Running {}...", command.path_string()),
-        });
+        self.troubleshooting_lines.clear();
+        self.progress = None;
         self.status_message = format!("Running {}...", command.path_string());
+        self.status_tone = StatusTone::Running;
         self.active_run = Some(start_run(
             registry.clone(),
             context.clone(),
@@ -198,17 +204,28 @@ impl AppState {
             command.path_string(),
             command.ui.supports_cancel,
         ));
-        self.main_tab = MainTab::Terminal;
+        self.main_tab = MainTab::Troubleshooting;
     }
 
     pub fn poll_active_run(&mut self) {
         let mut completed = None;
         if let Some(run) = &mut self.active_run {
             while let Ok(event) = run.output_rx.try_recv() {
-                self.active_output.push(OutputLine {
-                    is_error: matches!(event.stream, OutputStream::Stderr),
-                    text: event.line,
-                });
+                match event.stream {
+                    OutputStream::Stderr => {
+                        self.troubleshooting_lines.push(DiagnosticLine {
+                            severity: DiagnosticSeverity::Error,
+                            text: event.line,
+                        });
+                    }
+                    OutputStream::Warn => {
+                        self.troubleshooting_lines.push(DiagnosticLine {
+                            severity: DiagnosticSeverity::Warn,
+                            text: event.line,
+                        });
+                    }
+                    OutputStream::Stdout => {}
+                }
             }
 
             if let Some(result) = run.try_take_completion() {
@@ -219,30 +236,21 @@ impl AppState {
         if let Some((label, completion)) = completed {
             match completion {
                 RunCompletion::Succeeded(result) => {
-                    let status = if result.exit_code == 0 {
-                        "success"
+                    let success = result.exit_code == 0;
+                    self.status_tone = if success {
+                        StatusTone::Success
                     } else {
-                        "failed"
+                        StatusTone::Failed
                     };
+                    let status = if success { "success" } else { "failed" };
                     self.status_message = format!("{label} completed with status {status}.");
-                    self.session_history.push(HistoryEntry {
-                        label,
-                        status: status.to_owned(),
-                        output: self.active_output.clone(),
-                        result: Some(result),
-                    });
                 }
                 RunCompletion::Failed(error) => {
+                    self.status_tone = StatusTone::Failed;
                     self.status_message = error.clone();
-                    self.active_output.push(OutputLine {
-                        is_error: true,
-                        text: error.clone(),
-                    });
-                    self.session_history.push(HistoryEntry {
-                        label,
-                        status: "failed".to_owned(),
-                        output: self.active_output.clone(),
-                        result: None,
+                    self.troubleshooting_lines.push(DiagnosticLine {
+                        severity: DiagnosticSeverity::Error,
+                        text: error,
                     });
                 }
             }
@@ -251,50 +259,33 @@ impl AppState {
         }
     }
 
-    pub fn apply_progress_update(&mut self, update: TridBuildProgress) {
-        if self.active_run.is_none() {
+    pub fn apply_progress_snapshot(&mut self, snapshot: ProgressSnapshot) {
+        if self.active_run.is_none() && snapshot.phase != dhara_tool_kernel::RunPhase::Complete {
             return;
         }
-
-        let label = progress_label(&update);
-        let value = match update.total.filter(|total| *total > 0) {
-            Some(total) => (update.current as f32 / total as f32).clamp(0.0, 1.0),
-            None => self.progress.as_ref().map(|state| state.value).unwrap_or(0.0),
-        };
-
-        self.progress = Some(ProgressState { value, label });
+        self.progress = Some(snapshot);
     }
 
     pub fn cancel_active(&mut self) {
         let Some(run) = &self.active_run else {
             self.status_message = "No active command to cancel.".to_owned();
+            self.status_tone = StatusTone::Warning;
             return;
         };
         if !run.cancelable {
             self.status_message = "The active command cannot be canceled safely.".to_owned();
+            self.status_tone = StatusTone::Warning;
             return;
         }
         if cancel_run() {
             self.status_message = "Sent cancellation request to the active subprocess.".to_owned();
+            self.status_tone = StatusTone::Warning;
         } else {
             self.status_message =
                 "The active command is running, but no cancelable subprocess is active yet."
                     .to_owned();
+            self.status_tone = StatusTone::Warning;
         }
-    }
-
-    pub fn terminal_lines(&self) -> &[OutputLine] {
-        &self.active_output
-    }
-
-    pub fn history_preview_lines(&self) -> &[OutputLine] {
-        let Some(index) = self.selected_history_index else {
-            return &[];
-        };
-        self.session_history
-            .get(index)
-            .map(|entry| entry.output.as_slice())
-            .unwrap_or(&[])
     }
 
     pub fn apply_activation_confirm(
@@ -307,6 +298,7 @@ impl AppState {
         apply_config_drift(repo_root, &prompt.drifts)?;
         self.status_message =
             "Configuration drift applied from dhara.config.toml.".to_owned();
+        self.status_tone = StatusTone::Success;
         Ok(())
     }
 
@@ -315,26 +307,11 @@ impl AppState {
         self.should_quit = true;
         self.status_message =
             "Activation declined. Update manifests manually or relaunch with --yes.".to_owned();
+        self.status_tone = StatusTone::Warning;
     }
-}
 
-fn progress_label(update: &TridBuildProgress) -> String {
-    use dhara_tool_kernel::filedefs::TridBuildStage;
-
-    let stage = match update.stage {
-        TridBuildStage::LoadSource => "load",
-        TridBuildStage::ExtractArchive => "extract",
-        TridBuildStage::ParseDefinitions => "parse",
-        TridBuildStage::ReduceDefinitions => "reduce",
-        TridBuildStage::FinalizePackage => "finalize",
-    };
-
-    if let Some(total) = update.total.filter(|total| *total > 0) {
-        format!("{stage}: {}/{} — {}", update.current, total, update.message)
-    } else if update.message.is_empty() {
-        stage.to_owned()
-    } else {
-        format!("{stage}: {}", update.message)
+    pub fn invalidate_system_configs(&mut self) {
+        self.system_configs_text = None;
     }
 }
 
@@ -344,16 +321,16 @@ mod tests {
 
     use anyhow::Result;
 
-    use dhara_tool_cli::command::{
+    use dhara_tool_kernel::{
+        ProgressSnapshot, RunPhase, WorkspaceSnapshot, workspace::DefsPackageStatus,
+    };
+
+    use crate::command::{
         CommandRegistry, CommandResult, CommandSpec, CommandUi, RunMode, SectionSpec, ToolContext,
     };
-    use dhara_tool_kernel::filedefs::{
-        TridBuildProgress, TridBuildStage, TridBuildStats,
-    };
-    use dhara_tool_kernel::{WorkspaceSnapshot, workspace::DefsPackageStatus};
-    use dhara_tool_cli::runner::start_run;
+    use crate::runner::start_run;
 
-    use super::{AppState, MainTab};
+    use super::{AppState, MainTab, StatusTone};
 
     fn noop(_: &ToolContext, _: &[String]) -> Result<CommandResult> {
         Ok(CommandResult::with_message("done"))
@@ -390,7 +367,7 @@ mod tests {
     }
 
     #[test]
-    fn poll_active_run_records_history_on_completion() {
+    fn poll_active_run_sets_success_tone() {
         let registry = registry_with_show();
         let mut state = AppState::with_workspace("repo", test_workspace(), &registry);
         state.select_command(&registry, "config.show");
@@ -414,7 +391,7 @@ mod tests {
             "config show".to_owned(),
             false,
         ));
-        state.main_tab = MainTab::Terminal;
+        state.main_tab = MainTab::Troubleshooting;
 
         loop {
             state.poll_active_run();
@@ -423,13 +400,12 @@ mod tests {
             }
         }
 
-        assert_eq!(state.session_history.len(), 1);
-        assert_eq!(state.session_history[0].status, "success");
+        assert_eq!(state.status_tone, StatusTone::Success);
         assert!(state.progress.is_none());
     }
 
     #[test]
-    fn apply_progress_update_sets_bar_value() {
+    fn apply_progress_snapshot_updates_bar() {
         let registry = registry_with_show();
         let mut state = AppState::with_workspace("repo", test_workspace(), &registry);
         state.active_run = Some(start_run(
@@ -450,18 +426,17 @@ mod tests {
             false,
         ));
 
-        state.apply_progress_update(TridBuildProgress {
-            stage: TridBuildStage::ParseDefinitions,
-            message: "Parsing".to_owned(),
-            current: 50,
-            total: Some(100),
-            current_item: None,
-            stats: TridBuildStats::default(),
-            trace_detail: None,
+        state.apply_progress_snapshot(ProgressSnapshot {
+            phase: RunPhase::Running,
+            overall: 0.42,
+            percent: 42,
+            active_step: Some("parse"),
+            step_label: "parse: 42/100".to_owned(),
+            analyzing_message: String::new(),
         });
 
         let progress = state.progress.expect("progress set");
-        assert!((progress.value - 0.5).abs() < f32::EPSILON);
-        assert!(progress.label.contains("parse"));
+        assert_eq!(progress.percent, 42);
+        assert!(progress.step_label.contains("parse"));
     }
 }

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
-pub struct GuiBootParams {
+pub struct TuiBootParams {
     pub min: bool,
     pub trace: bool,
     pub workers: usize,

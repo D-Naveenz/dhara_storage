@@ -20,7 +20,7 @@ flowchart TB
     kernel[dhara_tool_kernel]
     ops[dhara_tool_ops]
     cli[dhara_tool_cli]
-    gui[dhara_tool_gui]
+    tui[dhara_tool_tui]
     bin[dhara_tool binary]
   end
 
@@ -29,9 +29,9 @@ flowchart TB
   ffi --> csharp
   kernel --> ops
   ops --> cli
-  cli --> gui
+  cli --> tui
   cli --> bin
-  gui --> bin
+  tui --> bin
   kernel -.->|registry pin| dal
 ```
 
@@ -41,7 +41,7 @@ flowchart TB
 | `src/core/dhara_storage` | Rust-native runtime (crates.io) |
 | `src/bindings/dharastorage-ffi` | C ABI crate (`dharastorage-ffi` package, `dharastorage` lib name) |
 | `src/bindings/csharp/` | `Dhara.Storage` NuGet source, tests, consumer smoke |
-| `tooling/dhara_tool/crates/*` | Nested workspace: kernel → ops → cli/gui → binary |
+| `tooling/dhara_tool/crates/*` | Nested workspace: kernel → ops → cli/tui → binary |
 | `dhara.config.toml` | Workspace semver, tool semver, NuGet/CI metadata |
 
 ## Operator tool crates
@@ -71,20 +71,20 @@ flowchart LR
     commands[commands / registry]
     forms[forms]
     runner[runner]
+    interactive[interactive state]
   end
 
-  subgraph gui [dhara_tool_gui]
-    widgets[widgets]
-    screens[screens]
-    app[app.rs]
+  subgraph tui [dhara_tool_tui]
+    screens[screens / widgets]
+    app[app.rs event loop]
   end
 
   kernel --> ops
   kernel --> cli
   ops --> cli
-  cli --> gui
+  cli --> tui
   cli --> bin[dhara_tool bin]
-  gui --> bin
+  tui --> bin
 ```
 
 ### Commands vs operations
@@ -92,23 +92,23 @@ flowchart LR
 | Layer | Responsibility | Example |
 |-------|----------------|---------|
 | **CLI** (`dhara_tool_cli`) | Arg parsing, command registry, dispatch, form schemas | `version show`, `quality clippy` argv → handler |
-| **Ops** (`dhara_tool_ops`) | Domain workflows shared by CLI and GUI | `quality::run_clippy`, `release::run_cargo_release` |
-| **Kernel** (`dhara_tool_kernel`) | Paths, config activation, logging, defs I/O, subprocess helpers | `detect_config_drift`, `defs sync-embedded` |
+| **Ops** (`dhara_tool_ops`) | Domain workflows shared by CLI and TUI | `quality::run_clippy`, `release::run_cargo_release` |
+| **Kernel** (`dhara_tool_kernel`) | Paths, config activation, logging, defs I/O, subprocess helpers, weighted progress | `detect_config_drift`, `operation_progress` |
 
 **Version bump example:** `version bump patch` in CLI calls `repo_config::bump_workspace_version` in kernel, which writes `dhara.config.toml` and (on activation) syncs root `Cargo.toml` workspace deps. Tool-only bumps update `[tool].version` and `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` together.
 
-`app.rs` lives in the **binary crate** because it orchestrates CLI and GUI; neither `cli` nor `gui` can depend on each other without a cycle.
+`app.rs` lives in the **binary crate** because it orchestrates CLI and TUI; neither `cli` nor `tui` can depend on each other without a cycle.
 
-### GUI widget tiers
+### TUI layout (`dhara_tool_tui`)
 
-| Tier | Location | When to use |
-|------|----------|-------------|
-| **Primitives** | `gui/widgets/` — `panel`, `button`, `field`, `input`, `select`, `tabs`, `scroll_area`, `separator`, `progress`, `stepper`, `path_field` | Reusable iced wrappers and layout tokens |
-| **Promoted** | `gui/widgets/` — `tab_view`, `tree_row`, `action_bar`, `modal_overlay` | Shared compositions used across screens |
-| **Screens** | `gui/screens/` — `shell`, `nav`, `options`, `terminal`, `history`, `activation`, `repo_setup` | Full views; `app.rs` wires update/subscription only |
-| **Promotion rule** | Move to `widgets/` when used twice+ or >~80 lines of shared layout | Avoid premature abstraction |
+| Region | Role |
+|--------|------|
+| **Tasks tree** | Favorites + command hierarchy from `dhara_tool_cli::interactive::tree` |
+| **Tabs** | Info, Options, Troubleshooting (warn/error only), System configs (read-only) |
+| **Action panel** | Weighted progress bar with % overlay, status tone, Run/Cancel/Reset |
+| **Chrome** | Title bar (version + repo), bottom command shortcut bar |
 
-Primitives stay **iced-first** (no business logic); screens call into `dhara_tool_ops` via `ToolContext` and `dhara_tool_cli::runner`.
+Progress is driven by `dhara_tool_kernel::operation_progress` (analyze → weighted steps → aggregate %), not stdout parsing. `dhara_tool_cli::runner` installs `OperationProgressGuard` for interactive runs.
 
 `dhara_tool_cli::registry` is split by command section (`config`, `defs`, `quality`, `package`, `release`) with shared `ui` metadata helpers.
 

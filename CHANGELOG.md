@@ -6,6 +6,18 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **Interactive TUI** — ratatui + ratatui-interact operator UI (`dhara_tool_tui`) with three-panel layout (tasks tree, Info/Options/Troubleshooting/System configs tabs, action panel), weighted installer-style progress (`operation_progress`), and TTY launch when no subcommand is given.
+
+### Changed
+
+- **Operator UI** — iced GUI removed; `dhara_tool` launches the TUI on an interactive terminal instead of a graphical display.
+
+### Removed
+
+- **`dhara_tool_gui`** — iced-based operator UI and GUI assets.
+
 ## [0.9.0] — 2026-07-02
 
 Compared to [v0.8.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.8.0).

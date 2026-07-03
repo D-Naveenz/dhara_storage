@@ -7,6 +7,7 @@ use once_cell::sync::Lazy;
 pub enum OutputStream {
     Stdout,
     Stderr,
+    Warn,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,6 +51,10 @@ pub fn emit_stderr_line(line: impl Into<String>) {
     emit(OutputStream::Stderr, line.into());
 }
 
+pub fn emit_warn_line(line: impl Into<String>) {
+    emit(OutputStream::Warn, line.into());
+}
+
 pub fn set_active_child(child: Option<Arc<Mutex<Child>>>) {
     let mut slot = ACTIVE_CHILD
         .lock()
@@ -91,5 +96,6 @@ fn emit(stream: OutputStream, line: String) {
     match stream {
         OutputStream::Stdout => println!("{line}"),
         OutputStream::Stderr => eprintln!("{line}"),
+        OutputStream::Warn => eprintln!("{line}"),
     }
 }

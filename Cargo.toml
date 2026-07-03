@@ -6,7 +6,7 @@ members = [
     "tooling/dhara_tool/crates/dhara_tool_kernel",
     "tooling/dhara_tool/crates/dhara_tool_ops",
     "tooling/dhara_tool/crates/dhara_tool_cli",
-    "tooling/dhara_tool/crates/dhara_tool_gui",
+    "tooling/dhara_tool/crates/dhara_tool_tui",
     "tooling/dhara_tool/crates/dhara_tool",
 ]
 resolver = "3"

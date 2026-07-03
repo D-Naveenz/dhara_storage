@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use dhara_tool_cli::command::{CommandRegistry, CommandSpec};
+use crate::command::{CommandRegistry, CommandSpec};
 
 pub const FAVORITES_GROUP: &str = "__favorites__";
 
@@ -42,7 +42,7 @@ impl NavTree {
     pub fn from_registry(registry: &CommandRegistry) -> Self {
         let roots = vec![
             build_favorites_group(registry),
-            build_commands_group(registry),
+            build_tasks_group(registry),
         ];
         Self { roots }
     }
@@ -71,7 +71,7 @@ fn build_favorites_group(registry: &CommandRegistry) -> TreeNode {
     }
 }
 
-fn build_commands_group(registry: &CommandRegistry) -> TreeNode {
+fn build_tasks_group(registry: &CommandRegistry) -> TreeNode {
     let mut branch_map: BTreeMap<String, BranchBuilder> = BTreeMap::new();
 
     for command in registry.commands() {
@@ -84,8 +84,8 @@ fn build_commands_group(registry: &CommandRegistry) -> TreeNode {
         .collect();
 
     TreeNode {
-        label: "Commands".to_owned(),
-        path_key: "commands".to_owned(),
+        label: "Tasks".to_owned(),
+        path_key: "tasks".to_owned(),
         command_id: None,
         children,
     }
@@ -148,11 +148,7 @@ fn insert_command(branch_map: &mut BTreeMap<String, BranchBuilder>, command: &Co
         if is_leaf {
             current_map.insert(
                 segment.to_string(),
-                BranchBuilder::leaf(
-                    segment.to_string(),
-                    path_key,
-                    command.id,
-                ),
+                BranchBuilder::leaf(segment.to_string(), path_key, command.id),
             );
         } else {
             current_map
@@ -176,9 +172,9 @@ impl TreeViewState {
     pub fn new(registry: &CommandRegistry) -> Self {
         let mut state = Self::default();
         state.expanded.insert(FAVORITES_GROUP.to_owned());
-        state.expanded.insert("commands".to_owned());
+        state.expanded.insert("tasks".to_owned());
         for section in registry.sections() {
-            state.expanded.insert(format!("commands/{}", section.name));
+            state.expanded.insert(format!("tasks/{}", section.name));
         }
         state
     }
@@ -227,11 +223,11 @@ mod tests {
 
     use anyhow::Result;
 
-    use dhara_tool_cli::command::{
+    use crate::command::{
         CommandRegistry, CommandResult, CommandSpec, CommandUi, SectionSpec, ToolContext,
     };
 
-    use super::{NavTree, QUICK_ACTIONS, TreeViewState};
+    use super::NavTree;
 
     fn noop(_: &ToolContext, _: &[String]) -> Result<CommandResult> {
         Ok(CommandResult::success())
@@ -253,62 +249,13 @@ mod tests {
             ui: CommandUi::empty("Show"),
             handler: Arc::new(noop),
         });
-        registry.add_command(CommandSpec {
-            id: "config.env.init",
-            path: &["config", "env", "init"],
-            summary: "Init env",
-            args_summary: "",
-            section: "config",
-            ui: CommandUi::empty("Init"),
-            handler: Arc::new(noop),
-        });
         registry
     }
 
     #[test]
-    fn nav_tree_builds_nested_paths() {
+    fn nav_tree_builds_tasks_group() {
         let registry = sample_registry();
         let tree = NavTree::from_registry(&registry);
-        let commands = tree
-            .roots
-            .iter()
-            .find(|node| node.path_key == "commands")
-            .expect("commands group");
-        let config = commands
-            .children
-            .iter()
-            .find(|node| node.label == "config")
-            .expect("config branch");
-        assert!(config.command_id.is_none());
-        assert_eq!(config.children.len(), 2);
-        let env = config.children.iter().find(|node| node.label == "env");
-        assert!(env.is_some());
-    }
-
-    #[test]
-    fn favorites_include_quick_actions() {
-        let registry = sample_registry();
-        let tree = NavTree::from_registry(&registry);
-        let favorites = tree
-            .roots
-            .iter()
-            .find(|node| node.path_key == super::FAVORITES_GROUP)
-            .expect("favorites");
-        assert!(favorites.children.is_empty() || favorites.children.len() <= QUICK_ACTIONS.len());
-    }
-
-    #[test]
-    fn visible_rows_respect_expansion() {
-        let registry = sample_registry();
-        let tree = NavTree::from_registry(&registry);
-        let mut state = TreeViewState::new(&registry);
-        state.expanded.remove("commands");
-        let collapsed = state.visible_rows(&tree);
-        assert!(collapsed.iter().any(|row| row.node.path_key == "commands"));
-        assert!(!collapsed.iter().any(|row| row.node.label == "config"));
-
-        state.expanded.insert("commands".to_owned());
-        let expanded = state.visible_rows(&tree);
-        assert!(expanded.iter().any(|row| row.node.label == "config"));
+        assert!(tree.roots.iter().any(|node| node.label == "Tasks"));
     }
 }

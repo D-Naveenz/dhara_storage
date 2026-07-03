@@ -2,6 +2,7 @@ pub mod activation;
 pub mod context;
 pub mod filedefs;
 pub mod logging;
+pub mod operation_progress;
 pub mod msvc;
 pub mod output;
 pub mod paths;
@@ -21,6 +22,12 @@ pub use filedefs::{
     load_package, normalize_package, packages_match, print_defs_help, sync_embedded_package,
     write_package,
 };
+pub use operation_progress::{
+    OperationProgressGuard, ProgressSnapshot, ProgressStep, RunPhase, adjust_step_weight,
+    apply_trid_progress, begin_analyzing, begin_single_shot, commit_plan, complete_progress,
+    plan_step, register_interactive_progress_sender, set_step_message, set_step_total, tick_step,
+    unregister_interactive_progress_sender,
+};
 pub use logging::{
     LoggingOptions, LoggingRuntime, current_log_path, ensure_logging, format_command_args,
     init_logging, is_long_running_module, log_build_progress, log_file_path, log_module_begin,
@@ -30,7 +37,7 @@ pub use logging::{
 };
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,
-    emit_stdout_line,
+    emit_stdout_line, emit_warn_line,
 };
 pub use repo_config::{
     CONFIG_PATH, CiConfig, ConfigDriftItem, ConfigDriftKind, DharaRepoConfig, ENV_EXAMPLE_PATH,

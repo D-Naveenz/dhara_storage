@@ -3,7 +3,7 @@ members = [
     "crates/dhara_tool_kernel",
     "crates/dhara_tool_ops",
     "crates/dhara_tool_cli",
-    "crates/dhara_tool_gui",
+    "crates/dhara_tool_tui",
     "crates/dhara_tool",
 ]
 resolver = "3"

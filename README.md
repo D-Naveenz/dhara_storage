@@ -25,7 +25,7 @@ Current release line: **0.9.0** (workspace crates and NuGet; `dhara_tool` is ind
 | Definitions DAL | FlatBuffers, embedded `filedefs.dat` |
 | Native interop | `cdylib` C ABI (`dharastorage`) |
 | Managed bindings | .NET 10 (`Dhara.Storage`) |
-| Operator surface | `dhara_tool` (Clap + iced GUI) |
+| Operator surface | `dhara_tool` (Clap + ratatui TUI) |
 | CI / release | GitHub Actions, `dhara.config.toml` |
 
 ```

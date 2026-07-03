@@ -2,7 +2,10 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 
 use crate::command::{CommandRegistry, CommandResult, RunMode, ToolContext};
-use dhara_tool_kernel::{OutputCaptureGuard, OutputEvent, cancel_active_subprocess};
+use dhara_tool_kernel::{
+    OperationProgressGuard, OutputCaptureGuard, OutputEvent, begin_single_shot, cancel_active_subprocess,
+    complete_progress,
+};
 
 pub struct RunHandle {
     pub label: String,
@@ -31,10 +34,13 @@ pub fn start_run(
     context.run_mode = RunMode::Interactive;
     let join = thread::spawn(move || {
         let _capture = OutputCaptureGuard::install(output_tx);
+        let _progress = OperationProgressGuard::install();
+        begin_single_shot("Running");
         let completion = match registry.execute(&context, &command) {
             Ok(result) => RunCompletion::Succeeded(result),
             Err(error) => RunCompletion::Failed(format!("{error:#}")),
         };
+        complete_progress();
         let _ = completion_tx.send(completion);
     });
 
