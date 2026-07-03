@@ -881,8 +881,8 @@ mod tests {
                     "linux-arm64".to_owned(),
                     "osx-arm64".to_owned(),
                 ],
-                host_runtime_smoke: "win-x64".to_owned(),
-                aot_runtime_smoke: "win-x64".to_owned(),
+                host_runtime_smoke: "linux-x64".to_owned(),
+                aot_runtime_smoke: "linux-x64".to_owned(),
             },
             publish: PublishConfig {
                 environment: "nuget-production".to_owned(),

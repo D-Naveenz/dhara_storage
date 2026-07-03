@@ -122,7 +122,7 @@ cargo test -p dhara_tool
 cargo clippy -p dhara_tool --all-targets -- -D warnings
 ```
 
-CI builds `profile.dist` per OS inside [pipeline][ci-cd] `platform (*)` jobs (cache keyed by tool source hash). Platform-specific paths (MSVC re-exec, native merge, verify package) are exercised there. PR CI does not run `cargo test -p dhara_tool` — validate locally.
+CI builds `profile.dist` on Windows (`stage-native`) and Linux (`package pack`, `verify package`; cache keyed by source hash). Rust/dotnet tests run on `platform (linux)` only; other platform jobs stage natives. PR CI does not run `cargo test -p dhara_tool` — validate locally.
 
 **VS Code:** tasks under `dhara-tool:` — `ensure dist`, `watch dev` (`cargo watch`, dev profile), `quality run (dist)`. Launch **Debug dhara_tool (dev)** for `cargo run`; **Run dhara_tool (dist)** ensures dist first. Requires [CodeLLDB][codelldb]; `cargo-watch` for the watch task.
 

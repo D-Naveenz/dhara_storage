@@ -25,7 +25,7 @@ flowchart LR
   VP --> NUPKG[Dhara.Storage.nupkg]
 ```
 
-Each platform job runs `dhara_tool package stage-native` (with `--msvc-env` on Windows), uploads a `native-stage-{os}` artifact from `target/dist/artifacts/native-stage`, and exits. The `publish-readiness` job downloads all four artifacts, runs `native merge` into the same default stage directory, then `verify package` (no `--native-stage` when the merged tree matches the dist binary default).
+Each platform job stages native assets (tool with `--msvc-env` on Windows; direct `cargo build` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke + AOT on `linux-x64`).
 
 ## Expected layout
 
@@ -89,7 +89,7 @@ When `StagedNativeRoot` is set, [Dhara.Storage.csproj][csproj] skips local `carg
 
 Staged natives must be added in a `Pack` target as `_PackageFiles` with an explicit `PackagePath` derived from `MakeRelative` under `runtimes/`. A static `ItemGroup` with `%(RecursiveDir)` often fails to include merged CI assets even when files exist on disk.
 
-### Local smoke test
+### Local pack check
 
 ```powershell
 $stage = (Resolve-Path target/dist/artifacts/native-stage).Path

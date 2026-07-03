@@ -301,16 +301,16 @@ mod tests {
                 package_project: "src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj".to_owned(),
                 tests_project: "src/bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
                     .to_owned(),
-                native_runtimes: vec!["win-x64".to_owned()],
-                host_runtime_smoke: "win-x64".to_owned(),
-                aot_runtime_smoke: "win-x64".to_owned(),
+                native_runtimes: vec!["linux-x64".to_owned()],
+                host_runtime_smoke: "linux-x64".to_owned(),
+                aot_runtime_smoke: "linux-x64".to_owned(),
             },
             publish: PublishConfig {
                 environment: "nuget-production".to_owned(),
                 api_key_env: "NUGET_API_KEY".to_owned(),
             },
             targets: TargetsConfig {
-                rust_targets: [("win-x64".to_owned(), "x86_64-pc-windows-msvc".to_owned())]
+                rust_targets: [("linux-x64".to_owned(), "x86_64-unknown-linux-gnu".to_owned())]
                     .into_iter()
                     .collect(),
             },

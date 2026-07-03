@@ -34,8 +34,8 @@ native_runtimes = [
     "linux-arm64",
     "osx-arm64",
 ]
-host_runtime_smoke = "win-x64"
-aot_runtime_smoke = "win-x64"
+host_runtime_smoke = "linux-x64"
+aot_runtime_smoke = "linux-x64"
 
 [publish]
 environment = "nuget-production"

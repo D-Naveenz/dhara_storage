@@ -33,9 +33,8 @@ jobs:
           lfs: true
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@master
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           components: rustfmt, clippy
 
       - name: Cache Cargo dependencies
@@ -71,11 +70,6 @@ jobs:
           toolchain: stable
           targets: aarch64-pc-windows-msvc
 
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
@@ -103,7 +97,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
@@ -114,25 +108,10 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
-
-      - name: Rust tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage-ffi
-
-      - name: .NET tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          tests_project=$(grep -E '^\s*tests_project\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-          dotnet test "$tests_project"
 
       - name: Stage native assets
         shell: bash
@@ -141,7 +120,7 @@ jobs:
           target/dist/dhara_tool.exe -r "$GITHUB_WORKSPACE" --yes package stage-native --msvc-env
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-windows
           path: target/dist/artifacts/native-stage
@@ -162,51 +141,16 @@ jobs:
         with:
           toolchain: stable
 
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
       - name: Setup Linux GUI dependencies
         uses: ./.github/actions/setup-linux-tool-deps
-
-      - name: Compute dhara_tool source hash
-        id: tool-hash
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256_file() {
-            if command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "$@"
-            else
-              shasum -a 256 "$@"
-            fi
-          }
-          hash=$(
-            {
-              git ls-files 'tooling/dhara_tool'
-              git ls-files 'Cargo.toml' 'Cargo.lock'
-            } | sort -u | while read -r file; do
-              [ -f "$file" ] && sha256_file "$file"
-            done | sha256_file | awk '{print substr($1, 1, 16)}'
-          )
-          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
-
-      - name: Restore dhara_tool cache
-        id: tool-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
-
-      - name: Build dhara_tool on cache miss
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        run: cargo build -p dhara_tool --profile dist
-
-      - name: Save dhara_tool cache
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
 
       - name: Rust tests
         shell: bash
@@ -215,6 +159,13 @@ jobs:
           cargo test -p dhara_storage --all-features
           cargo test -p dhara_storage_dal
           cargo test -p dharastorage-ffi
+
+      - name: .NET tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests_project=$(grep -E '^\s*tests_project\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+          dotnet test "$tests_project"
 
       - name: Stage native assets
         shell: bash
@@ -230,7 +181,7 @@ jobs:
           cp "target/$target/release/$lib" "$dest"
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-linux
           path: target/dist/artifacts/native-stage
@@ -257,54 +208,6 @@ jobs:
       - name: Setup Linux GUI dependencies
         uses: ./.github/actions/setup-linux-tool-deps
 
-      - name: Compute dhara_tool source hash
-        id: tool-hash
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256_file() {
-            if command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "$@"
-            else
-              shasum -a 256 "$@"
-            fi
-          }
-          hash=$(
-            {
-              git ls-files 'tooling/dhara_tool'
-              git ls-files 'Cargo.toml' 'Cargo.lock'
-            } | sort -u | while read -r file; do
-              [ -f "$file" ] && sha256_file "$file"
-            done | sha256_file | awk '{print substr($1, 1, 16)}'
-          )
-          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
-
-      - name: Restore dhara_tool cache
-        id: tool-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-arm64
-
-      - name: Build dhara_tool on cache miss
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        run: cargo build -p dhara_tool --profile dist
-
-      - name: Save dhara_tool cache
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-arm64
-
-      - name: Rust tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage-ffi
-
       - name: Stage native assets
         shell: bash
         run: |
@@ -319,7 +222,7 @@ jobs:
           cp "target/$target/release/$lib" "$dest"
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-linux-arm64
           path: target/dist/artifacts/native-stage
@@ -343,54 +246,6 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Compute dhara_tool source hash
-        id: tool-hash
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256_file() {
-            if command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "$@"
-            else
-              shasum -a 256 "$@"
-            fi
-          }
-          hash=$(
-            {
-              git ls-files 'tooling/dhara_tool'
-              git ls-files 'Cargo.toml' 'Cargo.lock'
-            } | sort -u | while read -r file; do
-              [ -f "$file" ] && sha256_file "$file"
-            done | sha256_file | awk '{print substr($1, 1, 16)}'
-          )
-          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
-
-      - name: Restore dhara_tool cache
-        id: tool-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-osx-arm64
-
-      - name: Build dhara_tool on cache miss
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        run: cargo build -p dhara_tool --profile dist
-
-      - name: Save dhara_tool cache
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-osx-arm64
-
-      - name: Rust tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
-          cargo test -p dharastorage-ffi
-
       - name: Stage native assets
         shell: bash
         run: |
@@ -405,7 +260,7 @@ jobs:
           cp "target/$target/release/$lib" "$dest"
 
       - name: Upload native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: native-stage-macos
           path: target/dist/artifacts/native-stage
@@ -458,7 +313,7 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
@@ -473,13 +328,13 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
 
       - name: Download native stages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: native-stage-*
           path: target/dist/artifacts/native-inputs
@@ -525,14 +380,14 @@ jobs:
           printf '{"version":"%s","commit":"%s"}\n' "$version" "${{ github.sha }}" > target/dist/artifacts/release-metadata.json
 
       - name: Upload release native stage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-native-stage
           path: target/dist/artifacts/native-stage
           retention-days: 90
 
       - name: Upload release NuGet package
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-nuget-package
           path: |
@@ -542,17 +397,17 @@ jobs:
           retention-days: 90
 
       - name: Upload release metadata
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-metadata
           path: target/dist/artifacts/release-metadata.json
           retention-days: 90
 
   nuget-verify:
-    name: NuGet verify (windows)
+    name: NuGet verify (linux)
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     needs: nuget-package
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -568,6 +423,13 @@ jobs:
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+
+      - name: Install NativeAOT build dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
@@ -596,10 +458,14 @@ jobs:
 
       - name: Restore dhara_tool cache
         id: tool-cache
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         with:
           path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
+          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
+
+      - name: Setup Linux tool build dependencies
+        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
+        uses: ./.github/actions/setup-linux-tool-deps
 
       - name: Build dhara_tool on cache miss
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
@@ -607,13 +473,13 @@ jobs:
 
       - name: Save dhara_tool cache
         if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
+          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
 
       - name: Download merged native stage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-native-stage
           path: target/dist/artifacts/native-stage
@@ -622,5 +488,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool.exe -r "$GITHUB_WORKSPACE" --yes verify package \
+          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package \
             --native-stage target/dist/artifacts/native-stage
