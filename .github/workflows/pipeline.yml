@@ -479,7 +479,7 @@ jobs:
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
 
       - name: Download native stages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: native-stage-*
           path: target/dist/artifacts/native-inputs
@@ -613,7 +613,7 @@ jobs:
           key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
 
       - name: Download merged native stage
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-native-stage
           path: target/dist/artifacts/native-stage
