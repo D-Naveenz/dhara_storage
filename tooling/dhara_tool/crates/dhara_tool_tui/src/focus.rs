@@ -11,9 +11,6 @@ pub enum FocusRegion {
 #[derive(Debug, Clone, Default)]
 pub struct FocusState {
     pub region: FocusRegion,
-    pub task_row: usize,
-    pub tab_index: usize,
-    pub form_field: usize,
     pub action_button: usize,
 }
 

@@ -1,6 +1,5 @@
 use ratatui::style::{Color, Modifier, Style};
 
-pub const BG: Color = Color::Rgb(24, 24, 28);
 pub const PANEL_BG: Color = Color::Rgb(32, 32, 38);
 pub const BORDER: Color = Color::Rgb(64, 64, 72);
 pub const TEXT: Color = Color::Rgb(220, 220, 225);

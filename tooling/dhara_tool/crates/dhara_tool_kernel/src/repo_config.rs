@@ -164,8 +164,7 @@ pub fn detect_config_drift(repo_root: &Path) -> Result<Vec<ConfigDriftItem>> {
     let cargo_path = repo_root.join(ROOT_CARGO_TOML_PATH);
     let cargo_content = fs::read_to_string(&cargo_path)
         .with_context(|| format!("failed to read {}", cargo_path.display()))?;
-    let updated_cargo = sync_cargo_toml(&cargo_content, &config.versions.workspace)?;
-    if updated_cargo != cargo_content {
+    if cargo_toml_needs_sync(&cargo_content, &config.versions.workspace)? {
         drifts.push(ConfigDriftItem {
             kind: ConfigDriftKind::WorkspaceCargoToml,
             summary: format!(
@@ -272,6 +271,9 @@ pub fn bump_version(repo_root: &Path, part: VersionPart) -> Result<String> {
 pub fn sync_cargo_toml(content: &str, version: &str) -> Result<String> {
     Version::parse(version)
         .with_context(|| format!("invalid rust workspace version: {version}"))?;
+    if !cargo_toml_needs_sync(content, version)? {
+        return Ok(content.to_owned());
+    }
     let mut document = content
         .parse::<DocumentMut>()
         .context("failed to parse Cargo.toml")?;
@@ -283,14 +285,81 @@ pub fn sync_cargo_toml(content: &str, version: &str) -> Result<String> {
 
 pub fn sync_tool_cargo_toml(content: &str, version: &str) -> Result<String> {
     Version::parse(version).with_context(|| format!("invalid tool version: {version}"))?;
-    let mut document = content
+    let document = content
         .parse::<DocumentMut>()
         .context("failed to parse tooling/dhara_tool/Cargo.toml")?;
+    if tool_version_from_document(&document) == Some(version) {
+        return Ok(content.to_owned());
+    }
+    let mut document = document;
     if document.get("workspace").is_none() {
         document["workspace"] = toml_edit::table();
     }
     document["workspace"]["package"]["version"] = value(version);
     Ok(document.to_string())
+}
+
+/// Workspace version fields owned by `dhara.config.toml` (semantic compare; not full-file text).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ManagedCargoSnapshot {
+    workspace_version: String,
+    dal_version: String,
+    storage_version: String,
+}
+
+fn managed_cargo_snapshot_from_content(content: &str) -> Result<ManagedCargoSnapshot> {
+    let document = content
+        .parse::<DocumentMut>()
+        .context("failed to parse Cargo.toml")?;
+    let workspace_version = workspace_package_version(&document)
+        .ok_or_else(|| anyhow::anyhow!("Cargo.toml is missing workspace.package.version"))?;
+    let dal_version = workspace_dependency_version(&document, "dhara_storage_dal")
+        .ok_or_else(|| anyhow::anyhow!("Cargo.toml is missing dhara_storage_dal version"))?;
+    let storage_version = workspace_dependency_version(&document, "dhara_storage")
+        .ok_or_else(|| anyhow::anyhow!("Cargo.toml is missing dhara_storage version"))?;
+    Ok(ManagedCargoSnapshot {
+        workspace_version,
+        dal_version,
+        storage_version,
+    })
+}
+
+fn managed_cargo_snapshot_for_version(version: &str) -> ManagedCargoSnapshot {
+    ManagedCargoSnapshot {
+        workspace_version: version.to_owned(),
+        dal_version: version.to_owned(),
+        storage_version: version.to_owned(),
+    }
+}
+
+pub fn cargo_toml_needs_sync(content: &str, version: &str) -> Result<bool> {
+    Version::parse(version)
+        .with_context(|| format!("invalid rust workspace version: {version}"))?;
+    let expected = managed_cargo_snapshot_for_version(version);
+    let current = match managed_cargo_snapshot_from_content(content) {
+        Ok(current) => current,
+        Err(_) => return Ok(true),
+    };
+    Ok(current != expected)
+}
+
+fn workspace_package_version(document: &DocumentMut) -> Option<String> {
+    document
+        .get("workspace")
+        .and_then(|workspace| workspace.get("package"))
+        .and_then(|package| package.get("version"))
+        .and_then(|version| version.as_str())
+        .map(str::to_owned)
+}
+
+fn workspace_dependency_version(document: &DocumentMut, name: &str) -> Option<String> {
+    document
+        .get("workspace")
+        .and_then(|workspace| workspace.get("dependencies"))
+        .and_then(|dependencies| dependencies.get(name))
+        .and_then(|dependency| dependency.get("version"))
+        .and_then(|version| version.as_str())
+        .map(str::to_owned)
 }
 
 fn tool_version_from_document(document: &DocumentMut) -> Option<&str> {
@@ -994,6 +1063,45 @@ mod tests {
         assert!(updated.contains(
             "dhara_storage = { version = \"0.2.0\", path = \"src/core/dhara_storage\" }"
         ));
+    }
+
+    #[test]
+    fn cargo_toml_needs_sync_ignores_line_endings_when_versions_match() {
+        let formatted = "[workspace]\r\n[workspace.package]\r\nversion = \"0.2.0\"\r\n[workspace.dependencies]\r\ndhara_storage_dal = { version = \"0.2.0\", path = \"src/core/dhara_storage_dal\" }\r\ndhara_storage = { version = \"0.2.0\", path = \"src/core/dhara_storage\" }\r\n";
+
+        assert!(!cargo_toml_needs_sync(formatted, "0.2.0").unwrap());
+        assert_eq!(sync_cargo_toml(formatted, "0.2.0").unwrap(), formatted);
+    }
+
+    #[test]
+    fn detect_config_drift_ignores_cargo_toml_formatting() {
+        let temp = tempdir().unwrap();
+        write_required_files(temp.path());
+        let config = sample_config();
+        fs::write(
+            temp.path().join(CONFIG_PATH),
+            toml::to_string_pretty(&config).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            temp.path().join(ROOT_CARGO_TOML_PATH),
+            "[workspace]\r\n[workspace.package]\r\nversion = \"0.2.0\"\r\n[workspace.dependencies]\r\ndhara_storage_dal = { version = \"0.2.0\", path = \"src/core/dhara_storage_dal\" }\r\ndhara_storage = { version = \"0.2.0\", path = \"src/core/dhara_storage\" }\r\n",
+        )
+        .unwrap();
+
+        let drifts = detect_config_drift(temp.path()).unwrap();
+        assert!(!drifts
+            .iter()
+            .any(|item| item.kind == ConfigDriftKind::WorkspaceCargoToml));
+    }
+
+    #[test]
+    fn sync_tool_cargo_toml_preserves_content_when_version_matches() {
+        let formatted = "[workspace.package]\r\nversion = \"0.8.4\"\r\n";
+        assert_eq!(
+            sync_tool_cargo_toml(formatted, "0.8.4").unwrap(),
+            formatted
+        );
     }
 
     #[test]
