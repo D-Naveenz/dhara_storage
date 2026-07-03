@@ -9,7 +9,7 @@ pub fn render_title_bar(frame: &mut Frame<'_>, area: Rect, version: &str, reposi
     let block = Block::default()
         .borders(Borders::BOTTOM)
         .border_style(theme::border_style())
-        .style(theme::panel_style());
+        .style(theme::bar_style());
     let inner = block.inner(area);
     frame.render_widget(block, area);
 

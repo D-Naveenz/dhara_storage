@@ -14,6 +14,13 @@ use dhara_tool_cli::interactive::AppState;
 use crate::focus::TuiFocus;
 use crate::theme as dhara_theme;
 
+fn dhara_progress_style(theme: &Theme) -> ProgressStyle {
+    let mut style = ProgressStyle::from(theme);
+    style.bordered = false;
+    style.unfilled_color = dhara_theme::PANEL_BG;
+    style
+}
+
 pub fn render_action_panel(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -72,7 +79,6 @@ pub fn render_action_panel(
     cancel_btn.set_focused(shell_focus.is_focused(&TuiFocus::ActionCancel));
     reset_btn.set_focused(shell_focus.is_focused(&TuiFocus::ActionReset));
 
-    let mut registry = ClickRegionRegistry::new();
     let button_row = Layout::horizontal([
         Constraint::Ratio(1, 3),
         Constraint::Ratio(1, 3),
@@ -80,44 +86,19 @@ pub fn render_action_panel(
     ])
     .split(layout[3]);
 
-    let run = Button::new("Run", run_btn)
+    let buf = frame.buffer_mut();
+    Button::new("Run", run_btn)
         .variant(ButtonVariant::Block)
-        .theme(theme);
-    let cancel = Button::new("Cancel", cancel_btn)
+        .theme(theme)
+        .render_with_registry(button_row[0], buf, shell_clicks, TuiFocus::ActionRun);
+    Button::new("Cancel", cancel_btn)
         .variant(ButtonVariant::Block)
-        .theme(theme);
-    let reset = Button::new("Reset", reset_btn)
+        .theme(theme)
+        .render_with_registry(button_row[1], buf, shell_clicks, TuiFocus::ActionCancel);
+    Button::new("Reset", reset_btn)
         .variant(ButtonVariant::Block)
-        .theme(theme);
-
-    if run_btn.enabled {
-        let region = run.render_stateful(button_row[0], frame.buffer_mut());
-        if region.area.width > 0 {
-            registry.register(region.area, TuiFocus::ActionRun);
-        }
-    } else {
-        run.render(button_row[0], frame.buffer_mut());
-    }
-    if cancel_btn.enabled {
-        let region = cancel.render_stateful(button_row[1], frame.buffer_mut());
-        if region.area.width > 0 {
-            registry.register(region.area, TuiFocus::ActionCancel);
-        }
-    } else {
-        cancel.render(button_row[1], frame.buffer_mut());
-    }
-    if reset_btn.enabled {
-        let region = reset.render_stateful(button_row[2], frame.buffer_mut());
-        if region.area.width > 0 {
-            registry.register(region.area, TuiFocus::ActionReset);
-        }
-    } else {
-        reset.render(button_row[2], frame.buffer_mut());
-    }
-
-    for region in registry.regions() {
-        shell_clicks.register(region.area, region.data.clone());
-    }
+        .theme(theme)
+        .render_with_registry(button_row[2], buf, shell_clicks, TuiFocus::ActionReset);
 }
 
 fn render_progress(
@@ -141,7 +122,7 @@ fn render_progress(
             spin.render(area, frame.buffer_mut());
         }
         Some(snapshot) => {
-            let mut style = ProgressStyle::from(theme);
+            let mut style = dhara_progress_style(theme);
             if snapshot.phase == RunPhase::Complete {
                 style.filled_color = dhara_theme::SUCCESS;
             }
@@ -166,7 +147,7 @@ fn render_progress(
         None => {
             Progress::new(0.0)
                 .label("Ready")
-                .theme(theme)
+                .style(dhara_progress_style(theme))
                 .render(area, frame.buffer_mut());
         }
     }

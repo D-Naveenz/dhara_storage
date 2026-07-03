@@ -19,6 +19,16 @@ pub fn panel_style() -> Style {
     Style::default().fg(TEXT).bg(PANEL_BG)
 }
 
+pub fn bar_style() -> Style {
+    Style::default()
+        .fg(TEXT)
+        .bg(Color::Rgb(40, 40, 46))
+}
+
+pub fn border_only_style() -> Style {
+    Style::default().fg(TEXT)
+}
+
 pub fn border_style() -> Style {
     Style::default().fg(BORDER)
 }

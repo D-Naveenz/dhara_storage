@@ -1,7 +1,8 @@
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
-use ratatui_interact::components::key_hints_footer;
 
 use dhara_tool_cli::interactive::{AppState, MainTab};
 
@@ -98,16 +99,44 @@ pub fn footer_hints(ctx: &FooterContext<'_>) -> Vec<(&'static str, &'static str)
     hints
 }
 
+fn hints_line(hints: &[(&str, &str)]) -> Line<'static> {
+    let mut spans = Vec::new();
+    for (idx, (key, desc)) in hints.iter().enumerate() {
+        if idx > 0 {
+            spans.push(Span::raw(" | "));
+        }
+        spans.push(Span::styled(
+            (*key).to_owned(),
+            Style::default().fg(Color::Green),
+        ));
+        spans.push(Span::raw(format!(": {desc}")));
+    }
+    Line::from(spans)
+}
+
 pub fn render_command_bar(frame: &mut Frame<'_>, area: Rect, ctx: &FooterContext<'_>) {
     let hints = footer_hints(ctx);
-    let lines = key_hints_footer(&hints);
-    let block = Block::default()
-        .borders(Borders::TOP)
+    let line = hints_line(&hints);
+
+    frame.render_widget(Block::default().style(theme::bar_style()), area);
+
+    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(area);
+
+    Block::default()
+        .borders(Borders::BOTTOM)
         .border_style(theme::border_style())
-        .style(theme::panel_style());
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
-    Paragraph::new(lines)
-        .style(theme::panel_style())
-        .render(inner, frame.buffer_mut());
+        .style(theme::bar_style())
+        .render(chunks[0], frame.buffer_mut());
+
+    Paragraph::new(line)
+        .style(theme::bar_style())
+        .render(
+            Rect {
+                x: chunks[1].x + 1,
+                y: chunks[1].y,
+                width: chunks[1].width.saturating_sub(2),
+                height: 1,
+            },
+            frame.buffer_mut(),
+        );
 }

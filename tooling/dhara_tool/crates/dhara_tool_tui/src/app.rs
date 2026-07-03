@@ -19,9 +19,8 @@ use dhara_tool_kernel::{
     resolve_and_persist_repository, unregister_interactive_progress_sender,
 };
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::widgets::Block;
 use ratatui_interact::components::{
-    ButtonState, CheckBoxState, InputState, MousePointer, MousePointerState, ScrollableContentState,
+    ButtonState, CheckBoxState, InputState, MarqueeState, ScrollableContentState,
     SpinnerState, TabViewAction, TabViewState, TreeViewState as WidgetTreeState,
     handle_scrollable_content_key, handle_scrollable_content_mouse, handle_tab_view_key,
     handle_tab_view_mouse,
@@ -31,8 +30,8 @@ use ratatui_interact::theme::Theme;
 use ratatui_interact::traits::{ClickRegionRegistry, ContainerAction};
 
 use crate::adapters::task_tree::{
-    TreeKeyAction, apply_tree_selection, build_tree_nodes, handle_tree_key, render_task_tree,
-    sync_nav_from_widget, sync_widget_from_nav, task_row_from_widget,
+    TreeKeyAction, apply_tree_selection, build_tree_nodes, handle_tree_key, handle_tree_mouse,
+    render_task_tree, sync_nav_from_widget, sync_widget_from_nav, task_row_from_widget,
 };
 use crate::boot::TuiBootParams;
 use crate::command_bar::{FooterContext, render_command_bar};
@@ -42,7 +41,7 @@ use crate::screens::{
     apply_option_widgets_to_form, cycle_form_field, render_center_panel, sync_option_widgets_from_form,
     sync_state_from_tab_view, tab_index,
 };
-use crate::theme::{self, interact_theme};
+use crate::theme::interact_theme;
 use crate::widgets::{action_panel, title_bar};
 
 pub fn can_launch_tui() -> bool {
@@ -77,9 +76,8 @@ pub struct DharaTui {
     pub modals: ModalLayer,
     pub shell_clicks: ClickRegionRegistry<TuiFocus>,
     pub tab_clicks: ClickRegionRegistry<TabViewAction>,
-    pub mouse_pointer: MousePointerState,
-    pub mouse_col: u16,
-    pub mouse_row: u16,
+    pub tree_marquee: MarqueeState,
+    pub task_tree_inner: Rect,
     pub center_content_area: Rect,
 }
 
@@ -189,9 +187,8 @@ fn build_app(
         modals,
         shell_clicks: ClickRegionRegistry::new(),
         tab_clicks: ClickRegionRegistry::new(),
-        mouse_pointer: MousePointerState::with_enabled(true),
-        mouse_col: 0,
-        mouse_row: 0,
+        tree_marquee: MarqueeState::new(),
+        task_tree_inner: Rect::default(),
         center_content_area: Rect::default(),
     }
 }
@@ -258,10 +255,6 @@ fn run_loop(
 
 fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     let area = frame.area();
-    frame.render_widget(
-        Block::default().style(theme::panel_style()),
-        area,
-    );
 
     let layout = Layout::vertical([
         Constraint::Length(2),
@@ -288,13 +281,14 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     app.tab_clicks.clear();
 
     let tree_focused = app.shell_focus.is_focused(&TuiFocus::TaskTree);
-    render_task_tree(
+    app.task_tree_inner = render_task_tree(
         frame,
         body[0],
         &app.task_tree_nodes,
         &app.task_tree_widget,
         &app.theme,
         tree_focused,
+        &mut app.tree_marquee,
     );
 
     let center_clicks = render_center_panel(
@@ -344,11 +338,6 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     if app.repo_setup.is_some() {
         app.modals.render_repo(frame, &app.theme);
     }
-
-    app.mouse_pointer.update_position(app.mouse_col, app.mouse_row);
-    MousePointer::new(&app.mouse_pointer)
-        .theme(&app.theme)
-        .render(frame.buffer_mut());
 }
 
 fn handle_key(app: &mut DharaTui, key: KeyEvent) -> Result<()> {
@@ -513,8 +502,6 @@ fn handle_tab_content_key(app: &mut DharaTui, key: &KeyEvent) -> bool {
 }
 
 fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
-    app.mouse_col = mouse.column;
-    app.mouse_row = mouse.row;
     let screen = Rect::new(0, 0, 200, 60);
 
     if app.repo_setup.is_some() {
@@ -531,15 +518,34 @@ fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
     }
 
     if is_left_click(&mouse) {
+        if app.tab_clicks.handle_click(mouse.column, mouse.row).is_some() {
+            handle_tab_view_mouse(&mut app.tab_view_state, &app.tab_clicks, &mouse);
+            app.state.main_tab = sync_state_from_tab_view(&app.tab_view_state);
+        }
+
+        if handle_tree_mouse(
+            &mut app.task_tree_widget,
+            &app.task_tree_nodes,
+            app.task_tree_inner,
+            &mouse,
+        ) {
+            app.shell_focus.focus(TuiFocus::TaskTree);
+            app.task_row = task_row_from_widget(&app.task_tree_widget);
+            sync_nav_from_widget(
+                &app.task_tree_widget,
+                &mut app.state.tree_view,
+                &app.task_tree_nodes,
+            );
+        }
+
         if let Some(focus) = app.shell_clicks.handle_click(mouse.column, mouse.row) {
             app.shell_focus.focus(focus.clone());
-            if matches!(focus, TuiFocus::ActionRun | TuiFocus::ActionCancel | TuiFocus::ActionReset) {
+            if matches!(
+                focus,
+                TuiFocus::ActionRun | TuiFocus::ActionCancel | TuiFocus::ActionReset
+            ) {
                 trigger_action_button(app);
             }
-        } else if let Some(action) = app.tab_clicks.handle_click(mouse.column, mouse.row) {
-            handle_tab_view_mouse(&mut app.tab_view_state, &app.tab_clicks, &mouse);
-            let _ = action;
-            app.state.main_tab = sync_state_from_tab_view(&app.tab_view_state);
         }
 
         if app.shell_focus.is_focused(&TuiFocus::TabContent) {

@@ -6,7 +6,7 @@ use dhara_tool_cli::interactive::{AppState, DiagnosticSeverity, MainTab};
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
 use ratatui::text::Line;
-use ratatui::widgets::{Paragraph, Widget};
+use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
     CheckBox, CheckBoxState, InputState, ScrollableContent, ScrollableContentState, Tab,
@@ -52,7 +52,20 @@ pub fn render_center_panel(
     tab_state.focused = shell_focus.is_focused(&TuiFocus::MainTabs)
         || shell_focus.is_focused(&TuiFocus::TabContent);
 
-    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(area);
+    let tabs_focused = shell_focus.is_focused(&TuiFocus::MainTabs)
+        || shell_focus.is_focused(&TuiFocus::TabContent);
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(if tabs_focused {
+            dhara_theme::border_style().fg(dhara_theme::ACCENT)
+        } else {
+            dhara_theme::border_style()
+        })
+        .style(dhara_theme::border_only_style());
+    let panel_inner = block.inner(area);
+    frame.render_widget(block, area);
+
+    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(panel_inner);
     let tabs: Vec<Tab<'_>> = TAB_LABELS.iter().map(|label| Tab::new(label)).collect();
 
     let mut click_registry = ClickRegionRegistry::new();

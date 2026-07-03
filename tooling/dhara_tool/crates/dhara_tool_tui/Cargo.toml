@@ -16,3 +16,4 @@ dhara_tool_kernel = { path = "../dhara_tool_kernel" }
 ratatui = "0.30"
 ratatui-crossterm = "0.1"
 ratatui-interact = { version = "0.5", features = ["filesystem"] }
+unicode-width = "0.2"
