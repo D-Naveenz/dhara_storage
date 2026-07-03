@@ -1,7 +1,7 @@
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Widget};
+use ratatui::widgets::{Block, Paragraph, Widget};
 use ratatui::Frame;
 
 use dhara_tool_cli::interactive::{AppState, MainTab};
@@ -119,22 +119,13 @@ pub fn render_command_bar(frame: &mut Frame<'_>, area: Rect, ctx: &FooterContext
     let line = hints_line(&hints);
 
     frame.render_widget(Block::default().style(theme::bar_style()), area);
-
-    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).split(area);
-
-    Block::default()
-        .borders(Borders::BOTTOM)
-        .border_style(theme::border_style())
-        .style(theme::bar_style())
-        .render(chunks[0], frame.buffer_mut());
-
     Paragraph::new(line)
         .style(theme::bar_style())
         .render(
             Rect {
-                x: chunks[1].x + 1,
-                y: chunks[1].y,
-                width: chunks[1].width.saturating_sub(2),
+                x: area.x + 1,
+                y: area.y,
+                width: area.width.saturating_sub(2),
                 height: 1,
             },
             frame.buffer_mut(),

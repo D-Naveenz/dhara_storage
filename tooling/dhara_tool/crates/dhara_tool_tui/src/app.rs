@@ -257,9 +257,9 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     let area = frame.area();
 
     let layout = Layout::vertical([
-        Constraint::Length(2),
+        Constraint::Length(1),
         Constraint::Min(1),
-        Constraint::Length(2),
+        Constraint::Length(1),
     ])
     .split(area);
 
@@ -308,7 +308,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
         &app.option_checkbox,
     );
     app.tab_clicks = center_clicks.registry;
-    let center_chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(body[1]);
+    let center_chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(body[1]);
     app.center_content_area = center_chunks[1];
 
     action_panel::render_action_panel(

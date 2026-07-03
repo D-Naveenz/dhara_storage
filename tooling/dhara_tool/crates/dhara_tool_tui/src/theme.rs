@@ -37,6 +37,13 @@ pub fn selected_style() -> Style {
     Style::default().fg(Color::White).bg(SELECTED_BG)
 }
 
+pub fn tree_selected_style() -> Style {
+    Style::default()
+        .fg(WARNING)
+        .bg(SELECTED_BG)
+        .add_modifier(Modifier::BOLD)
+}
+
 pub fn status_style_for_tone(tone: dhara_tool_cli::StatusTone) -> Style {
     let color = match tone {
         dhara_tool_cli::StatusTone::Ready => TEXT,

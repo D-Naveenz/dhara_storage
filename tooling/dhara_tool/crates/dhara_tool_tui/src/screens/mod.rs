@@ -10,7 +10,7 @@ use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
     CheckBox, CheckBoxState, InputState, ScrollableContent, ScrollableContentState, Tab,
-    TabView, TabViewAction, TabViewState,
+    TabView, TabViewAction, TabViewState, TabViewStyle,
 };
 use ratatui_interact::theme::Theme;
 use ratatui_interact::traits::ClickRegionRegistry;
@@ -65,12 +65,21 @@ pub fn render_center_panel(
     let panel_inner = block.inner(area);
     frame.render_widget(block, area);
 
-    let chunks = Layout::vertical([Constraint::Length(3), Constraint::Min(1)]).split(panel_inner);
+    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(panel_inner);
     let tabs: Vec<Tab<'_>> = TAB_LABELS.iter().map(|label| Tab::new(label)).collect();
+
+    frame.render_widget(Block::default().style(dhara_theme::bar_style()), chunks[0]);
+
+    let mut tab_style = TabViewStyle::from(theme);
+    tab_style.bordered_content = false;
+    tab_style.show_indicator = false;
+    tab_style.selected_style = dhara_theme::tree_selected_style();
+    tab_style.focused_style = dhara_theme::tree_selected_style();
+    tab_style.normal_style = Style::default().fg(dhara_theme::TEXT);
 
     let mut click_registry = ClickRegionRegistry::new();
     let tab_view = TabView::new(&tabs, tab_state)
-        .theme(theme)
+        .style(tab_style)
         .content(|_, _, _| {});
     tab_view.render_with_registry(chunks[0], frame.buffer_mut(), &mut click_registry);
 

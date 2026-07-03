@@ -146,10 +146,10 @@ fn flatten_nodes<'a>(
 
 fn tree_style(theme: &Theme) -> TreeStyle {
     let mut style = TreeStyle::from(theme);
-    style.selected_style = dhara_theme::selected_style();
+    style.selected_style = dhara_theme::tree_selected_style();
     style.normal_style = Style::default().fg(dhara_theme::TEXT);
-    style.cursor_normal = "  ";
-    style.cursor_selected = "> ";
+    style.cursor_normal = "";
+    style.cursor_selected = "";
     style
 }
 
@@ -165,13 +165,6 @@ fn build_prefix(
     } else {
         style.normal_style
     };
-
-    let cursor = if is_selected {
-        style.cursor_selected
-    } else {
-        style.cursor_normal
-    };
-    prefix.push_str(cursor);
 
     for &parent_is_last in &flat.parent_is_last {
         let connector = if parent_is_last {
@@ -253,6 +246,13 @@ pub fn render_task_tree(
         let row_area = Rect::new(tree_area.x, row_y, tree_area.width, 1);
 
         let (prefix, row_style) = build_prefix(&style, flat_node, is_selected, widget);
+        if is_selected {
+            for x in row_area.x..row_area.x + row_area.width {
+                buf[(x, row_y)]
+                    .set_bg(dhara_theme::SELECTED_BG)
+                    .set_fg(dhara_theme::WARNING);
+            }
+        }
         let prefix_width = prefix.width();
         buf.set_string(row_area.x, row_area.y, &prefix, row_style);
 
