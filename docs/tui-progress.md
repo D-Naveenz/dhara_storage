@@ -71,9 +71,11 @@ Status line priority in the TUI:
 2. `analyzing_message` while analyzing
 3. Command `activity_label` + elapsed (fallback for short commands)
 
-The **action panel title** uses `command_milestone` (e.g. `building definitions package`) so command-level chrome does not compete with step detail on the status line.
+The action panel title is fixed (`Actions`); it does not change per command.
 
 Elapsed seconds (after 4s) append to the step line without clobbering stage text. Elapsed is computed from `install_run_clock` on the **worker thread** when each snapshot is published — there is no background reporter thread.
+
+**Status line copy** stays short (not audit-log prose): extract/finalize use fixed phrases without counts; parse and reduce keep `(current/total)`; completion summaries (`Parsed N in …`, `trimmed to N`, `kept X of Y`) stay in file logs only.
 
 ## Status flicker fix (thread-local plan)
 

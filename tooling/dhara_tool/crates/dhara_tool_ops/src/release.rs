@@ -101,7 +101,7 @@ pub fn run(
     let session = ProgressSession;
     session.tick("nuget-release", 0, "Running NuGet release flow");
     let result = run_nuget_release(repo_root, tool_root, config, options, &package_options)?;
-    session.finish_step("nuget-release", "Running NuGet release — done");
+    session.finish_step("nuget-release", "Running NuGet release");
     Ok(result)
 }
 

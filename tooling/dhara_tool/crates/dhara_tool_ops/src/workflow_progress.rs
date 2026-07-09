@@ -13,7 +13,7 @@ pub fn run_workflow_step(
         session.tick(id, 0, detail);
         let result = operation();
         if result.is_ok() {
-            session.finish_step(id, format!("{label} — done"));
+            session.finish_step(id, label);
         }
         return result;
     }
@@ -26,7 +26,7 @@ pub fn run_workflow_step(
     session.tick(id, 0, detail);
     let result = operation();
     if result.is_ok() {
-        session.finish_step(id, format!("{label} — done"));
+        session.finish_step(id, label);
     }
     result
 }
@@ -56,7 +56,7 @@ pub fn run_planned_step(
     session.tick(id, 0, detail);
     let result = operation();
     if result.is_ok() {
-        session.finish_step(id, format!("{label} — done"));
+        session.finish_step(id, label);
     }
     result
 }

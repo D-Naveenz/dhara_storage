@@ -34,9 +34,8 @@ pub fn render_action_panel(
     shell_clicks: &mut ClickRegionRegistry<TuiFocus>,
 ) {
     let focused_region = shell_focus.current().copied();
-    let block_title = action_panel_title(state);
     let block = Block::default()
-        .title(block_title)
+        .title(" Actions ")
         .borders(Borders::ALL)
         .border_style(if matches!(
             focused_region,
@@ -125,15 +124,6 @@ fn render_progress(frame: &mut Frame<'_>, area: Rect, state: &AppState, theme: &
     Progress::new(ratio)
         .style(style)
         .render(inner, frame.buffer_mut());
-}
-
-fn action_panel_title(state: &AppState) -> String {
-    if let Some(snapshot) = state.progress.as_ref() {
-        if !snapshot.command_milestone.is_empty() {
-            return format!(" Actions — {} ", snapshot.command_milestone);
-        }
-    }
-    " Actions ".to_owned()
 }
 
 fn format_status_line(state: &AppState) -> String {

@@ -457,20 +457,7 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                     plan.steps[index].total = Some(total);
                     plan.steps[index].weight = total;
                     plan.steps[index].current = update.current as u64;
-                    plan.steps[index].detail = if update.message.starts_with("extracted") {
-                        "Extracting archive — done".to_owned()
-                    } else if total > 1 && update.current > 0 {
-                        format!(
-                            "Extracting archive ({}/{})",
-                            update.current, total
-                        )
-                    } else if total > 1 {
-                        format!("Extracting archive (0/{total})")
-                    } else if !update.message.is_empty() {
-                        format!("Extracting archive — {}", update.message)
-                    } else {
-                        "Extracting archive…".to_owned()
-                    };
+                    plan.steps[index].detail = "Extracting archive…".to_owned();
                 }
             }
             TridBuildStage::ParseDefinitions => {
@@ -483,7 +470,12 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                 if let Some(index) = find_step_index(plan, "parse") {
                     plan.steps[index].current = update.current as u64;
                     if update.message.starts_with("Reading definition files") {
-                        plan.steps[index].detail = update.message.clone();
+                        plan.steps[index].detail = "Reading definition files…".to_owned();
+                    } else if update.message.starts_with("Parsed ") {
+                        // Completion summary belongs in audit logs, not the status line.
+                        let total = update.total.unwrap_or(0);
+                        plan.steps[index].detail =
+                            format!("Parsing definitions ({}/{})", update.current, total);
                     } else {
                         let total = update.total.unwrap_or(0);
                         plan.steps[index].detail = format!(
@@ -502,15 +494,8 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                 if let Some(index) = find_step_index(plan, "reduce") {
                     plan.steps[index].current = update.current as u64;
                     let total = update.total.unwrap_or(0);
-                    if let Some(item) = &update.current_item {
-                        plan.steps[index].detail = format!(
-                            "Reducing definitions ({}/{}) — {}",
-                            update.current, total, item
-                        );
-                    } else {
-                        plan.steps[index].detail =
-                            format!("Reducing definitions ({}/{})", update.current, total);
-                    }
+                    plan.steps[index].detail =
+                        format!("Reducing definitions ({}/{})", update.current, total);
                 }
             }
             TridBuildStage::FinalizePackage => {
@@ -521,12 +506,7 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                     plan.steps[index].total = Some(total);
                     plan.steps[index].weight = total;
                     plan.steps[index].current = update.current as u64;
-                    if !update.message.is_empty() {
-                        plan.steps[index].detail =
-                            format!("Finalizing package — {}", update.message);
-                    } else {
-                        plan.steps[index].detail = "Finalizing package".to_owned();
-                    }
+                    plan.steps[index].detail = "Finalizing package…".to_owned();
                 }
             }
         }
@@ -715,7 +695,7 @@ mod tests {
         session.set_total("fmt", 1);
         session.commit();
         session.tick("fmt", 1, "Formatting Rust");
-        session.finish_step("fmt", "Formatting Rust — done");
+        session.finish_step("fmt", "Formatting");
 
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
         assert_eq!(snapshot.percent, 100);
@@ -759,7 +739,7 @@ mod tests {
 
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
         assert_eq!(snapshot.active_step, Some("extract"));
-        assert!(snapshot.step_label.contains("50/200"));
+        assert_eq!(snapshot.step_label, "Extracting archive…");
         with_plan(|plan| {
             let extract = plan
                 .steps
@@ -788,7 +768,7 @@ mod tests {
         assert_eq!(snapshot.active_step, Some("parse"));
         assert_eq!(
             snapshot.step_label,
-            "Reading definition files (21692 found)"
+            "Reading definition files…"
         );
     }
 }

@@ -495,7 +495,7 @@ fn stage_native_assets(
 
     if report_progress {
         let session = ProgressSession;
-        session.finish_step("stage-native", "Staging native libraries — done");
+        session.finish_step("stage-native", "Staging native libraries");
     }
 
     Ok(())
