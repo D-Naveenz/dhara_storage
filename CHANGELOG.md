@@ -6,17 +6,27 @@ uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.7] — 2026-07-10
+
+`dhara_tool` **0.9.7** (workspace crates remain **0.9.0**).
+
 ### Added
 
-- **Interactive TUI** — ratatui + ratatui-interact operator UI (`dhara_tool_tui`) with three-panel layout (tasks tree, Info/Options/Troubleshooting/System configs tabs, action panel), weighted installer-style progress (`operation_progress`), and TTY launch when no subcommand is given.
+- **ratatui TUI** — replaces the iced GUI: task tree, config tabs, action panel; launches on a TTY when no subcommand is given.
+- **Operation progress** — multi-step bar and status for defs, quality, package, verify, and release ([`docs/tui-progress.md`](docs/tui-progress.md)).
 
 ### Changed
 
-- **Operator UI** — iced GUI removed; `dhara_tool` launches the TUI on an interactive terminal instead of a graphical display.
+- **TrID `.7z` extract** — `sevenz-rust` with entry-level bar ticks (`tar` fallback).
+- **TUI status copy** — short step phrases; parse/reduce keep `(current/total)`; fixed `Actions` panel title.
+
+### Fixed
+
+- **Progress flicker** — worker-thread snapshots only (removed background elapsed reporter).
 
 ### Removed
 
-- **`dhara_tool_gui`** — iced-based operator UI and GUI assets.
+- **`dhara_tool_gui`** — iced operator UI and assets.
 
 ## [0.9.0] — 2026-07-02
 
@@ -149,6 +159,7 @@ Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.
 
 Initial tagged release in this changelog series. See git history before `v0.6.0` for earlier changes.
 
+[0.9.7]: https://github.com/D-Naveenz/dhara_storage/compare/v0.9.0...v0.9.7
 [0.9.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.0...v0.7.1
