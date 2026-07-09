@@ -433,6 +433,8 @@ mod tests {
             active_step: Some("parse"),
             step_label: "parse: 42/100".to_owned(),
             analyzing_message: String::new(),
+            activity_label: String::new(),
+            elapsed_secs: None,
         });
 
         let progress = state.progress.expect("progress set");

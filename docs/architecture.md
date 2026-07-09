@@ -105,10 +105,10 @@ flowchart LR
 |--------|------|
 | **Tasks tree** | Favorites + command hierarchy from `dhara_tool_cli::interactive::tree` |
 | **Tabs** | Info, Options, Troubleshooting (warn/error only), System configs (read-only) |
-| **Action panel** | Weighted progress bar with % overlay, status tone, Run/Cancel/Reset |
+| **Action panel** | Unit-sum progress bar with % overlay, stage status line, Run/Cancel/Reset |
 | **Chrome** | Title bar (version + repo), bottom command shortcut bar |
 
-Progress is driven by `dhara_tool_kernel::operation_progress` (analyze → weighted steps → aggregate %), not stdout parsing. `dhara_tool_cli::runner` installs `OperationProgressGuard` for interactive runs.
+Progress is driven by `dhara_tool_kernel::operation_progress` (analyze → discover totals → commit plan → tick stages; unit-sum %). Workflows in `dhara_tool_ops` call progress hooks at subprocess boundaries — not stdout parsing. See [TUI operation progress](tui-progress.md). `dhara_tool_cli::runner` installs `OperationProgressGuard` for interactive runs (no placeholder single-step plan).
 
 `dhara_tool_cli::registry` is split by command section (`config`, `defs`, `quality`, `package`, `release`) with shared `ui` metadata helpers.
 

@@ -1,0 +1,128 @@
+# TUI and interactive operation progress
+
+This document describes how `dhara_tool` reports progress in the interactive TUI (and shares the same state machine with direct-mode stderr counters). It is written for agents and operators who need to extend workflows without relying on chat history.
+
+## Problem this solves
+
+Long-running commands previously showed a **0% bar until completion** because [`runner.rs`](../tooling/dhara_tool/crates/dhara_tool_cli/src/runner.rs) installed a placeholder `begin_single_shot("Running")` step that blocked real multi-step plans. Status text was often overwritten by generic command labels from [`CommandRun`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/logging/operation.rs).
+
+The fix is a **shared discover → commit → tick** lifecycle in [`operation_progress.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/operation_progress.rs), wired into defs, quality, package, verify, and release workflows.
+
+## Lifecycle
+
+```mermaid
+stateDiagram-v2
+  direction LR
+  Analyzing: Analyzing
+  Running: Running
+  Complete: Complete
+
+  Analyzing --> Running: commit_plan with actual totals
+  Running --> Complete: complete_progress
+```
+
+| Phase | User sees | When |
+| ----- | --------- | ---- |
+| **Analyzing** | `Analyzing TrID source…`, `Planning quality checks…` | Totals not yet known |
+| **Running** | Step label + `current/total`, bar moves | After `commit_plan()` |
+| **Complete** | 100%, green bar | Runner calls `complete_progress()` on success |
+
+**Percent formula** (unit-sum, not opaque weights):
+
+```text
+percent = sum(min(step.current, step.total)) / sum(step.total) * 100
+```
+
+Runtime totals come from measured work (file counts, enabled checks, RIDs to build) — not hardcoded budgets. Illustrative chat examples (e.g. 48,000 total units) were intent only.
+
+## API cheat sheet (kernel)
+
+| Function | Purpose |
+| -------- | ------- |
+| `begin_analyzing(msg)` | Indeterminate phase; clears steps |
+| `plan_step(id, label, units)` | Register a stage |
+| `set_step_total(id, total)` | Set discovered unit count |
+| `commit_plan()` | Switch to determinate running |
+| `tick_step(id, current)` | Advance stage |
+| `set_step_message(id, detail)` | Status detail line |
+| `complete_progress()` | Force 100% |
+| `ProgressSession` | Thin RAII-style helper wrapping the above |
+| `has_committed_progress_plan()` | True when a real multi-step plan is active |
+
+**Ops helper:** [`workflow_progress.rs`](../tooling/dhara_tool/crates/dhara_tool_ops/src/workflow_progress.rs) — `begin_workflow`, `run_planned_step`, `run_workflow_step`.
+
+### Rules for new workflows
+
+1. Call `begin_analyzing` (or `begin_workflow`) before work when totals are unknown.
+2. After discovery, `plan_step` + `set_step_total` with **actual** counts, then `commit_plan`.
+3. Tick on stage boundaries (subprocess start/end, file batches) — **no stdout parsing** for percent.
+4. If called nested inside a parent workflow, check `has_committed_progress_plan()` and skip installing a second plan (see `nuget::verify` / `nuget::publish`).
+
+## Presentation layers
+
+| Mode | Sink | Notes |
+| ---- | ---- | ----- |
+| **Interactive (TUI)** | `ProgressSnapshot` channel → [`action_panel.rs`](../tooling/dhara_tool/crates/dhara_tool_tui/src/widgets/action_panel.rs) | Do not draw `indicatif` to stderr (conflicts with ratatui) |
+| **Direct CLI** | [`logging/progress.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/logging/progress.rs) throttled stderr | TrID counters on TTY |
+
+Status line priority in the TUI:
+
+1. Active step `detail` or `label (current/total)`
+2. `analyzing_message` while analyzing
+3. Command `activity_label` + elapsed (fallback for short commands)
+
+Elapsed seconds (after 4s) append to the step line without clobbering stage text.
+
+## Per-command rollout
+
+| Command | Status | Steps (examples) |
+| ------- | ------ | ---------------- |
+| `defs.build-trid-xml` | **Reference** | extract → parse (`xml_files.len()`) → reduce → finalize |
+| `defs.inspect-trid-xml` / `defs.sync-embedded` | Same TrID path | Same |
+| `quality.run` | Wired | fmt, clippy, doc?, test-rust, test-dotnet? |
+| `quality.fmt` / `clippy` / `doc` / `test-*` | Wired (standalone single step) | One step each |
+| `package.pack` | Wired | stage-native (per RID), dotnet-pack, inspect |
+| `package.stage-native` | Wired | stage-native (per RID) |
+| `verify.package` | Wired | pack, restore-smoke, run-smoke, reject-check, aot-restore, aot-publish |
+| `package.publish` | Wired | verify, optional push |
+| `release.run` | Wired | validate, cargo-release?, nuget-release |
+| `native.merge`, fast defs, config | Skip | Too short for meaningful bar |
+
+## Defs / TrID worked example
+
+1. **Load source** → `begin_analyzing("Analyzing TrID source…")`
+2. **Extract archive** → step `extract`, total `1` until byte-level API exists
+3. **Enumerate XML files** → `set_step_total("parse", xml_files.len())`, same for `reduce`
+4. **Parse** → `tick_step` every 250 files (sequential and parallel via `emit_trid_progress`)
+5. **Reduce / finalize** → throttled ticks with survivor detail
+
+Parallel parse uses thread-safe `emit_trid_progress` (mutex in dispatch) instead of `FnMut` callbacks from worker threads.
+
+## File map
+
+| File | Role |
+| ---- | ---- |
+| [`operation_progress.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/operation_progress.rs) | Plan state, snapshot, `ProgressSession` |
+| [`workflow_progress.rs`](../tooling/dhara_tool/crates/dhara_tool_ops/src/workflow_progress.rs) | Ops step helpers |
+| [`runner.rs`](../tooling/dhara_tool/crates/dhara_tool_cli/src/runner.rs) | `OperationProgressGuard`; no placeholder plan |
+| [`operation.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/logging/operation.rs) | `CommandRun`; elapsed without clobbering steps |
+| [`progress.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/logging/progress.rs) | TrID dispatch + direct stderr |
+| [`source.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/filedefs/trid/source.rs) | Parse enumeration + parallel ticks |
+| [`quality.rs`](../tooling/dhara_tool/crates/dhara_tool_ops/src/quality.rs) | Quality workflow steps |
+| [`nuget.rs`](../tooling/dhara_tool/crates/dhara_tool_ops/src/nuget.rs) | Pack / verify / publish / stage-native |
+| [`release.rs`](../tooling/dhara_tool/crates/dhara_tool_ops/src/release.rs) | Release workflow steps |
+| [`action_panel.rs`](../tooling/dhara_tool/crates/dhara_tool_tui/src/widgets/action_panel.rs) | Bar + status rendering |
+
+## Deferred
+
+- Tar byte-level extract progress
+- Parsing cargo/dotnet stdout for fine-grained percent
+- [`indicatif`](https://docs.rs/indicatif) on stderr in direct mode (spinner → bar pattern)
+- Per-stage bar reset (0–100% each stage) as optional UX
+- Duration-based weight estimates before enumeration
+
+## Related
+
+- [Logging conventions](logging.md) — audit tiers and TrID phase lines
+- [Workspace architecture](architecture.md) — tool crate DAG and TUI layout
+- [AGENTS.md](../AGENTS.md) — local verify commands

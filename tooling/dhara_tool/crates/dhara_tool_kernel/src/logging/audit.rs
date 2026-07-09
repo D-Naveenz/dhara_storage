@@ -1,7 +1,7 @@
 use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use chrono::{Local, NaiveDate};
 use tracing::{Level, debug, error, info, warn};
@@ -22,7 +22,7 @@ use crate::filedefs::{TridBuildProgress, TridTransformReport};
 static LOGGING: OnceLock<LoggingRuntime> = OnceLock::new();
 
 const LOG_FILE_STEM: &str = "dhara_tool";
-const AUDIT_TARGET: &str = "dhara_tool::audit";
+pub(crate) const AUDIT_TARGET: &str = "dhara_tool::audit";
 
 #[derive(Debug, Clone)]
 pub struct LoggingOptions {
@@ -132,13 +132,13 @@ fn io_error_from_set_global_default(
     std::io::Error::other(error)
 }
 
-/// Console stays at INFO in direct mode. Interactive mode suppresses the console
-/// entirely; WARN/ERROR are routed to the TUI troubleshooting panel.
+/// Console TRACE in direct mode; OFF in interactive (TUI diagnostic layer).
+/// File: INFO default; WARN with `--min`; DEBUG with `--trace`.
 fn resolve_log_levels(min: bool, trace: bool, run_mode: RunMode) -> (LevelFilter, LevelFilter) {
     let console = if run_mode == RunMode::Interactive {
         LevelFilter::OFF
     } else {
-        LevelFilter::INFO
+        LevelFilter::TRACE
     };
     let file = if trace {
         LevelFilter::DEBUG
@@ -291,18 +291,30 @@ pub fn log_session_end(exit_code: i32, module_id: Option<&str>, error: Option<&s
             "dhara_tool exiting {code} at {timestamp}"
         ),
     }
+    write_session_record(exit_code, module_id, error);
 }
 
-pub fn is_long_running_module(command_id: &str) -> bool {
-    matches!(
-        command_id,
-        "defs.build-trid-xml"
-            | "defs.inspect-trid-xml"
-            | "defs.sync-embedded"
-            | "verify.package"
-            | "package.pack"
-            | "package.publish"
-            | "release.run"
+/// File-only separator between process invocations in the daily log.
+pub fn write_session_record(exit_code: i32, module_id: Option<&str>, error: Option<&str>) {
+    let Some(path) = current_log_path() else {
+        return;
+    };
+    let record = format_session_record(exit_code, module_id, error);
+    if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(path) {
+        use std::io::Write;
+        let _ = file.write_all(record.as_bytes());
+    }
+}
+
+fn format_session_record(exit_code: i32, module_id: Option<&str>, error: Option<&str>) -> String {
+    let module = module_id.unwrap_or("—");
+    let error_suffix = error
+        .map(|value| format!("  error={value}"))
+        .unwrap_or_default();
+    format!(
+        "================================================================================\n\
+         session end  exit={exit_code}  module={module}{error_suffix}\n\
+         ================================================================================\n"
     )
 }
 
@@ -359,63 +371,6 @@ fn summarize_defs_report(report: &crate::context::StructuredReport) -> String {
     }
 }
 
-pub fn log_module_begin(module_id: &str, config_summary: &str) {
-    crate::logging::progress::reset_build_progress_logging();
-    info!(
-        target: AUDIT_TARGET,
-        "{module_id} started — {config_summary}"
-    );
-}
-
-pub fn log_module_begin_debug(module_id: &str, config_summary: &str) {
-    crate::logging::progress::reset_build_progress_logging();
-    debug!(
-        target: AUDIT_TARGET,
-        "{module_id} — {config_summary}"
-    );
-}
-
-pub fn log_module_end(module_id: &str, exit_code: i32, summary: &str, started: Instant) {
-    let duration = format_duration(started.elapsed());
-    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
-    if exit_code == 0 {
-        info!(
-            target: AUDIT_TARGET,
-            "{module_id} finished in {duration} at {timestamp} — {summary}"
-        );
-    } else {
-        warn!(
-            target: AUDIT_TARGET,
-            "{module_id} finished in {duration} at {timestamp} with exit {exit_code} — {summary}"
-        );
-    }
-}
-
-pub fn log_module_compact_finish(module_id: &str, exit_code: i32, summary: &str, started: Instant) {
-    let duration = format_duration(started.elapsed());
-    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
-    if exit_code == 0 {
-        info!(
-            target: AUDIT_TARGET,
-            "{module_id} finished in {duration} at {timestamp} — {summary}"
-        );
-    } else {
-        warn!(
-            target: AUDIT_TARGET,
-            "{module_id} finished in {duration} at {timestamp} with exit {exit_code} — {summary}"
-        );
-    }
-}
-
-pub fn log_module_failed(module_id: &str, error: &str, started: Instant) {
-    let duration = format_duration(started.elapsed());
-    let timestamp = Local::now().format("%Y-%m-%dT%H:%M:%S%.3fZ");
-    error!(
-        target: AUDIT_TARGET,
-        "{module_id} failed in {duration} at {timestamp} — {error}"
-    );
-}
-
 pub fn log_module_step_debug(message: &str) {
     debug!(target: AUDIT_TARGET, "{message}");
 }
@@ -429,7 +384,7 @@ pub fn log_module_step_error(message: &str) {
 }
 
 pub fn log_transform_statistics(report: &TridTransformReport) {
-    info!(
+    debug!(
         target: AUDIT_TARGET,
         "TrID transform — parsed={}, kept={}, mime_corrected={}, mime_rejected={}, ext_rejected={}, sig_rejected={}, trimmed={}",
         report.total_parsed,
@@ -450,7 +405,7 @@ pub fn log_file_path(logs_dir: &Path) -> PathBuf {
     current_log_path().unwrap_or_else(|| {
         allocate_log_path(logs_dir).unwrap_or_else(|_| {
             let today = Local::now().date_naive();
-            logs_dir.join(log_file_name_for(today, 0))
+            logs_dir.join(log_file_name_for(today))
         })
     })
 }
@@ -458,60 +413,14 @@ pub fn log_file_path(logs_dir: &Path) -> PathBuf {
 fn allocate_log_path(logs_dir: &Path) -> std::io::Result<PathBuf> {
     fs::create_dir_all(logs_dir)?;
     let today = Local::now().date_naive();
-    let session = next_log_session(logs_dir, today)?;
-    Ok(logs_dir.join(log_file_name_for(today, session)))
+    Ok(logs_dir.join(log_file_name_for(today)))
 }
 
-fn next_log_session(logs_dir: &Path, date: NaiveDate) -> std::io::Result<u32> {
-    let mut highest: Option<u32> = None;
-
-    if logs_dir.is_dir() {
-        for entry in fs::read_dir(logs_dir)? {
-            let entry = entry?;
-            if !entry.file_type()?.is_file() {
-                continue;
-            }
-
-            let name = entry.file_name();
-            let Some(session) = parse_log_session(name.to_string_lossy().as_ref(), date) else {
-                continue;
-            };
-
-            highest = Some(highest.map_or(session, |current| current.max(session)));
-        }
-    }
-
-    Ok(match highest {
-        None => 0,
-        Some(session) => session + 1,
-    })
+fn log_file_name_for(date: NaiveDate) -> String {
+    format!("{}_{LOG_FILE_STEM}.log", date.format("%Y-%m-%d"))
 }
 
-fn parse_log_session(file_name: &str, date: NaiveDate) -> Option<u32> {
-    let date_prefix = date.format("%Y-%m-%d").to_string();
-    if file_name == log_file_name_for(date, 0) {
-        return Some(0);
-    }
-
-    let prefix = format!("{date_prefix}_{LOG_FILE_STEM}_");
-    let suffix = ".log";
-    if !file_name.starts_with(&prefix) || !file_name.ends_with(suffix) {
-        return None;
-    }
-
-    let session_text = &file_name[prefix.len()..file_name.len() - suffix.len()];
-    session_text.parse().ok()
-}
-
-fn log_file_name_for(date: NaiveDate, session: u32) -> String {
-    let date_prefix = date.format("%Y-%m-%d");
-    match session {
-        0 => format!("{date_prefix}_{LOG_FILE_STEM}.log"),
-        session => format!("{date_prefix}_{LOG_FILE_STEM}_{session}.log"),
-    }
-}
-
-fn format_duration(duration: Duration) -> String {
+pub(crate) fn format_duration(duration: Duration) -> String {
     let secs = duration.as_secs();
     if secs >= 3600 {
         format!("{}h{}m", secs / 3600, (secs % 3600) / 60)
@@ -534,52 +443,41 @@ mod tests {
     use tempfile::tempdir;
     use tracing_subscriber::filter::LevelFilter;
 
-    use super::{
-        format_duration, log_file_name_for, next_log_session, parse_log_session, resolve_log_levels,
-    };
+    use super::{format_duration, format_session_record, log_file_name_for, resolve_log_levels};
     use crate::context::RunMode;
+    use std::io::Write;
     use std::time::Duration;
 
     #[test]
-    fn log_file_name_uses_dhara_tool_stem_for_session_zero() {
+    fn log_file_name_uses_daily_stem() {
         let date = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
-        assert_eq!(log_file_name_for(date, 0), "2026-04-10_dhara_tool.log");
+        assert_eq!(log_file_name_for(date), "2026-04-10_dhara_tool.log");
     }
 
     #[test]
-    fn log_file_name_adds_session_suffix_for_positive_sessions() {
-        let date = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
-        assert_eq!(log_file_name_for(date, 1), "2026-04-10_dhara_tool_1.log");
-        assert_eq!(log_file_name_for(date, 3), "2026-04-10_dhara_tool_3.log");
-    }
-
-    #[test]
-    fn parse_log_session_recognizes_session_zero_and_numbered_sessions() {
-        let date = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
-        assert_eq!(
-            parse_log_session("2026-04-10_dhara_tool.log", date),
-            Some(0)
-        );
-        assert_eq!(
-            parse_log_session("2026-04-10_dhara_tool_1.log", date),
-            Some(1)
-        );
-        assert_eq!(parse_log_session("2026-04-09_dhara_tool.log", date), None);
-    }
-
-    #[test]
-    fn next_log_session_starts_at_zero_and_increments() {
+    fn daily_log_appends_to_same_file() {
         let temp = tempdir().unwrap();
         let logs_dir = temp.path();
         let date = NaiveDate::from_ymd_opt(2026, 4, 10).unwrap();
+        let path = logs_dir.join(log_file_name_for(date));
+        std::fs::write(&path, "first\n").unwrap();
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap()
+            .write_all(b"second\n")
+            .unwrap();
+        let content = std::fs::read_to_string(path).unwrap();
+        assert!(content.contains("first"));
+        assert!(content.contains("second"));
+    }
 
-        assert_eq!(next_log_session(logs_dir, date).unwrap(), 0);
-
-        std::fs::write(logs_dir.join(log_file_name_for(date, 0)), "session 0").unwrap();
-        assert_eq!(next_log_session(logs_dir, date).unwrap(), 1);
-
-        std::fs::write(logs_dir.join(log_file_name_for(date, 1)), "session 1").unwrap();
-        assert_eq!(next_log_session(logs_dir, date).unwrap(), 2);
+    #[test]
+    fn session_record_format() {
+        let record = format_session_record(0, Some("defs.build-trid-xml"), None);
+        assert!(record.contains("session end"));
+        assert!(record.contains("exit=0"));
+        assert!(record.contains("defs.build-trid-xml"));
     }
 
     #[test]
@@ -589,9 +487,9 @@ mod tests {
     }
 
     #[test]
-    fn default_log_levels_use_info_on_console_and_file() {
+    fn direct_mode_uses_trace_on_console() {
         let (console, file) = resolve_log_levels(false, false, RunMode::Direct);
-        assert_eq!(console, LevelFilter::INFO);
+        assert_eq!(console, LevelFilter::TRACE);
         assert_eq!(file, LevelFilter::INFO);
     }
 
@@ -605,14 +503,14 @@ mod tests {
     #[test]
     fn min_lowers_file_log_to_warn_only() {
         let (console, file) = resolve_log_levels(true, false, RunMode::Direct);
-        assert_eq!(console, LevelFilter::INFO);
+        assert_eq!(console, LevelFilter::TRACE);
         assert_eq!(file, LevelFilter::WARN);
     }
 
     #[test]
     fn trace_raises_file_log_to_debug() {
         let (console, file) = resolve_log_levels(false, true, RunMode::Direct);
-        assert_eq!(console, LevelFilter::INFO);
+        assert_eq!(console, LevelFilter::TRACE);
         assert_eq!(file, LevelFilter::DEBUG);
     }
 }

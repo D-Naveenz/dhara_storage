@@ -3,9 +3,7 @@ use std::sync::Arc;
 
 use anyhow::{Result, bail};
 use dhara_tool_kernel::{
-    LoggingOptions, ensure_logging, format_command_args, is_long_running_module,
-    log_module_begin, log_module_begin_debug, log_module_compact_finish, log_module_end,
-    log_module_failed, summarize_command_result,
+    LoggingOptions, CommandOutcome, CommandRun, ensure_logging,
 };
 
 pub use dhara_tool_kernel::{
@@ -132,36 +130,9 @@ impl CommandRegistry {
 
         ensure_logging(LoggingOptions::from_context(context))?;
 
-        let long_running = is_long_running_module(command.id);
-        let started = std::time::Instant::now();
-        let args_summary = format_command_args(rest);
-
-        if long_running {
-            log_module_begin(command.id, &args_summary);
-        } else {
-            log_module_begin_debug(command.id, &args_summary);
-        }
-
+        let run = CommandRun::begin(command.id);
         let result = (command.handler)(context, rest);
-
-        match &result {
-            Ok(command_result) => {
-                let summary = summarize_command_result(command.id, command_result);
-                if long_running {
-                    log_module_end(command.id, command_result.exit_code, &summary, started);
-                } else {
-                    log_module_compact_finish(
-                        command.id,
-                        command_result.exit_code,
-                        &summary,
-                        started,
-                    );
-                }
-            }
-            Err(error) => {
-                log_module_failed(command.id, &error.to_string(), started);
-            }
-        }
+        run.complete(CommandOutcome::from_execute(command.id, &result));
 
         result
     }

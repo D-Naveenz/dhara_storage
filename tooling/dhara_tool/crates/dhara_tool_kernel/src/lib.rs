@@ -23,17 +23,18 @@ pub use filedefs::{
     write_package,
 };
 pub use operation_progress::{
-    OperationProgressGuard, ProgressSnapshot, ProgressStep, RunPhase, adjust_step_weight,
-    apply_trid_progress, begin_analyzing, begin_single_shot, commit_plan, complete_progress,
-    plan_step, register_interactive_progress_sender, set_step_message, set_step_total, tick_step,
-    unregister_interactive_progress_sender,
+    OperationProgressGuard, ProgressSession, ProgressSnapshot, ProgressStep, RunPhase,
+    adjust_step_weight, apply_trid_progress, begin_analyzing, begin_single_shot, clear_run_activity,
+    commit_plan, complete_progress, has_committed_progress_plan, plan_step,
+    register_interactive_progress_sender, set_command_activity, set_run_activity, set_run_elapsed,
+    set_step_message, set_step_total, tick_step, unregister_interactive_progress_sender,
 };
 pub use logging::{
-    LoggingOptions, LoggingRuntime, current_log_path, ensure_logging, format_command_args,
-    init_logging, is_long_running_module, log_build_progress, log_file_path, log_module_begin,
-    log_module_begin_debug, log_module_compact_finish, log_module_end, log_module_failed,
-    log_module_step_debug, log_module_step_error, log_module_step_warn, log_session_begin,
-    log_session_end, log_transform_statistics, summarize_command_result,
+    ActivityLabel, CommandOutcome, CommandRun, ELAPSED_UI_THRESHOLD, LoggingOptions, LoggingRuntime,
+    command_labels, current_log_path, ensure_logging, format_command_args, init_logging,
+    log_build_progress, log_file_path, log_module_step_debug, log_module_step_error,
+    log_module_step_warn, log_session_begin, log_session_end, log_transform_statistics,
+    phase_activity_label, summarize_command_result, write_session_record,
 };
 pub use output::{
     OutputCaptureGuard, OutputEvent, OutputStream, cancel_active_subprocess, emit_stderr_line,

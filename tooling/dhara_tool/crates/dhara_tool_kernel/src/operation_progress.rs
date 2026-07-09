@@ -1,10 +1,14 @@
+//! Interactive operation progress: discover work → commit plan with actual unit totals → tick stages.
+//!
+//! Design and rollout: [`docs/tui-progress.md`](../../../../docs/tui-progress.md).
+
 use std::cell::RefCell;
 use std::sync::{Mutex, OnceLock, mpsc::Sender};
 
 use crate::filedefs::{TridBuildProgress, TridBuildStage};
 use crate::logging::interactive_mode_enabled;
 
-/// Lifecycle phase for weighted operation progress.
+/// Lifecycle phase for operation progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RunPhase {
     Analyzing,
@@ -12,11 +16,12 @@ pub enum RunPhase {
     Complete,
 }
 
-/// A single weighted step in an operation plan.
+/// A single step in an operation plan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProgressStep {
     pub id: &'static str,
     pub label: &'static str,
+    /// Planned work units; prefer [`set_step_total`] after discovery.
     pub weight: u64,
     pub current: u64,
     pub total: Option<u64>,
@@ -32,6 +37,10 @@ pub struct ProgressSnapshot {
     pub active_step: Option<&'static str>,
     pub step_label: String,
     pub analyzing_message: String,
+    /// Fallback activity when no step detail is available (command-level label).
+    pub activity_label: String,
+    /// Wall-clock seconds since command run began; set after [`crate::logging::ELAPSED_UI_THRESHOLD`].
+    pub elapsed_secs: Option<u64>,
 }
 
 struct OperationPlan {
@@ -40,6 +49,8 @@ struct OperationPlan {
     steps: Vec<ProgressStep>,
     active_step: Option<&'static str>,
     committed: bool,
+    activity_label: String,
+    elapsed_secs: Option<u64>,
 }
 
 impl Default for OperationPlan {
@@ -50,6 +61,8 @@ impl Default for OperationPlan {
             steps: Vec::new(),
             active_step: None,
             committed: false,
+            activity_label: String::new(),
+            elapsed_secs: None,
         }
     }
 }
@@ -61,6 +74,8 @@ thread_local! {
         steps: Vec::new(),
         active_step: None,
         committed: false,
+        activity_label: String::new(),
+        elapsed_secs: None,
     }) };
 }
 
@@ -93,6 +108,48 @@ impl Drop for OperationProgressGuard {
     fn drop(&mut self) {
         PLAN.with(|plan| {
             *plan.borrow_mut() = OperationPlan::default();
+        });
+    }
+}
+
+/// Thin helper for multi-step workflows (quality, package, defs).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ProgressSession;
+
+impl ProgressSession {
+    pub fn analyzing(&self, message: impl Into<String>) {
+        begin_analyzing(message);
+    }
+
+    pub fn plan(&self, id: &'static str, label: &'static str, units: u64) {
+        plan_step(id, label, units);
+    }
+
+    pub fn set_total(&self, id: &'static str, total: u64) {
+        set_step_total(id, total);
+    }
+
+    pub fn commit(&self) {
+        commit_plan();
+    }
+
+    pub fn tick(&self, id: &'static str, current: u64, detail: impl Into<String>) {
+        tick_step(id, current);
+        set_step_message(id, detail);
+    }
+
+    pub fn finish_step(&self, id: &'static str, detail: impl Into<String>) {
+        with_plan(|plan| {
+            if let Some(index) = find_step_index(plan, id) {
+                let total = plan.steps[index]
+                    .total
+                    .unwrap_or(plan.steps[index].weight)
+                    .max(1);
+                plan.steps[index].current = total;
+                plan.steps[index].detail = detail.into();
+                plan.active_step = Some(id);
+                publish_snapshot(plan);
+            }
         });
     }
 }
@@ -132,9 +189,12 @@ fn snapshot_from_plan(plan: &OperationPlan) -> ProgressSnapshot {
         active_step: plan.active_step,
         step_label,
         analyzing_message: plan.analyzing_message.clone(),
+        activity_label: plan.activity_label.clone(),
+        elapsed_secs: plan.elapsed_secs,
     }
 }
 
+/// `percent = sum(min(current, total)) / sum(total) * 100` across all steps.
 fn compute_overall(plan: &OperationPlan) -> f32 {
     if plan.steps.is_empty() {
         return if plan.phase == RunPhase::Complete {
@@ -144,24 +204,21 @@ fn compute_overall(plan: &OperationPlan) -> f32 {
         };
     }
 
-    let total_weight: u64 = plan.steps.iter().map(|step| step.weight).sum();
-    if total_weight == 0 {
+    let mut planned_total: u64 = 0;
+    let mut done_total: u64 = 0;
+
+    for step in &plan.steps {
+        let planned = step.total.unwrap_or(step.weight.max(1));
+        let done = step.current.min(planned);
+        planned_total += planned;
+        done_total += done;
+    }
+
+    if planned_total == 0 {
         return 0.0;
     }
 
-    let weighted: f64 = plan
-        .steps
-        .iter()
-        .map(|step| {
-            let fraction = match step.total.filter(|total| *total > 0) {
-                Some(total) => step.current as f64 / total as f64,
-                None => 0.0,
-            };
-            step.weight as f64 * fraction
-        })
-        .sum();
-
-    (weighted / total_weight as f64).clamp(0.0, 1.0) as f32
+    (done_total as f64 / planned_total as f64).clamp(0.0, 1.0) as f32
 }
 
 fn active_step_label(plan: &OperationPlan) -> String {
@@ -177,13 +234,22 @@ fn active_step_label(plan: &OperationPlan) -> String {
     }
 
     match step.total.filter(|total| *total > 0) {
-        Some(total) => format!("{}: {}/{}", step.id, step.current, total),
+        Some(total) => format!("{} ({}/{})", step.label, step.current, total),
         None => step.label.to_owned(),
     }
 }
 
 fn find_step_index(plan: &mut OperationPlan, id: &'static str) -> Option<usize> {
     plan.steps.iter().position(|step| step.id == id)
+}
+
+fn is_placeholder_plan(plan: &OperationPlan) -> bool {
+    plan.steps.len() == 1 && plan.steps[0].id == "run"
+}
+
+/// Returns true when a handler has committed a multi-step progress plan.
+pub fn has_committed_progress_plan() -> bool {
+    with_plan(|plan| plan.committed && !plan.steps.is_empty() && !is_placeholder_plan(plan))
 }
 
 pub fn begin_analyzing(message: impl Into<String>) {
@@ -220,6 +286,9 @@ pub fn adjust_step_weight(id: &'static str, weight: u64) {
     with_plan(|plan| {
         if let Some(index) = find_step_index(plan, id) {
             plan.steps[index].weight = weight;
+            if plan.steps[index].total.is_none() {
+                plan.steps[index].total = Some(weight);
+            }
             publish_snapshot(plan);
         }
     });
@@ -236,6 +305,7 @@ pub fn commit_plan() {
     });
 }
 
+/// Legacy single-step placeholder; prefer [`begin_analyzing`] + [`commit_plan`].
 pub fn begin_single_shot(label: &'static str) {
     with_plan(|plan| {
         plan.phase = RunPhase::Running;
@@ -245,7 +315,7 @@ pub fn begin_single_shot(label: &'static str) {
             label,
             weight: 1,
             current: 0,
-            total: None,
+            total: Some(1),
             detail: String::new(),
         }];
         plan.active_step = Some("run");
@@ -258,6 +328,7 @@ pub fn set_step_total(id: &'static str, total: u64) {
     with_plan(|plan| {
         if let Some(index) = find_step_index(plan, id) {
             plan.steps[index].total = Some(total);
+            plan.steps[index].weight = total.max(1);
             plan.active_step = Some(id);
             publish_snapshot(plan);
         }
@@ -295,15 +366,59 @@ pub fn complete_progress() {
             if let Some(total) = step.total {
                 step.current = total;
             } else {
-                step.current = 1;
-                step.total = Some(1);
+                step.current = step.weight.max(1);
+                step.total = Some(step.current);
             }
         }
         publish_snapshot(plan);
     });
 }
 
-/// Maps TrID build progress into the weighted operation plan.
+/// Sets the fallback command-level activity label (used when no step detail is active).
+pub fn set_command_activity(label: &str) {
+    with_plan(|plan| {
+        if has_committed_progress_plan_in(plan) {
+            return;
+        }
+        plan.activity_label = label.to_owned();
+        publish_snapshot(plan);
+    });
+}
+
+/// Updates elapsed seconds on the status line without changing step or activity text.
+pub fn set_run_elapsed(elapsed_secs: Option<u64>) {
+    with_plan(|plan| {
+        plan.elapsed_secs = elapsed_secs;
+        publish_snapshot(plan);
+    });
+}
+
+/// Updates command activity and elapsed together (only when no committed step plan).
+pub fn set_run_activity(label: &str, elapsed_secs: Option<u64>) {
+    with_plan(|plan| {
+        if has_committed_progress_plan_in(plan) {
+            plan.elapsed_secs = elapsed_secs;
+        } else {
+            plan.activity_label = label.to_owned();
+            plan.elapsed_secs = elapsed_secs;
+        }
+        publish_snapshot(plan);
+    });
+}
+
+pub fn clear_run_activity() {
+    with_plan(|plan| {
+        plan.activity_label.clear();
+        plan.elapsed_secs = None;
+        publish_snapshot(plan);
+    });
+}
+
+fn has_committed_progress_plan_in(plan: &OperationPlan) -> bool {
+    plan.committed && !plan.steps.is_empty() && !is_placeholder_plan(plan)
+}
+
+/// Maps TrID build progress into the operation plan.
 pub fn apply_trid_progress(update: &TridBuildProgress) {
     with_plan(|plan| {
         match update.stage {
@@ -318,47 +433,49 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                 if let Some(index) = find_step_index(plan, "extract") {
                     let total = update.total.unwrap_or(1).max(1) as u64;
                     plan.steps[index].total = Some(total);
+                    plan.steps[index].weight = total;
                     plan.steps[index].current = update.current as u64;
-                    if !update.message.is_empty() {
-                        plan.steps[index].detail = format!("extract: {}", update.message);
+                    if update.current == 0 && !update.message.is_empty() {
+                        plan.steps[index].detail =
+                            format!("Extracting archive — {}", update.message);
+                    } else if update.current > 0 {
+                        plan.steps[index].detail = "Extracting archive — done".to_owned();
                     }
                 }
             }
             TridBuildStage::ParseDefinitions => {
                 ensure_trid_plan(plan);
                 if let Some(total) = update.total.filter(|total| *total > 0) {
-                    adjust_step_weight_internal(plan, "parse", total as u64);
-                    adjust_step_weight_internal(plan, "reduce", total as u64);
                     set_step_total_internal(plan, "parse", total as u64);
+                    set_step_total_internal(plan, "reduce", total as u64);
                 }
                 plan.active_step = Some("parse");
                 if let Some(index) = find_step_index(plan, "parse") {
                     plan.steps[index].current = update.current as u64;
+                    let total = update.total.unwrap_or(0);
                     plan.steps[index].detail = format!(
-                        "parse: {}/{}",
-                        update.current,
-                        update.total.unwrap_or(0)
+                        "Parsing definitions ({}/{})",
+                        update.current, total
                     );
                 }
             }
             TridBuildStage::ReduceDefinitions => {
                 ensure_trid_plan(plan);
                 if let Some(total) = update.total.filter(|total| *total > 0) {
-                    adjust_step_weight_internal(plan, "reduce", total as u64);
                     set_step_total_internal(plan, "reduce", total as u64);
                 }
                 plan.active_step = Some("reduce");
                 if let Some(index) = find_step_index(plan, "reduce") {
                     plan.steps[index].current = update.current as u64;
+                    let total = update.total.unwrap_or(0);
                     if let Some(item) = &update.current_item {
-                        plan.steps[index].detail =
-                            format!("reduce: {}/{} — {}", update.current, update.total.unwrap_or(0), item);
-                    } else {
                         plan.steps[index].detail = format!(
-                            "reduce: {}/{}",
-                            update.current,
-                            update.total.unwrap_or(0)
+                            "Reducing definitions ({}/{}) — {}",
+                            update.current, total, item
                         );
+                    } else {
+                        plan.steps[index].detail =
+                            format!("Reducing definitions ({}/{})", update.current, total);
                     }
                 }
             }
@@ -368,9 +485,13 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                 if let Some(index) = find_step_index(plan, "finalize") {
                     let total = update.total.unwrap_or(1).max(1) as u64;
                     plan.steps[index].total = Some(total);
+                    plan.steps[index].weight = total;
                     plan.steps[index].current = update.current as u64;
                     if !update.message.is_empty() {
-                        plan.steps[index].detail = format!("finalize: {}", update.message);
+                        plan.steps[index].detail =
+                            format!("Finalizing package — {}", update.message);
+                    } else {
+                        plan.steps[index].detail = "Finalizing package".to_owned();
                     }
                 }
             }
@@ -392,7 +513,7 @@ fn begin_analyzing_internal(plan: &mut OperationPlan, message: &str) {
 }
 
 fn ensure_trid_plan(plan: &mut OperationPlan) {
-    if !plan.steps.is_empty() {
+    if !plan.steps.is_empty() && !is_placeholder_plan(plan) {
         return;
     }
     plan.phase = RunPhase::Running;
@@ -434,15 +555,10 @@ fn ensure_trid_plan(plan: &mut OperationPlan) {
     plan.active_step = Some("extract");
 }
 
-fn adjust_step_weight_internal(plan: &mut OperationPlan, id: &'static str, weight: u64) {
-    if let Some(index) = find_step_index(plan, id) {
-        plan.steps[index].weight = weight;
-    }
-}
-
 fn set_step_total_internal(plan: &mut OperationPlan, id: &'static str, total: u64) {
     if let Some(index) = find_step_index(plan, id) {
         plan.steps[index].total = Some(total);
+        plan.steps[index].weight = total.max(1);
     }
 }
 
@@ -458,10 +574,10 @@ mod tests {
     }
 
     #[test]
-    fn weighted_aggregation_across_steps() {
+    fn unit_sum_aggregation_across_steps() {
         reset_plan();
-        plan_step("a", "Step A", 1);
-        plan_step("b", "Step B", 3);
+        plan_step("a", "Step A", 10);
+        plan_step("b", "Step B", 100);
         commit_plan();
         set_step_total("a", 10);
         set_step_total("b", 100);
@@ -469,24 +585,32 @@ mod tests {
         tick_step("b", 50);
 
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
-        // a done (0.25) + b half (0.375) = 0.625
-        assert!((snapshot.overall - 0.625).abs() < 0.01);
-        assert_eq!(snapshot.percent, 63);
+        // 10 + 50 = 60 / 110
+        assert!((snapshot.overall - 60.0 / 110.0).abs() < 0.01);
+        assert_eq!(snapshot.percent, 55);
     }
 
     #[test]
-    fn adjust_step_weight_renormalizes() {
+    fn placeholder_plan_replaced_by_trid_plan() {
         reset_plan();
-        plan_step("parse", "Parse", 100);
-        plan_step("reduce", "Reduce", 100);
-        commit_plan();
-        adjust_step_weight("parse", 200);
-        set_step_total("parse", 200);
-        tick_step("parse", 100);
+        begin_single_shot("Running");
+        apply_trid_progress(&TridBuildProgress {
+            stage: TridBuildStage::ExtractArchive,
+            message: "archive.7z".to_owned(),
+            current: 0,
+            total: Some(1),
+            current_item: None,
+            stats: TridBuildStats::default(),
+            trace_detail: None,
+        });
 
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
-        // parse half done: 200 * 0.5 / 300 ≈ 0.333
-        assert!((snapshot.overall - 0.333).abs() < 0.02);
+        assert_eq!(snapshot.active_step, Some("extract"));
+        assert!(!snapshot.step_label.is_empty());
+        with_plan(|plan| {
+            assert!(plan.steps.iter().any(|s| s.id == "parse"));
+            assert!(!is_placeholder_plan(plan));
+        });
     }
 
     #[test]
@@ -509,12 +633,43 @@ mod tests {
     }
 
     #[test]
+    fn elapsed_does_not_clobber_step_detail() {
+        reset_plan();
+        plan_step("work", "Working", 1);
+        commit_plan();
+        set_step_message("work", "Running Clippy");
+        set_run_elapsed(Some(12));
+
+        let snapshot = with_plan(|plan| snapshot_from_plan(plan));
+        assert_eq!(snapshot.step_label, "Running Clippy");
+        assert_eq!(snapshot.elapsed_secs, Some(12));
+        assert!(snapshot.activity_label.is_empty());
+    }
+
+    #[test]
     fn complete_sets_full_progress() {
         reset_plan();
-        begin_single_shot("Running");
+        plan_step("only", "Only", 1);
+        commit_plan();
+        set_step_total("only", 1);
         complete_progress();
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
         assert_eq!(snapshot.phase, RunPhase::Complete);
+        assert_eq!(snapshot.percent, 100);
+    }
+
+    #[test]
+    fn progress_session_ticks_and_finishes() {
+        reset_plan();
+        let session = ProgressSession;
+        session.analyzing("Planning…");
+        session.plan("fmt", "Formatting", 1);
+        session.set_total("fmt", 1);
+        session.commit();
+        session.tick("fmt", 1, "Formatting Rust");
+        session.finish_step("fmt", "Formatting Rust — done");
+
+        let snapshot = with_plan(|plan| snapshot_from_plan(plan));
         assert_eq!(snapshot.percent, 100);
     }
 }

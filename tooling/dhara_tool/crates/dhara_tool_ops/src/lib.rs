@@ -4,6 +4,7 @@ pub mod nuget;
 pub mod quality;
 pub mod release;
 pub mod verify;
+pub mod workflow_progress;
 
 pub use native_merge::*;
 pub use native_rids::*;

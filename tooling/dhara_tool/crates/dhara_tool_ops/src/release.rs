@@ -10,9 +10,10 @@ use dhara_tool_kernel::{
     logging::log_module_step_debug,
     repo_config::{DharaRepoConfig, load_env, verify_release},
     subprocess::run_command,
+    ProgressSession,
 };
 
-use crate::{nuget, PackageOptions};
+use crate::{nuget, workflow_progress::{begin_workflow, plan_unit_step, run_planned_step}, PackageOptions};
 
 const CARGO_REGISTRY_TOKEN_ENV: &str = "CARGO_REGISTRY_TOKEN";
 
@@ -41,12 +42,35 @@ pub fn run(
         options.dry_run, options.publish_cargo, options.publish_nuget
     ));
 
-    verify_release(repo_root)?;
-    validate_versions_synced(repo_root, config)?;
-    ensure_release_secrets(repo_root, config, options)?;
+    if let Some(session) = begin_workflow("Planning release…") {
+        plan_unit_step(&session, "validate", "Validating release metadata");
+        if options.publish_cargo {
+            plan_unit_step(&session, "cargo-release", "Running cargo release");
+        }
+        if options.publish_nuget {
+            plan_unit_step(&session, "nuget-release", "Running NuGet release");
+        }
+        session.commit();
+    }
+
+    run_planned_step(
+        "validate",
+        "Validating release metadata",
+        "Checking versions and secrets",
+        || {
+            verify_release(repo_root)?;
+            validate_versions_synced(repo_root, config)?;
+            ensure_release_secrets(repo_root, config, options)
+        },
+    )?;
 
     if options.publish_cargo {
-        run_cargo_release(repo_root, options.dry_run)?;
+        run_planned_step(
+            "cargo-release",
+            "Running cargo release",
+            "Running cargo release",
+            || run_cargo_release(repo_root, options.dry_run),
+        )?;
     }
 
     if !options.publish_cargo && !options.publish_nuget {
@@ -74,10 +98,24 @@ pub fn run(
         prepacked_nuget_override: options.prepacked_nuget.clone(),
     };
 
+    let session = ProgressSession;
+    session.tick("nuget-release", 0, "Running NuGet release flow");
+    let result = run_nuget_release(repo_root, tool_root, config, options, &package_options)?;
+    session.finish_step("nuget-release", "Running NuGet release — done");
+    Ok(result)
+}
+
+fn run_nuget_release(
+    repo_root: &Path,
+    tool_root: &Path,
+    config: &DharaRepoConfig,
+    options: &ReleaseOptions,
+    package_options: &PackageOptions,
+) -> Result<CommandResult> {
     if let Some(_prepacked) = options.prepacked_nuget.clone() {
         if options.dry_run {
             if options.verify_package_on_dry_run {
-                nuget::verify(repo_root, tool_root, config, &package_options)?;
+                nuget::verify(repo_root, tool_root, config, package_options)?;
             }
             return Ok(CommandResult::with_message(if options.publish_cargo {
                 "Cargo and NuGet release dry run completed using pre-packed NuGet artifact."
@@ -86,7 +124,7 @@ pub fn run(
             }));
         }
 
-        nuget::publish_packed(repo_root, tool_root, config, &package_options)?;
+        nuget::publish_packed(repo_root, tool_root, config, package_options)?;
         return Ok(CommandResult::with_message(if options.publish_cargo {
             "Cargo and NuGet release completed successfully."
         } else {
@@ -95,7 +133,7 @@ pub fn run(
     }
 
     if options.dry_run {
-        nuget::publish(repo_root, tool_root, config, &package_options)?;
+        nuget::publish(repo_root, tool_root, config, package_options)?;
         return Ok(CommandResult::with_message(if options.publish_cargo {
             "Cargo and NuGet release dry run completed."
         } else {
@@ -103,8 +141,8 @@ pub fn run(
         }));
     }
 
-    nuget::pack(repo_root, tool_root, config, &package_options)?;
-    nuget::publish_packed(repo_root, tool_root, config, &package_options)?;
+    nuget::pack(repo_root, tool_root, config, package_options)?;
+    nuget::publish_packed(repo_root, tool_root, config, package_options)?;
 
     Ok(CommandResult::with_message(if options.publish_cargo {
         "Cargo and NuGet release completed successfully."

@@ -10,6 +10,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | Doc | Audience | Topic |
 |-----|----------|-------|
 | [Logging conventions][logging] | Operators, agents | `dhara_tool` audit tiers, session lifecycle, TrID phase lines |
+| [TUI operation progress][tui-progress] | Operators, agents | Interactive progress bar, discover→commit→tick, per-command rollout |
 | [filedefs.dat / DSFD format][filedefs-dat] | Implementers | Binary layout, metadata footer, defs build pipeline |
 | [Typed C-compatible ABI][typed-abi] | FFI authors | `#[repr(C)]` rules, ownership, Rust ↔ C# marshalling |
 | [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `dhara_tool` touchpoints |
@@ -46,6 +47,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: ../tooling/dhara_tool/README.md
 [logging]: logging.md
+[tui-progress]: tui-progress.md
 [filedefs-dat]: filedefs-dat.md
 [typed-abi]: typed-c-compatible-abi.md
 [ci-cd]: ci-cd-pipelines.md

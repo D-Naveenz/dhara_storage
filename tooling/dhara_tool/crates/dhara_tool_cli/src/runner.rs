@@ -3,8 +3,7 @@ use std::thread::{self, JoinHandle};
 
 use crate::command::{CommandRegistry, CommandResult, RunMode, ToolContext};
 use dhara_tool_kernel::{
-    OperationProgressGuard, OutputCaptureGuard, OutputEvent, begin_single_shot, cancel_active_subprocess,
-    complete_progress,
+    OperationProgressGuard, OutputCaptureGuard, OutputEvent, cancel_active_subprocess, complete_progress,
 };
 
 pub struct RunHandle {
@@ -35,7 +34,6 @@ pub fn start_run(
     let join = thread::spawn(move || {
         let _capture = OutputCaptureGuard::install(output_tx);
         let _progress = OperationProgressGuard::install();
-        begin_single_shot("Running");
         let completion = match registry.execute(&context, &command) {
             Ok(result) => RunCompletion::Succeeded(result),
             Err(error) => RunCompletion::Failed(format!("{error:#}")),

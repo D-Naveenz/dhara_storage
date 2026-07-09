@@ -6,6 +6,7 @@ use tracing::debug;
 
 use dhara_tool_kernel::CommandResult;
 use dhara_tool_kernel::{
+    has_committed_progress_plan,
     logging::log_module_step_debug,
     paths::{default_artifacts_dir, resolve_output_dir},
     repo_config::{DharaRepoConfig, load_env, verify_release},
@@ -13,11 +14,13 @@ use dhara_tool_kernel::{
         inspect_package_entries, run_command, run_command_expect_failure,
         run_command_with_env_redacted, write_nuget_config,
     },
+    ProgressSession,
 };
 
 use crate::native_rids::{
     buildable_runtimes_on_host, native_lib_filename, package_native_path, platform, platform_target,
 };
+use crate::workflow_progress::{begin_workflow, plan_unit_step, run_planned_step};
 
 #[derive(Debug, Clone)]
 pub struct PackageOptions {
@@ -44,6 +47,11 @@ pub fn pack(
     ));
     verify_release(repo_root)?;
 
+    let nested = has_committed_progress_plan();
+    if !nested {
+        setup_pack_plan(config, options)?;
+    }
+
     let version = effective_version(config, &options.version_override);
     let artifacts_root = artifacts_root(tool_root)?;
     let output_root = output_root(tool_root, options.output_dir.as_ref())?;
@@ -56,7 +64,7 @@ pub fn pack(
     } else {
         let stage = artifacts_root.join("native-stage");
         reset_directory(&stage)?;
-        stage_native_assets(repo_root, config, options, &stage)?;
+        stage_native_assets(repo_root, config, options, &stage, !nested)?;
         stage
     };
     let nuget_output = output_root.join("nuget");
@@ -64,27 +72,49 @@ pub fn pack(
 
     validate_staged_native_assets(&native_stage_root, config)?;
 
-    run_command(
-        "dotnet",
-        &[
-            "pack".to_owned(),
-            config.ci.package_project.clone(),
-            "--configuration".to_owned(),
-            options.configuration.clone(),
-            "--include-symbols".to_owned(),
-            "-p:ContinuousIntegrationBuild=true".to_owned(),
-            "-p:Platform=AnyCPU".to_owned(),
-            "-p:PlatformTarget=AnyCPU".to_owned(),
-            format!("-p:Version={version}"),
-            format!("-p:StagedNativeRoot={}", native_stage_root.display()),
-            "--output".to_owned(),
-            nuget_output.display().to_string(),
-        ],
-        repo_root,
-    )?;
+    let pack_command = || {
+        run_command(
+            "dotnet",
+            &[
+                "pack".to_owned(),
+                config.ci.package_project.clone(),
+                "--configuration".to_owned(),
+                options.configuration.clone(),
+                "--include-symbols".to_owned(),
+                "-p:ContinuousIntegrationBuild=true".to_owned(),
+                "-p:Platform=AnyCPU".to_owned(),
+                "-p:PlatformTarget=AnyCPU".to_owned(),
+                format!("-p:Version={version}"),
+                format!("-p:StagedNativeRoot={}", native_stage_root.display()),
+                "--output".to_owned(),
+                nuget_output.display().to_string(),
+            ],
+            repo_root,
+        )
+    };
+
+    if nested {
+        pack_command()?;
+    } else {
+        run_planned_step(
+            "dotnet-pack",
+            "Packing NuGet package",
+            "Running dotnet pack",
+            pack_command,
+        )?;
+    }
 
     let package_path = nuget_output.join(format!("{}.{}.nupkg", config.nuget.package_id, version));
-    inspect_package_contents(&package_path, config)?;
+    if nested {
+        inspect_package_contents(&package_path, config)?;
+    } else {
+        run_planned_step(
+            "inspect",
+            "Inspecting package",
+            "Inspecting package contents",
+            || inspect_package_contents(&package_path, config),
+        )?;
+    }
     log_module_step_debug(&format!(
         "packed NuGet package at {}",
         package_path.display()
@@ -94,6 +124,28 @@ pub fn pack(
         "Packed {}",
         package_path.display()
     )))
+}
+
+fn setup_pack_plan(config: &DharaRepoConfig, options: &PackageOptions) -> Result<()> {
+    let runtimes = buildable_runtimes_on_host(&config.ci.native_runtimes);
+    if runtimes.is_empty() && options.native_stage_override.is_none() && native_stage_from_env().is_none()
+    {
+        bail!("no native runtimes are buildable on the current host");
+    }
+
+    let Some(session) = begin_workflow("Planning package build…") else {
+        return Ok(());
+    };
+
+    if options.native_stage_override.is_none() && native_stage_from_env().is_none() {
+        let count = runtimes.len().max(1) as u64;
+        session.plan("stage-native", "Staging native libraries", count);
+        session.set_total("stage-native", count);
+    }
+    plan_unit_step(&session, "dotnet-pack", "Packing NuGet package");
+    plan_unit_step(&session, "inspect", "Inspecting package");
+    session.commit();
+    Ok(())
 }
 
 pub fn verify(
@@ -106,7 +158,34 @@ pub fn verify(
         "verifying NuGet package (configuration={})",
         options.configuration
     ));
-    pack(repo_root, tool_root, config, options)?;
+
+    let nested = has_committed_progress_plan();
+    if !nested {
+        if let Some(session) = begin_workflow("Planning package verification…") {
+            plan_unit_step(&session, "pack", "Packing NuGet package");
+            plan_unit_step(&session, "restore-smoke", "Restoring smoke consumer");
+            plan_unit_step(&session, "run-smoke", "Running smoke consumer");
+            plan_unit_step(&session, "reject-check", "Verifying unsupported runtime rejection");
+            plan_unit_step(&session, "aot-restore", "Restoring AOT smoke consumer");
+            plan_unit_step(&session, "aot-publish", "Publishing AOT smoke consumer");
+            session.commit();
+        }
+    }
+
+    let run_step = |id, label, detail, op: &dyn Fn() -> Result<()>| {
+        if nested {
+            op()
+        } else {
+            run_planned_step(id, label, detail, op)
+        }
+    };
+
+    run_step(
+        "pack",
+        "Packing NuGet package",
+        "Building and packing package",
+        &|| pack(repo_root, tool_root, config, options).map(|_| ()),
+    )?;
 
     let version = effective_version(config, &options.version_override);
     let artifacts_root = artifacts_root(tool_root)?;
@@ -127,30 +206,61 @@ pub fn verify(
         ],
     )?;
 
-    restore_smoke_consumer(
-        repo_root,
-        config,
-        &version,
-        &local_config,
-        Some(&config.ci.host_runtime_smoke),
-        false,
+    run_step(
+        "restore-smoke",
+        "Restoring smoke consumer",
+        "Restoring host smoke consumer",
+        &|| {
+            restore_smoke_consumer(
+                repo_root,
+                config,
+                &version,
+                &local_config,
+                Some(&config.ci.host_runtime_smoke),
+                false,
+            )
+        },
     )?;
-    run_smoke_consumer(repo_root, config, &version)?;
-    verify_unsupported_runtime_rejected(repo_root, config, &version, &local_config)?;
-    restore_smoke_consumer(
-        repo_root,
-        config,
-        &version,
-        &local_config,
-        Some(&config.ci.aot_runtime_smoke),
-        true,
+    run_step(
+        "run-smoke",
+        "Running smoke consumer",
+        "Running host smoke consumer",
+        &|| run_smoke_consumer(repo_root, config, &version),
     )?;
-    publish_aot_smoke_consumer(
-        repo_root,
-        config,
-        &version,
-        &artifacts_root.join("smoke-aot"),
-        &config.ci.aot_runtime_smoke,
+    run_step(
+        "reject-check",
+        "Verifying unsupported runtime rejection",
+        "Verifying unsupported runtime is rejected",
+        &|| verify_unsupported_runtime_rejected(repo_root, config, &version, &local_config),
+    )?;
+    run_step(
+        "aot-restore",
+        "Restoring AOT smoke consumer",
+        "Restoring AOT smoke consumer",
+        &|| {
+            restore_smoke_consumer(
+                repo_root,
+                config,
+                &version,
+                &local_config,
+                Some(&config.ci.aot_runtime_smoke),
+                true,
+            )
+        },
+    )?;
+    run_step(
+        "aot-publish",
+        "Publishing AOT smoke consumer",
+        "Publishing AOT smoke consumer",
+        &|| {
+            publish_aot_smoke_consumer(
+                repo_root,
+                config,
+                &version,
+                &artifacts_root.join("smoke-aot"),
+                &config.ci.aot_runtime_smoke,
+            )
+        },
     )?;
     log_module_step_debug(&format!(
         "completed NuGet verification at {}",
@@ -171,7 +281,25 @@ pub fn publish(
         "publishing NuGet package (execute={})",
         options.execute_publish
     ));
-    verify(repo_root, tool_root, config, options)?;
+
+    let nested = has_committed_progress_plan();
+    if !nested {
+        if let Some(session) = begin_workflow("Planning package publish…") {
+            plan_unit_step(&session, "verify", "Verifying package");
+            if options.execute_publish {
+                plan_unit_step(&session, "push", "Publishing to NuGet feed");
+            }
+            session.commit();
+        }
+    }
+
+    if nested {
+        verify(repo_root, tool_root, config, options)?;
+    } else {
+        run_planned_step("verify", "Verifying package", "Running package verification", || {
+            verify(repo_root, tool_root, config, options).map(|_| ())
+        })?;
+    }
 
     if !options.execute_publish {
         return Ok(CommandResult::with_message(
@@ -192,22 +320,35 @@ pub fn publish(
         .join("nuget")
         .join(format!("{}.{}.nupkg", config.nuget.package_id, version));
 
-    run_command_with_env_redacted(
-        "dotnet",
-        &[
-            "nuget".to_owned(),
-            "push".to_owned(),
-            package_path.display().to_string(),
-            "--api-key".to_owned(),
-            api_key.clone(),
-            "--source".to_owned(),
-            source.clone(),
-            "--skip-duplicate".to_owned(),
-        ],
-        repo_root,
-        &[],
-        &[api_key.as_str()],
-    )?;
+    let push = || {
+        run_command_with_env_redacted(
+            "dotnet",
+            &[
+                "nuget".to_owned(),
+                "push".to_owned(),
+                package_path.display().to_string(),
+                "--api-key".to_owned(),
+                api_key.clone(),
+                "--source".to_owned(),
+                source.clone(),
+                "--skip-duplicate".to_owned(),
+            ],
+            repo_root,
+            &[],
+            &[api_key.as_str()],
+        )
+    };
+
+    if nested {
+        push()?;
+    } else {
+        run_planned_step(
+            "push",
+            "Publishing to NuGet feed",
+            "Running dotnet nuget push",
+            push,
+        )?;
+    }
 
     log_module_step_debug(&format!(
         "published NuGet package to {} via {}",
@@ -281,6 +422,7 @@ fn stage_native_assets(
     config: &DharaRepoConfig,
     options: &PackageOptions,
     stage_root: &Path,
+    report_progress: bool,
 ) -> Result<()> {
     let profile_flag = if options.configuration.eq_ignore_ascii_case("Release") {
         "--release"
@@ -293,13 +435,21 @@ fn stage_native_assets(
         bail!("no native runtimes are buildable on the current host");
     }
 
-    for rid in runtimes {
+    for (index, rid) in runtimes.iter().enumerate() {
+        if report_progress {
+            let session = ProgressSession;
+            session.tick(
+                "stage-native",
+                index as u64,
+                format!("Staging native library for {rid}"),
+            );
+        }
         let target = config
             .targets
             .rust_targets
-            .get(&rid)
+            .get(rid)
             .with_context(|| format!("missing rust target mapping for runtime '{rid}'"))?;
-        let lib_name = native_lib_filename(&rid)?;
+        let lib_name = native_lib_filename(rid)?;
         debug!(
             target: "dhara_tool::package_flow",
             runtime = %rid,
@@ -327,7 +477,7 @@ fn stage_native_assets(
             .join(lib_name);
         let destination_path = stage_root
             .join("runtimes")
-            .join(&rid)
+            .join(rid)
             .join("native")
             .join(lib_name);
         if let Some(parent) = destination_path.parent() {
@@ -343,6 +493,11 @@ fn stage_native_assets(
         })?;
     }
 
+    if report_progress {
+        let session = ProgressSession;
+        session.finish_step("stage-native", "Staging native libraries — done");
+    }
+
     Ok(())
 }
 
@@ -353,10 +508,22 @@ pub fn stage_native_for_host(
     config: &DharaRepoConfig,
     options: &PackageOptions,
 ) -> Result<CommandResult> {
+    let runtimes = buildable_runtimes_on_host(&config.ci.native_runtimes);
+    if runtimes.is_empty() {
+        bail!("no native runtimes are buildable on the current host");
+    }
+
+    if let Some(session) = begin_workflow("Planning native staging…") {
+        let count = runtimes.len() as u64;
+        session.plan("stage-native", "Staging native libraries", count);
+        session.set_total("stage-native", count);
+        session.commit();
+    }
+
     let artifacts_root = artifacts_root(tool_root)?;
     let stage_root = artifacts_root.join("native-stage");
     reset_directory(&stage_root)?;
-    stage_native_assets(repo_root, config, options, &stage_root)?;
+    stage_native_assets(repo_root, config, options, &stage_root, true)?;
     Ok(CommandResult::with_message(format!(
         "Staged host native assets at {}",
         stage_root.display()

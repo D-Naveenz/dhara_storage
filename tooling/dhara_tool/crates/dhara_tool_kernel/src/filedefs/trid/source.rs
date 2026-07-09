@@ -2,6 +2,7 @@ use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use rayon::prelude::*;
@@ -113,13 +114,37 @@ fn parse_definitions_sequential(
 
 fn parse_definitions_parallel(
     xml_files: &[PathBuf],
-    _total_files: usize,
+    total_files: usize,
     _progress: &mut dyn FnMut(TridBuildProgress),
 ) -> Result<Vec<ParsedTridDefinition>, BuilderError> {
+    let done = AtomicUsize::new(0);
     xml_files
         .par_iter()
-        .map(|xml_file| parse_xml_file(xml_file))
+        .map(|xml_file| {
+            let definition = parse_xml_file(xml_file)?;
+            let completed = done.fetch_add(1, Ordering::Relaxed) + 1;
+            report_parse_progress_parallel(completed, total_files);
+            Ok(definition)
+        })
         .collect()
+}
+
+fn report_parse_progress_parallel(done: usize, total: usize) {
+    if done != total && done != 1 && !done.is_multiple_of(250) {
+        return;
+    }
+    crate::logging::emit_trid_progress(TridBuildProgress {
+        stage: TridBuildStage::ParseDefinitions,
+        message: "Parsing XML definitions".to_string(),
+        current: done,
+        total: Some(total),
+        current_item: None,
+        stats: TridBuildStats {
+            parsed_count: done,
+            ..TridBuildStats::default()
+        },
+        trace_detail: None,
+    });
 }
 
 fn parse_xml_file(xml_file: &Path) -> Result<ParsedTridDefinition, BuilderError> {

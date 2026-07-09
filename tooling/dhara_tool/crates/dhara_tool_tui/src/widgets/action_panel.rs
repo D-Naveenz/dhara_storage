@@ -126,20 +126,29 @@ fn render_progress(frame: &mut Frame<'_>, area: Rect, state: &AppState, theme: &
         .render(inner, frame.buffer_mut());
 }
 
-fn status_line(state: &AppState) -> &str {
+fn format_status_line(state: &AppState) -> String {
     if let Some(snapshot) = state.progress.as_ref() {
         if snapshot.phase == RunPhase::Analyzing && !snapshot.analyzing_message.is_empty() {
-            return snapshot.analyzing_message.as_str();
+            return snapshot.analyzing_message.clone();
         }
         if !snapshot.step_label.is_empty() {
-            return snapshot.step_label.as_str();
+            if let Some(secs) = snapshot.elapsed_secs {
+                return format!("{}… ({secs}s)", snapshot.step_label.trim_end_matches('…'));
+            }
+            return snapshot.step_label.clone();
+        }
+        if !snapshot.activity_label.is_empty() {
+            if let Some(secs) = snapshot.elapsed_secs {
+                return format!("{}… ({secs}s)", snapshot.activity_label);
+            }
+            return format!("{}…", snapshot.activity_label);
         }
     }
-    state.status_message.as_str()
+    state.status_message.clone()
 }
 
 fn render_status(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    Paragraph::new(status_line(state))
+    Paragraph::new(format_status_line(state))
         .style(dhara_theme::status_style_for_tone(state.status_tone))
         .render(area, frame.buffer_mut());
 }
