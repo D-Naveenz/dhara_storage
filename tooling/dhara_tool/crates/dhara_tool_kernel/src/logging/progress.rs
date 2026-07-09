@@ -8,8 +8,6 @@ use std::time::{Duration, Instant};
 use tracing::debug;
 
 use crate::context::{RunMode, ToolContext};
-use crate::logging::phase_activity_label;
-use crate::operation_progress::{has_committed_progress_plan, set_run_activity};
 
 use crate::filedefs::{ReduceTraceDetail, TridBuildProgress, TridBuildStage};
 
@@ -218,9 +216,6 @@ fn handle_phase_timing(update: &TridBuildProgress) {
             "phase {} started",
             phase_name(stage)
         );
-        if progress_settings().run_mode == RunMode::Interactive && !has_committed_progress_plan() {
-            set_run_activity(phase_activity_label(stage), None);
-        }
     }
 
     let Some(summary) = phase_finish_summary(update) else {

@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 
 use rayon::prelude::*;
+use sevenz_rust::{Archive, default_entry_extract_fn, decompress_file_with_extract_fn};
 use tempfile::{TempDir, tempdir};
 use tracing::debug;
 
@@ -17,6 +18,7 @@ use super::{
 };
 
 const PARALLEL_PARSE_THRESHOLD: usize = 8;
+const EXTRACT_PROGRESS_INTERVAL: usize = 50;
 
 pub(crate) fn load_trid_definitions(
     source: &Path,
@@ -64,7 +66,7 @@ fn load_from_directory(
 
     progress(TridBuildProgress {
         stage: TridBuildStage::ParseDefinitions,
-        message: "Parsing XML definitions".to_string(),
+        message: format!("Reading definition files ({total_files} found)"),
         current: 0,
         total: Some(total_files),
         current_item: None,
@@ -190,32 +192,103 @@ fn load_from_archive(
     debug!(source = %source.display(), "extracting TrID XML archive");
     progress(TridBuildProgress {
         stage: TridBuildStage::ExtractArchive,
-        message: format!("Extracting {}", source.display()),
+        message: format!("Analyzing archive {}", source.display()),
         current: 0,
         total: None,
         current_item: Some(source.display().to_string()),
         stats: TridBuildStats::default(),
         trace_detail: None,
     });
-    let extraction_dir = extract_archive(source)?;
-    progress(TridBuildProgress {
-        stage: TridBuildStage::ExtractArchive,
-        message: "extracted archive".to_owned(),
-        current: 1,
-        total: Some(1),
-        current_item: None,
-        stats: TridBuildStats::default(),
-        trace_detail: None,
-    });
+    let extraction_dir = extract_archive(source, progress)?;
     load_from_directory(extraction_dir.path(), progress)
 }
 
-fn extract_archive(source: &Path) -> Result<TempDir, BuilderError> {
+fn extract_archive(
+    source: &Path,
+    progress: &mut dyn FnMut(TridBuildProgress),
+) -> Result<TempDir, BuilderError> {
+    match extract_archive_sevenz(source, progress) {
+        Ok(temp) => Ok(temp),
+        Err(sevenz_error) => {
+            debug!(
+                source = %source.display(),
+                error = %sevenz_error,
+                "sevenz extraction failed; falling back to tar"
+            );
+            extract_archive_tar(source, progress)
+        }
+    }
+}
+
+fn count_archive_entries(source: &Path) -> Result<usize, BuilderError> {
+    let archive = Archive::open(source).map_err(|error| BuilderError::ArchiveCommand {
+        operation: "analyze",
+        path: source.to_path_buf(),
+        message: error.to_string(),
+    })?;
+    Ok(archive
+        .files
+        .iter()
+        .filter(|entry| !entry.is_anti_item)
+        .count())
+}
+
+fn extract_archive_sevenz(
+    source: &Path,
+    progress: &mut dyn FnMut(TridBuildProgress),
+) -> Result<TempDir, BuilderError> {
     let temp = tempdir().map_err(|error| BuilderError::Io {
         operation: "create temporary extraction directory for",
         path: std::env::temp_dir(),
         source: error,
     })?;
+
+    let total_entries = count_archive_entries(source)?;
+    let total = total_entries.max(1);
+    report_extract_progress(progress, 0, total, source);
+
+    let mut completed = 0usize;
+    decompress_file_with_extract_fn(source, temp.path(), |entry, reader, dest| {
+        default_entry_extract_fn(entry, reader, dest)?;
+        completed += 1;
+        report_extract_progress(progress, completed, total, source);
+        Ok(true)
+    })
+    .map_err(|error| BuilderError::ArchiveCommand {
+        operation: "extract",
+        path: source.to_path_buf(),
+        message: error.to_string(),
+    })?;
+
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ExtractArchive,
+        message: "extracted archive".to_owned(),
+        current: total,
+        total: Some(total),
+        current_item: None,
+        stats: TridBuildStats::default(),
+        trace_detail: None,
+    });
+    debug!(
+        path = %source.display(),
+        destination = %temp.path().display(),
+        entries = total_entries,
+        "archive extracted with sevenz-rust"
+    );
+    Ok(temp)
+}
+
+fn extract_archive_tar(
+    source: &Path,
+    progress: &mut dyn FnMut(TridBuildProgress),
+) -> Result<TempDir, BuilderError> {
+    let temp = tempdir().map_err(|error| BuilderError::Io {
+        operation: "create temporary extraction directory for",
+        path: std::env::temp_dir(),
+        source: error,
+    })?;
+
+    report_extract_progress(progress, 0, 1, source);
 
     let output = Command::new("tar")
         .arg("-xf")
@@ -244,8 +317,46 @@ fn extract_archive(source: &Path) -> Result<TempDir, BuilderError> {
         });
     }
 
-    debug!(path = %source.display(), destination = %temp.path().display(), "archive extracted successfully");
+    report_extract_progress(progress, 1, 1, source);
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ExtractArchive,
+        message: "extracted archive".to_owned(),
+        current: 1,
+        total: Some(1),
+        current_item: None,
+        stats: TridBuildStats::default(),
+        trace_detail: None,
+    });
+    debug!(path = %source.display(), destination = %temp.path().display(), "archive extracted with tar");
     Ok(temp)
+}
+
+fn report_extract_progress(
+    progress: &mut dyn FnMut(TridBuildProgress),
+    completed: usize,
+    total: usize,
+    source: &Path,
+) {
+    if completed != 0
+        && completed != total
+        && completed != 1
+        && !completed.is_multiple_of(EXTRACT_PROGRESS_INTERVAL)
+    {
+        return;
+    }
+    progress(TridBuildProgress {
+        stage: TridBuildStage::ExtractArchive,
+        message: if total > 1 {
+            format!("Extracting archive ({completed}/{total})")
+        } else {
+            format!("Extracting {}", source.display())
+        },
+        current: completed,
+        total: Some(total),
+        current_item: None,
+        stats: TridBuildStats::default(),
+        trace_detail: None,
+    });
 }
 
 fn collect_xml_files(root: &Path, xml_files: &mut Vec<PathBuf>) -> Result<(), BuilderError> {

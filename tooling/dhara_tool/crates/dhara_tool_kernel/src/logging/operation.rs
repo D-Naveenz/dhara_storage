@@ -1,13 +1,11 @@
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use tracing::{info, warn};
 
 use crate::context::CommandResult;
 use crate::operation_progress::{
-    clear_run_activity, has_committed_progress_plan, set_command_activity, set_run_elapsed,
+    clear_run_activity, clear_run_clock, install_run_clock, set_command_activity,
+    set_command_milestone,
 };
 
 use super::audit::{format_duration, summarize_command_result, AUDIT_TARGET};
@@ -51,7 +49,6 @@ impl CommandOutcome {
 pub struct CommandRun {
     activity: ActivityLabel,
     started: Instant,
-    reporter: Option<ElapsedActivityReporter>,
 }
 
 impl CommandRun {
@@ -60,31 +57,20 @@ impl CommandRun {
         let activity = command_labels(command_id);
         info!(target: AUDIT_TARGET, "{}…", activity.present);
 
+        let started = Instant::now();
         if crate::logging::interactive_mode_enabled() {
+            install_run_clock(started);
+            set_command_milestone(&activity.present);
             set_command_activity(&activity.present);
         }
 
-        let reporter = if crate::logging::interactive_mode_enabled() {
-            Some(ElapsedActivityReporter::start(
-                activity.present.clone(),
-                Instant::now(),
-            ))
-        } else {
-            None
-        };
-
-        Self {
-            activity,
-            started: Instant::now(),
-            reporter,
-        }
+        Self { activity, started }
     }
 
-    pub fn complete(mut self, outcome: CommandOutcome) {
-        if let Some(reporter) = self.reporter.take() {
-            reporter.stop();
-        } else if crate::logging::interactive_mode_enabled() {
+    pub fn complete(self, outcome: CommandOutcome) {
+        if crate::logging::interactive_mode_enabled() {
             clear_run_activity();
+            clear_run_clock();
         }
 
         let duration = format_duration(self.started.elapsed());
@@ -115,50 +101,6 @@ impl CommandRun {
                 outcome.exit_code
             );
         }
-    }
-}
-
-struct ElapsedActivityReporter {
-    stop: Arc<AtomicBool>,
-    handle: Option<JoinHandle<()>>,
-}
-
-impl ElapsedActivityReporter {
-    fn start(label: String, started: Instant) -> Self {
-        let stop = Arc::new(AtomicBool::new(false));
-        let stop_flag = stop.clone();
-        let handle = thread::spawn(move || {
-            loop {
-                thread::sleep(Duration::from_secs(1));
-                if stop_flag.load(Ordering::Relaxed) {
-                    break;
-                }
-                let elapsed = started.elapsed();
-                let elapsed_secs = if elapsed >= ELAPSED_UI_THRESHOLD {
-                    Some(elapsed.as_secs())
-                } else {
-                    None
-                };
-                if has_committed_progress_plan() {
-                    set_run_elapsed(elapsed_secs);
-                } else {
-                    set_command_activity(&label);
-                    set_run_elapsed(elapsed_secs);
-                }
-            }
-        });
-        Self {
-            stop,
-            handle: Some(handle),
-        }
-    }
-
-    fn stop(self) {
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(handle) = self.handle {
-            let _ = handle.join();
-        }
-        clear_run_activity();
     }
 }
 
@@ -232,7 +174,7 @@ pub fn command_labels(command_id: &str) -> ActivityLabel {
     }
 }
 
-/// Present-tense label for a TrID pipeline phase (TUI activity hint).
+/// Present-tense label for a TrID pipeline phase (audit / direct-mode console).
 pub fn phase_activity_label(stage: crate::filedefs::TridBuildStage) -> &'static str {
     use crate::filedefs::TridBuildStage;
     match stage {

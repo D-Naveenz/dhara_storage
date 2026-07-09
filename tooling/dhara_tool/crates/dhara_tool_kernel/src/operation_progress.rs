@@ -4,9 +4,10 @@
 
 use std::cell::RefCell;
 use std::sync::{Mutex, OnceLock, mpsc::Sender};
+use std::time::Instant;
 
 use crate::filedefs::{TridBuildProgress, TridBuildStage};
-use crate::logging::interactive_mode_enabled;
+use crate::logging::{interactive_mode_enabled, ELAPSED_UI_THRESHOLD};
 
 /// Lifecycle phase for operation progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -39,6 +40,8 @@ pub struct ProgressSnapshot {
     pub analyzing_message: String,
     /// Fallback activity when no step detail is available (command-level label).
     pub activity_label: String,
+    /// Command milestone for panel chrome; does not replace step status.
+    pub command_milestone: String,
     /// Wall-clock seconds since command run began; set after [`crate::logging::ELAPSED_UI_THRESHOLD`].
     pub elapsed_secs: Option<u64>,
 }
@@ -50,7 +53,7 @@ struct OperationPlan {
     active_step: Option<&'static str>,
     committed: bool,
     activity_label: String,
-    elapsed_secs: Option<u64>,
+    command_milestone: String,
 }
 
 impl Default for OperationPlan {
@@ -62,12 +65,13 @@ impl Default for OperationPlan {
             active_step: None,
             committed: false,
             activity_label: String::new(),
-            elapsed_secs: None,
+            command_milestone: String::new(),
         }
     }
 }
 
 thread_local! {
+    static RUN_STARTED: RefCell<Option<Instant>> = const { RefCell::new(None) };
     static PLAN: RefCell<OperationPlan> = const { RefCell::new(OperationPlan {
         phase: RunPhase::Analyzing,
         analyzing_message: String::new(),
@@ -75,7 +79,7 @@ thread_local! {
         active_step: None,
         committed: false,
         activity_label: String::new(),
-        elapsed_secs: None,
+        command_milestone: String::new(),
     }) };
 }
 
@@ -97,6 +101,7 @@ pub struct OperationProgressGuard;
 
 impl OperationProgressGuard {
     pub fn install() -> Self {
+        clear_run_clock();
         PLAN.with(|plan| {
             *plan.borrow_mut() = OperationPlan::default();
         });
@@ -106,10 +111,38 @@ impl OperationProgressGuard {
 
 impl Drop for OperationProgressGuard {
     fn drop(&mut self) {
+        clear_run_clock();
         PLAN.with(|plan| {
             *plan.borrow_mut() = OperationPlan::default();
         });
     }
+}
+
+/// Records command start time on the worker thread for elapsed display in snapshots.
+pub fn install_run_clock(started: Instant) {
+    RUN_STARTED.with(|slot| {
+        *slot.borrow_mut() = Some(started);
+    });
+}
+
+pub fn clear_run_clock() {
+    RUN_STARTED.with(|slot| {
+        *slot.borrow_mut() = None;
+    });
+}
+
+fn elapsed_secs_from_clock() -> Option<u64> {
+    RUN_STARTED.with(|slot| {
+        let Some(started) = *slot.borrow() else {
+            return None;
+        };
+        let elapsed = started.elapsed();
+        if elapsed >= ELAPSED_UI_THRESHOLD {
+            Some(elapsed.as_secs())
+        } else {
+            None
+        }
+    })
 }
 
 /// Thin helper for multi-step workflows (quality, package, defs).
@@ -190,7 +223,8 @@ fn snapshot_from_plan(plan: &OperationPlan) -> ProgressSnapshot {
         step_label,
         analyzing_message: plan.analyzing_message.clone(),
         activity_label: plan.activity_label.clone(),
-        elapsed_secs: plan.elapsed_secs,
+        command_milestone: plan.command_milestone.clone(),
+        elapsed_secs: elapsed_secs_from_clock(),
     }
 }
 
@@ -374,6 +408,14 @@ pub fn complete_progress() {
     });
 }
 
+/// Sets the command milestone shown in action panel chrome (never overwritten by step ticks).
+pub fn set_command_milestone(label: &str) {
+    with_plan(|plan| {
+        plan.command_milestone = label.to_owned();
+        publish_snapshot(plan);
+    });
+}
+
 /// Sets the fallback command-level activity label (used when no step detail is active).
 pub fn set_command_activity(label: &str) {
     with_plan(|plan| {
@@ -385,33 +427,13 @@ pub fn set_command_activity(label: &str) {
     });
 }
 
-/// Updates elapsed seconds on the status line without changing step or activity text.
-pub fn set_run_elapsed(elapsed_secs: Option<u64>) {
-    with_plan(|plan| {
-        plan.elapsed_secs = elapsed_secs;
-        publish_snapshot(plan);
-    });
-}
-
-/// Updates command activity and elapsed together (only when no committed step plan).
-pub fn set_run_activity(label: &str, elapsed_secs: Option<u64>) {
-    with_plan(|plan| {
-        if has_committed_progress_plan_in(plan) {
-            plan.elapsed_secs = elapsed_secs;
-        } else {
-            plan.activity_label = label.to_owned();
-            plan.elapsed_secs = elapsed_secs;
-        }
-        publish_snapshot(plan);
-    });
-}
-
 pub fn clear_run_activity() {
     with_plan(|plan| {
         plan.activity_label.clear();
-        plan.elapsed_secs = None;
+        plan.command_milestone.clear();
         publish_snapshot(plan);
     });
+    clear_run_clock();
 }
 
 fn has_committed_progress_plan_in(plan: &OperationPlan) -> bool {
@@ -435,12 +457,20 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                     plan.steps[index].total = Some(total);
                     plan.steps[index].weight = total;
                     plan.steps[index].current = update.current as u64;
-                    if update.current == 0 && !update.message.is_empty() {
-                        plan.steps[index].detail =
-                            format!("Extracting archive — {}", update.message);
-                    } else if update.current > 0 {
-                        plan.steps[index].detail = "Extracting archive — done".to_owned();
-                    }
+                    plan.steps[index].detail = if update.message.starts_with("extracted") {
+                        "Extracting archive — done".to_owned()
+                    } else if total > 1 && update.current > 0 {
+                        format!(
+                            "Extracting archive ({}/{})",
+                            update.current, total
+                        )
+                    } else if total > 1 {
+                        format!("Extracting archive (0/{total})")
+                    } else if !update.message.is_empty() {
+                        format!("Extracting archive — {}", update.message)
+                    } else {
+                        "Extracting archive…".to_owned()
+                    };
                 }
             }
             TridBuildStage::ParseDefinitions => {
@@ -452,11 +482,15 @@ pub fn apply_trid_progress(update: &TridBuildProgress) {
                 plan.active_step = Some("parse");
                 if let Some(index) = find_step_index(plan, "parse") {
                     plan.steps[index].current = update.current as u64;
-                    let total = update.total.unwrap_or(0);
-                    plan.steps[index].detail = format!(
-                        "Parsing definitions ({}/{})",
-                        update.current, total
-                    );
+                    if update.message.starts_with("Reading definition files") {
+                        plan.steps[index].detail = update.message.clone();
+                    } else {
+                        let total = update.total.unwrap_or(0);
+                        plan.steps[index].detail = format!(
+                            "Parsing definitions ({}/{})",
+                            update.current, total
+                        );
+                    }
                 }
             }
             TridBuildStage::ReduceDefinitions => {
@@ -566,6 +600,7 @@ fn set_step_total_internal(plan: &mut OperationPlan, id: &'static str, total: u6
 mod tests {
     use super::*;
     use crate::filedefs::TridBuildStats;
+    use std::time::Duration;
 
     fn reset_plan() {
         PLAN.with(|plan| {
@@ -633,12 +668,25 @@ mod tests {
     }
 
     #[test]
+    fn elapsed_computed_on_publish() {
+        reset_plan();
+        install_run_clock(Instant::now() - ELAPSED_UI_THRESHOLD - Duration::from_secs(2));
+        plan_step("work", "Working", 1);
+        commit_plan();
+        set_step_message("work", "Running step");
+
+        let snapshot = with_plan(|plan| snapshot_from_plan(plan));
+        assert_eq!(snapshot.step_label, "Running step");
+        assert!(snapshot.elapsed_secs.unwrap_or(0) >= 6);
+    }
+
+    #[test]
     fn elapsed_does_not_clobber_step_detail() {
         reset_plan();
+        install_run_clock(Instant::now() - Duration::from_secs(12));
         plan_step("work", "Working", 1);
         commit_plan();
         set_step_message("work", "Running Clippy");
-        set_run_elapsed(Some(12));
 
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
         assert_eq!(snapshot.step_label, "Running Clippy");
@@ -671,5 +719,76 @@ mod tests {
 
         let snapshot = with_plan(|plan| snapshot_from_plan(plan));
         assert_eq!(snapshot.percent, 100);
+    }
+
+    #[test]
+    fn thread_local_plan_isolation_prevents_flicker() {
+        reset_plan();
+        plan_step("parse", "Parsing definitions", 100);
+        commit_plan();
+        set_step_message("parse", "Parsing definitions (500/10000)");
+
+        let worker = with_plan(|plan| snapshot_from_plan(plan));
+        assert_eq!(worker.step_label, "Parsing definitions (500/10000)");
+
+        let foreign = std::thread::spawn(|| with_plan(|plan| snapshot_from_plan(plan)))
+            .join()
+            .expect("foreign thread join");
+
+        assert!(
+            foreign.step_label.is_empty() || foreign.overall == 0.0,
+            "foreign thread must not see worker plan state"
+        );
+
+        let after = with_plan(|plan| snapshot_from_plan(plan));
+        assert_eq!(after.step_label, "Parsing definitions (500/10000)");
+    }
+
+    #[test]
+    fn extract_progress_advances_step() {
+        reset_plan();
+        apply_trid_progress(&TridBuildProgress {
+            stage: TridBuildStage::ExtractArchive,
+            message: "Extracting archive (50/200)".to_owned(),
+            current: 50,
+            total: Some(200),
+            current_item: None,
+            stats: TridBuildStats::default(),
+            trace_detail: None,
+        });
+
+        let snapshot = with_plan(|plan| snapshot_from_plan(plan));
+        assert_eq!(snapshot.active_step, Some("extract"));
+        assert!(snapshot.step_label.contains("50/200"));
+        with_plan(|plan| {
+            let extract = plan
+                .steps
+                .iter()
+                .find(|step| step.id == "extract")
+                .expect("extract step");
+            assert_eq!(extract.current, 50);
+            assert_eq!(extract.total, Some(200));
+        });
+    }
+
+    #[test]
+    fn enumerate_progress_updates_parse_detail() {
+        reset_plan();
+        apply_trid_progress(&TridBuildProgress {
+            stage: TridBuildStage::ParseDefinitions,
+            message: "Reading definition files (21692 found)".to_owned(),
+            current: 0,
+            total: Some(21692),
+            current_item: None,
+            stats: TridBuildStats::default(),
+            trace_detail: None,
+        });
+
+        let snapshot = with_plan(|plan| snapshot_from_plan(plan));
+        assert_eq!(snapshot.active_step, Some("parse"));
+        assert_eq!(
+            snapshot.step_label,
+            "Reading definition files (21692 found)"
+        );
     }
 }

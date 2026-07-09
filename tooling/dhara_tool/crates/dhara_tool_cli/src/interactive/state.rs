@@ -434,6 +434,7 @@ mod tests {
             step_label: "parse: 42/100".to_owned(),
             analyzing_message: String::new(),
             activity_label: String::new(),
+            command_milestone: String::new(),
             elapsed_secs: None,
         });
 

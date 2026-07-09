@@ -25,8 +25,8 @@ pub use filedefs::{
 pub use operation_progress::{
     OperationProgressGuard, ProgressSession, ProgressSnapshot, ProgressStep, RunPhase,
     adjust_step_weight, apply_trid_progress, begin_analyzing, begin_single_shot, clear_run_activity,
-    commit_plan, complete_progress, has_committed_progress_plan, plan_step,
-    register_interactive_progress_sender, set_command_activity, set_run_activity, set_run_elapsed,
+    clear_run_clock, commit_plan, complete_progress, has_committed_progress_plan, install_run_clock,
+    plan_step, register_interactive_progress_sender, set_command_activity, set_command_milestone,
     set_step_message, set_step_total, tick_step, unregister_interactive_progress_sender,
 };
 pub use logging::{
