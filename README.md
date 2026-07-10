@@ -62,12 +62,15 @@ dhara_storage/
 - .NET SDK **10.0.x** (for bindings tests and local .NET dev)
 - PowerShell or bash (for [verify-local][verify-local])
 - Windows: MSVC build tools when compiling `win-x64` / `win-arm64` natives locally
+- Git LFS and GitHub SSH access for clone/push (this repo tracks images and binaries via LFS)
+- Windows first-time SSH/LFS setup or smudge errors: [setup-github-ssh.ps1][setup-github-ssh]
 
 **Setup**
 
-1. Clone the repository.
-2. Copy [.env.example][env-example] to `.env.local` and fill publish keys only when releasing.
-3. Run the local verify script from the repo root:
+1. Clone the repository (SSH recommended).
+2. On Windows, if LFS checkout fails with `Permission denied (publickey)`, run `./tooling/scripts/setup-github-ssh.ps1 -Repair`.
+3. Copy [.env.example][env-example] to `.env.local` and fill publish keys only when releasing.
+4. Run the local verify script from the repo root:
 
 ```powershell
 ./tooling/scripts/verify-local.ps1
@@ -153,6 +156,7 @@ Licensed under [Apache-2.0][license]. See per-crate `Cargo.toml` and the NuGet p
 [readme-nuget]: src/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: tooling/dhara_tool/README.md
 [verify-local]: tooling/scripts/verify-local.ps1
+[setup-github-ssh]: tooling/scripts/setup-github-ssh.ps1
 [env-example]: .env.example
 [dhara-config]: dhara.config.toml
 [ci-cd]: docs/ci-cd-pipelines.md
