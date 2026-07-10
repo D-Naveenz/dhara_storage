@@ -3,20 +3,20 @@ pub mod modals;
 use dhara_tool_cli::command::{CommandRegistry, CommandSpec, FieldKind};
 use dhara_tool_cli::forms::FormValue;
 use dhara_tool_cli::interactive::{AppState, DiagnosticSeverity, MainTab};
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::Line;
-use ratatui::widgets::{Block, Borders, Paragraph, Widget};
+use ratatui::widgets::{Paragraph, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
-    CheckBox, CheckBoxState, Input, InputState, ScrollableContent, ScrollableContentState, Tab,
-    TabView, TabViewAction, TabViewState, TabViewStyle,
+    CheckBox, CheckBoxState, InputState, ScrollableContentState, Tab, TabViewAction, TabViewState,
 };
 use ratatui_interact::theme::Theme;
 use ratatui_interact::traits::ClickRegionRegistry;
 
 use crate::focus::TuiFocus;
 use crate::theme as dhara_theme;
+use crate::widgets::{dhara_input, panel, scroll_body, tab_table};
 
 const TAB_LABELS: [&str; 4] = ["Info", "Options", "Troubleshooting", "System"];
 
@@ -55,35 +55,27 @@ pub fn render_center_panel(
 
     let tabs_focused = shell_focus.is_focused(&TuiFocus::MainTabs)
         || shell_focus.is_focused(&TuiFocus::TabContent);
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(if tabs_focused {
-            dhara_theme::border_style().fg(dhara_theme::ACCENT)
-        } else {
-            dhara_theme::border_style()
-        })
-        .style(dhara_theme::border_only_style());
-    let panel_inner = block.inner(area);
-    frame.render_widget(block, area);
+    let panel_inner = panel::render_panel(frame, area, "", tabs_focused, false);
 
-    let chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(panel_inner);
+    let layout = tab_table::split_tab_table(panel_inner);
     let tabs: Vec<Tab<'_>> = TAB_LABELS.iter().map(|label| Tab::new(label)).collect();
-
-    frame.render_widget(Block::default().style(dhara_theme::bar_style()), chunks[0]);
-
-    let mut tab_style = TabViewStyle::from(theme);
-    tab_style.bordered_content = false;
-    tab_style.show_indicator = false;
-    tab_style.selected_style = dhara_theme::tree_selected_style();
-    tab_style.focused_style = dhara_theme::tree_selected_style();
-    tab_style.normal_style = Style::default().fg(dhara_theme::TEXT);
 
     let mut click_registry = ClickRegionRegistry::new();
     option_field_clicks.clear();
-    let tab_view = TabView::new(&tabs, tab_state)
-        .style(tab_style)
-        .content(|_, _, _| {});
-    tab_view.render_with_registry(chunks[0], frame.buffer_mut(), &mut click_registry);
+    tab_table::render_tab_header(
+        layout.header,
+        &tabs,
+        tab_state,
+        theme,
+        &mut click_registry,
+        frame.buffer_mut(),
+    );
+    tab_table::render_tab_separator(frame, Rect::new(
+        panel_inner.x,
+        panel_inner.y + 1,
+        panel_inner.width,
+        1,
+    ));
 
     let selected_tab = tab_state.selected_index;
     let content_focused = shell_focus.is_focused(&TuiFocus::TabContent);
@@ -92,10 +84,10 @@ pub fn render_center_panel(
     system_scroll.set_focused(content_focused && selected_tab == 3);
 
     match selected_tab {
-        0 => render_info_tab(chunks[1], frame.buffer_mut(), state, registry, info_scroll, theme),
+        0 => render_info_tab(layout.body, frame.buffer_mut(), state, registry, info_scroll, theme),
         1 => render_options_tab(
             frame,
-            chunks[1],
+            layout.body,
             state,
             registry,
             form_field,
@@ -106,8 +98,8 @@ pub fn render_center_panel(
             content_focused,
             option_field_clicks,
         ),
-        2 => render_trouble_tab(chunks[1], frame.buffer_mut(), state, trouble_scroll, theme),
-        3 => render_system_tab(chunks[1], frame.buffer_mut(), state, system_scroll, theme),
+        2 => render_trouble_tab(layout.body, frame.buffer_mut(), state, trouble_scroll, theme),
+        3 => render_system_tab(layout.body, frame.buffer_mut(), state, system_scroll, theme),
         _ => {}
     }
 
@@ -144,10 +136,7 @@ fn render_info_tab(
     }
 
     scroll.set_lines(lines);
-    ScrollableContent::new(scroll)
-        .title("Info")
-        .theme(theme)
-        .render(area, buf);
+    scroll_body::render_scroll_body(area, scroll, theme, buf);
 }
 
 fn render_options_tab(
@@ -212,11 +201,13 @@ fn render_options_tab(
                 FormValue::Text(_),
                 FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. },
             ) if selected && editing_form => {
-                let region = Input::new(option_input)
-                    .label(&field.label)
-                    .with_border(false)
-                    .theme(theme)
-                    .render_stateful(frame, row);
+                let region = dhara_input::render_field_input(
+                    frame,
+                    row,
+                    &field.label,
+                    option_input,
+                    theme,
+                );
                 option_field_clicks.register(region.area, index);
             }
             (
@@ -276,10 +267,7 @@ fn render_trouble_tab(
         })
         .collect();
     scroll.set_lines(lines);
-    ScrollableContent::new(scroll)
-        .title("Troubleshooting")
-        .theme(theme)
-        .render(area, buf);
+    scroll_body::render_scroll_body(area, scroll, theme, buf);
 }
 
 fn render_system_tab(
@@ -294,10 +282,7 @@ fn render_system_tab(
         .as_deref()
         .unwrap_or("Open this tab to load configuration.");
     scroll.set_lines(text.lines().map(str::to_owned).collect());
-    ScrollableContent::new(scroll)
-        .title("System configs")
-        .theme(theme)
-        .render(area, buf);
+    scroll_body::render_scroll_body(area, scroll, theme, buf);
 }
 
 pub fn tab_from_index(index: usize) -> MainTab {

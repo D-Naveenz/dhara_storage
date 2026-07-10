@@ -2,15 +2,13 @@ use crossterm::event::{KeyCode, MouseEvent};
 use dhara_tool_cli::command::CommandRegistry;
 use dhara_tool_cli::interactive::{AppState, NavTree, TreeNode as NavNode, TreeViewState as NavTreeState};
 use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::widgets::{Block, Borders, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
-    TreeNode, TreeStyle, TreeView, TreeViewState as WidgetTreeState, get_selected_id,
+    TreeNode, TreeView, TreeViewState as WidgetTreeState, get_selected_id,
 };
 use ratatui_interact::theme::Theme;
 
-use crate::theme as dhara_theme;
+use crate::widgets::{panel, scrollable_tree};
 
 #[derive(Debug, Clone)]
 pub struct TaskTreeData {
@@ -102,34 +100,16 @@ pub fn visible_count(nodes: &[TreeNode<TaskTreeData>], widget: &WidgetTreeState)
     TreeView::new(nodes, widget).visible_count()
 }
 
-fn tree_style(theme: &Theme) -> TreeStyle {
-    let mut style = TreeStyle::from(theme);
-    style.selected_style = dhara_theme::tree_selected_style();
-    style.normal_style = Style::default().fg(dhara_theme::TEXT);
-    style.cursor_normal = "";
-    style.cursor_selected = "";
-    style
-}
-
 pub fn render_task_tree(
     frame: &mut Frame<'_>,
     area: Rect,
     nodes: &[TreeNode<TaskTreeData>],
     widget: &WidgetTreeState,
+    h_scroll: u16,
     theme: &Theme,
     focused: bool,
 ) -> Rect {
-    let block = Block::default()
-        .title(" Tasks ")
-        .borders(Borders::ALL)
-        .border_style(if focused {
-            dhara_theme::border_style().fg(dhara_theme::ACCENT)
-        } else {
-            dhara_theme::border_style()
-        })
-        .style(dhara_theme::border_only_style());
-    let inner = block.inner(area);
-    frame.render_widget(block, area);
+    let inner = panel::render_panel(frame, area, "Tasks", focused, false);
 
     let tree_area = Rect {
         x: inner.x.saturating_add(1),
@@ -142,10 +122,15 @@ pub fn render_task_tree(
         return tree_area;
     }
 
-    TreeView::new(nodes, widget)
-        .style(tree_style(theme))
-        .render_item(|node, _selected| node.data.label.clone())
-        .render(tree_area, frame.buffer_mut());
+    scrollable_tree::render_clipped_tree(
+        tree_area,
+        nodes,
+        widget,
+        h_scroll,
+        |node| node.data.label.as_str(),
+        theme,
+        frame.buffer_mut(),
+    );
 
     tree_area
 }
@@ -155,7 +140,12 @@ pub fn handle_tree_mouse(
     nodes: &[TreeNode<TaskTreeData>],
     inner: Rect,
     mouse: &MouseEvent,
+    h_scroll: &mut u16,
 ) -> bool {
+    if scrollable_tree::handle_tree_wheel(widget, nodes, inner, mouse, h_scroll) {
+        return true;
+    }
+
     if inner.width == 0
         || inner.height == 0
         || mouse.column < inner.x
@@ -175,6 +165,13 @@ pub fn handle_tree_mouse(
     let visible_idx = widget.scroll as usize + rel_row;
     widget.selected_index = visible_idx.min(count - 1);
     widget.ensure_visible(count);
+    scrollable_tree::auto_scroll_selection(
+        nodes,
+        widget,
+        h_scroll,
+        inner.width,
+        |node| node.data.label.as_str(),
+    );
     true
 }
 
@@ -215,10 +212,12 @@ fn find_node<'a>(
 pub fn handle_tree_key(
     widget: &mut WidgetTreeState,
     nodes: &[TreeNode<TaskTreeData>],
+    h_scroll: &mut u16,
+    viewport_width: u16,
     code: KeyCode,
 ) -> TreeKeyAction {
     let count = visible_count(nodes, widget);
-    match code {
+    let action = match code {
         KeyCode::Up => {
             widget.select_prev();
             widget.ensure_visible(count.max(1));
@@ -241,6 +240,10 @@ pub fn handle_tree_key(
             widget.ensure_visible(count.max(1));
             TreeKeyAction::SelectionChanged
         }
+        KeyCode::Left if *h_scroll > 0 => {
+            *h_scroll = h_scroll.saturating_sub(1);
+            TreeKeyAction::Scrolled
+        }
         KeyCode::Left => {
             if let Some(id) = get_selected_id(nodes, widget) {
                 widget.collapse(&id);
@@ -248,14 +251,39 @@ pub fn handle_tree_key(
             TreeKeyAction::Toggled
         }
         KeyCode::Right => {
-            if let Some(id) = get_selected_id(nodes, widget) {
+            let max = scrollable_tree::max_horizontal_scroll(
+                nodes,
+                widget,
+                viewport_width,
+                |node| node.data.label.as_str(),
+            );
+            if *h_scroll < max {
+                *h_scroll = h_scroll.saturating_add(1);
+                TreeKeyAction::Scrolled
+            } else if let Some(id) = get_selected_id(nodes, widget) {
                 widget.expand(&id);
+                TreeKeyAction::Toggled
+            } else {
+                TreeKeyAction::None
             }
-            TreeKeyAction::Toggled
         }
         KeyCode::Enter | KeyCode::Char(' ') => TreeKeyAction::Activate,
         _ => TreeKeyAction::None,
+    };
+
+    if matches!(
+        action,
+        TreeKeyAction::SelectionChanged | TreeKeyAction::Toggled
+    ) {
+        scrollable_tree::auto_scroll_selection(
+            nodes,
+            widget,
+            h_scroll,
+            viewport_width,
+            |node| node.data.label.as_str(),
+        );
     }
+    action
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -263,9 +291,25 @@ pub enum TreeKeyAction {
     None,
     SelectionChanged,
     Toggled,
+    Scrolled,
     Activate,
 }
 
 pub fn task_row_from_widget(widget: &WidgetTreeState) -> usize {
     widget.selected_index
+}
+
+pub fn sync_tree_scroll(
+    nodes: &[TreeNode<TaskTreeData>],
+    widget: &WidgetTreeState,
+    h_scroll: &mut u16,
+    viewport_width: u16,
+) {
+    scrollable_tree::auto_scroll_selection(
+        nodes,
+        widget,
+        h_scroll,
+        viewport_width,
+        |node| node.data.label.as_str(),
+    );
 }

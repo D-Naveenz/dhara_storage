@@ -32,6 +32,8 @@ pub fn footer_hints(ctx: &FooterContext<'_>) -> Vec<(&'static str, &'static str)
     match ctx.shell_focus.current() {
         Some(TuiFocus::TaskTree) => {
             hints.push(("↑↓", "navigate"));
+            hints.push(("Wheel", "scroll"));
+            hints.push(("Shift+Wheel", "scroll horizontal"));
             hints.push(("Enter", "select/expand"));
             hints.push(("Click", "select"));
         }

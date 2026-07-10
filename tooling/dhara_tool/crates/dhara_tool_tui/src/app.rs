@@ -79,6 +79,7 @@ pub struct DharaTui {
     pub option_field_clicks: ClickRegionRegistry<usize>,
     pub task_tree_area: Rect,
     pub task_tree_inner: Rect,
+    pub task_tree_h_scroll: u16,
     pub center_panel_area: Rect,
     pub center_content_area: Rect,
     pub action_panel_area: Rect,
@@ -190,6 +191,7 @@ fn build_app(
         option_field_clicks: ClickRegionRegistry::new(),
         task_tree_area: Rect::default(),
         task_tree_inner: Rect::default(),
+        task_tree_h_scroll: 0,
         center_panel_area: Rect::default(),
         center_content_area: Rect::default(),
         action_panel_area: Rect::default(),
@@ -298,8 +300,15 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
         body[0],
         &app.task_tree_nodes,
         &app.task_tree_widget,
+        app.task_tree_h_scroll,
         &app.theme,
         tree_focused,
+    );
+    crate::adapters::task_tree::sync_tree_scroll(
+        &app.task_tree_nodes,
+        &app.task_tree_widget,
+        &mut app.task_tree_h_scroll,
+        app.task_tree_inner.width,
     );
 
     let center_clicks = render_center_panel(
@@ -394,8 +403,14 @@ fn handle_key(app: &mut DharaTui, key: KeyEvent) -> Result<()> {
 }
 
 fn handle_tree_keys(app: &mut DharaTui, code: KeyCode) -> Result<()> {
-    match handle_tree_key(&mut app.task_tree_widget, &app.task_tree_nodes, code) {
-        TreeKeyAction::SelectionChanged => {
+    match handle_tree_key(
+        &mut app.task_tree_widget,
+        &app.task_tree_nodes,
+        &mut app.task_tree_h_scroll,
+        app.task_tree_inner.width,
+        code,
+    ) {
+        TreeKeyAction::SelectionChanged | TreeKeyAction::Scrolled => {
             app.task_row = task_row_from_widget(&app.task_tree_widget);
             sync_nav_from_widget(&app.task_tree_widget, &mut app.state.tree_view, &app.task_tree_nodes);
         }
@@ -526,6 +541,29 @@ fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
         return;
     }
 
+    if matches!(
+        mouse.kind,
+        MouseEventKind::ScrollUp | MouseEventKind::ScrollDown
+    ) && point_in_rect(app.task_tree_inner, mouse.column, mouse.row)
+    {
+        if handle_tree_mouse(
+            &mut app.task_tree_widget,
+            &app.task_tree_nodes,
+            app.task_tree_inner,
+            &mouse,
+            &mut app.task_tree_h_scroll,
+        ) {
+            app.shell_focus.focus(TuiFocus::TaskTree);
+            app.task_row = task_row_from_widget(&app.task_tree_widget);
+            sync_nav_from_widget(
+                &app.task_tree_widget,
+                &mut app.state.tree_view,
+                &app.task_tree_nodes,
+            );
+        }
+        return;
+    }
+
     if is_left_click(&mouse) {
         focus_panel_at_pointer(
             &mut app.shell_focus,
@@ -547,6 +585,7 @@ fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
             &app.task_tree_nodes,
             app.task_tree_inner,
             &mouse,
+            &mut app.task_tree_h_scroll,
         ) {
             app.shell_focus.focus(TuiFocus::TaskTree);
             app.task_row = task_row_from_widget(&app.task_tree_widget);
