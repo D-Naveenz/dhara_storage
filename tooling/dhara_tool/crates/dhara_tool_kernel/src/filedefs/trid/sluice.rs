@@ -9,23 +9,23 @@ use super::{
 
 const LEVEL1: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/extensions/level1.txt"
+    "/data/extensions/level1.txt"
 ));
 const LEVEL2: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/extensions/level2.txt"
+    "/data/extensions/level2.txt"
 ));
 const LEVEL3: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/extensions/level3.txt"
+    "/data/extensions/level3.txt"
 ));
 const LEVEL4: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/extensions/level4.txt"
+    "/data/extensions/level4.txt"
 ));
 const LEVEL5: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/extensions/level5.txt"
+    "/data/extensions/level5.txt"
 ));
 
 static EXTENSION_SEEDS: Lazy<ExtensionSeeds> = Lazy::new(ExtensionSeeds::load);

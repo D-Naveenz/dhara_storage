@@ -10,17 +10,17 @@ use crate::context::{
     CommandResult, ReportField as CommandReportField, StructuredReport, ToolContext,
 };
 use crate::logging::{current_log_path, log_build_progress, log_file_path};
-use crate::paths::{default_package_dir, resolve_defs_output_dir, resolve_logs_dir, resolve_path_against_repo};
+use crate::paths::{resolve_defs_output_dir, resolve_logs_dir, resolve_package_dir};
 
 pub use package::*;
 pub use runner::*;
 
-/// Repo-relative working paths used by defs commands.
+/// Working paths used by defs commands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefsPaths {
-    /// Repository root used to resolve canonical tooling paths.
+    /// Repository root used to resolve workspace output paths.
     pub repo_root: PathBuf,
-    /// Source directory or archive root used to discover TrID XML inputs.
+    /// TrID input directory beside the tool binary (`{tool_root}/package` by default).
     pub package_dir: PathBuf,
     /// Output directory used for generated `filedefs.dat` artifacts.
     pub output_dir: PathBuf,
@@ -33,11 +33,10 @@ impl DefsPaths {
     pub fn from_context(context: &ToolContext) -> Self {
         Self {
             repo_root: context.repo_root.clone(),
-            package_dir: context
-                .package_dir
-                .clone()
-                .map(|path| resolve_path_against_repo(&context.repo_root, &path))
-                .unwrap_or_else(|| default_package_dir(&context.repo_root)),
+            package_dir: resolve_package_dir(
+                &context.tool_root,
+                context.package_dir.as_deref(),
+            ),
             output_dir: resolve_defs_output_dir(
                 &context.repo_root,
                 context.output_dir.as_deref(),
@@ -46,8 +45,8 @@ impl DefsPaths {
         }
     }
 
-    /// Resolves defs working paths from a repo root plus optional overrides.
-    pub fn from_repo_root(
+    /// Resolves defs working paths from repo and tool roots plus optional overrides.
+    pub fn from_roots(
         repo_root: &Path,
         tool_root: &Path,
         package_dir: Option<PathBuf>,
@@ -56,9 +55,7 @@ impl DefsPaths {
     ) -> Self {
         Self {
             repo_root: repo_root.to_path_buf(),
-            package_dir: package_dir
-                .map(|path| resolve_path_against_repo(repo_root, &path))
-                .unwrap_or_else(|| default_package_dir(repo_root)),
+            package_dir: resolve_package_dir(tool_root, package_dir.as_deref()),
             output_dir: resolve_defs_output_dir(repo_root, output_dir.as_deref()),
             logs_dir: resolve_logs_dir(tool_root, logs_dir.as_deref()),
         }

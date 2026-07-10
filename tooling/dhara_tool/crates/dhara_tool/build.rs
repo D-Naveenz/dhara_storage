@@ -4,6 +4,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 fn main() {
+    // Build input: crate `package/` is copied beside the binary; runtime reads `{tool_root}/package/`.
     println!("cargo:rerun-if-changed=../../package");
 
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").expect("manifest dir"));
@@ -27,8 +28,9 @@ fn main() {
 
 fn profile_artifact_dir(out_dir: &Path) -> Option<PathBuf> {
     // OUT_DIR is target/<profile>/build/<crate-hash>/out
-    let build_dir = out_dir.parent()?;
-    let profile_dir = build_dir.parent()?;
+    let crate_out = out_dir.parent()?;
+    let build_root = crate_out.parent()?;
+    let profile_dir = build_root.parent()?;
     Some(profile_dir.to_path_buf())
 }
 

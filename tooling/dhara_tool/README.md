@@ -29,19 +29,22 @@ For fmt/clippy/doc/tests parity with CI, prefer [verify-local][verify-local] ove
 tooling/dhara_tool/
 ├── crates/
 │   ├── dhara_tool_kernel/   # paths, config, logging, defs I/O, operation_progress
+│   │   └── data/            # compile-time reference catalogs (embedded via include_str!)
 │   ├── dhara_tool_ops/      # quality, verify, release, native merge
 │   ├── dhara_tool_cli/      # registry, commands, forms, runner, interactive state
 │   ├── dhara_tool_tui/      # ratatui screens, widgets, event loop
 │   └── dhara_tool/          # binary entry (CLI + TUI boot)
+└── package/                 # build input for large TrID archives (copied beside binary)
 
 {exe_path}/              # directory containing the running binary
+├── package/             # shipped TrID inputs (copied from crate package/ at build)
 ├── logs/                # audit logs ({date}_dhara_tool*.log)
 ├── output/              # NuGet packages and operator artifacts
 ├── artifacts/           # native staging scratch (e.g. native-stage/)
 └── runtime.toml         # cached repository path
 ```
 
-With the dist binary (`target/dist/dhara_tool`), `exe_path` is `target/dist/`. `cargo run` uses `target/debug/` instead. Workspace sources (TrID inputs, embedded defs) stay under the repository — see [logging reference][logging].
+With the dist binary (`target/dist/dhara_tool`), `exe_path` is `target/dist/`. `cargo run` uses `target/debug/` instead. Repository-scoped outputs (embedded `filedefs.dat` sync target) stay under the workspace via `-r` — see [logging reference][logging]. TrID input archives ship beside the binary in `{exe_path}/package/`.
 
 **Repository resolution:** `-r` / `--repository` overrides `{exe_path}/runtime.toml`; otherwise cache, then CLI prompt or TUI repository picker on first launch.
 
@@ -110,7 +113,7 @@ Logging flags: default INFO on console and file; `-m` / `--min` for WARN-only fi
 
 **Troubleshooting**
 
-- Missing TrID input → place archives under [tooling/dhara_tool/package/][package-readme]; see [DSFD reference][filedefs-dat].
+- Missing TrID input → place archives in [package/][package-readme] (build input); they are copied to `{exe_path}/package/` at build time. See [DSFD reference][filedefs-dat].
 - CD publish missing artifacts → merge commit SHA must match PR CI artifacts; see [CI/CD reference][ci-cd].
 - Sparse file logs → use `-t` / `--trace`; log path is DEBUG-only on session start.
 

@@ -158,10 +158,12 @@ future builder features.
 
 | Path | Role |
 |------|------|
-| `tooling/dhara_tool/package/triddefs_xml.7z` | Local TrID XML source archive (gitignored when large) |
-| `tooling/dhara_tool/package/triddefs_xml.source.toml` | Sidecar: upstream `definitions_release` date |
+| `tooling/dhara_tool/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
+| `tooling/dhara_tool/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
+| `{tool_root}/package/` | Runtime default for TrID input (copied beside binary at build) |
 | `src/core/dhara_storage_dal/resources/filedefs.dat` | Embedded runtime package (published with crate) |
 | `src/core/dhara_storage_dal` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
+| `tooling/dhara_tool/crates/dhara_tool_kernel/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
 Typical operator commands:
 
@@ -214,7 +216,7 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 - [Logging conventions][logging] — audit log format for `dhara_tool` builds
 - [dhara_storage_dal README][readme-dal] — crate-local quick reference
-- [dhara_tool package/ notes][package-readme] — builder input assets
+- [dhara_tool package/ notes][package-readme] — shipped TrID build inputs
 - [CI/CD pipelines][ci-cd] — defs build in release flow
 - [Docs index][docs-index]
 

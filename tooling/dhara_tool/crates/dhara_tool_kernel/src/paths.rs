@@ -100,9 +100,9 @@ pub fn resolve_path_against_repo(repo_root: &Path, path: &Path) -> PathBuf {
     resolve_path_against_base(repo_root, path)
 }
 
-/// Default TrID/package input directory (`tooling/dhara_tool/package`).
-pub fn default_package_dir(repo_root: &Path) -> PathBuf {
-    repo_root.join("tooling").join("dhara_tool").join("package")
+/// Default TrID/package input directory (`{tool_root}/package`).
+pub fn default_package_dir(tool_root: &Path) -> PathBuf {
+    tool_root.join("package")
 }
 
 /// Default directory for NuGet and other operator artifacts (`{tool_root}/output`).
@@ -154,6 +154,13 @@ pub fn resolve_defs_output_dir(repo_root: &Path, override_value: Option<&Path>) 
         .unwrap_or_else(|| default_defs_output_dir(repo_root))
 }
 
+/// Resolves the effective package input directory, honoring an optional CLI override.
+pub fn resolve_package_dir(tool_root: &Path, override_value: Option<&Path>) -> PathBuf {
+    override_value
+        .map(|path| resolve_path_against_base(tool_root, path))
+        .unwrap_or_else(|| default_package_dir(tool_root))
+}
+
 /// Resolves the effective logs directory, honoring an optional CLI override.
 pub fn resolve_logs_dir(tool_root: &Path, logs_override: Option<&Path>) -> PathBuf {
     logs_override
@@ -178,6 +185,10 @@ mod tests {
             default_nuget_dir(&tool),
             PathBuf::from("/exe/output/nuget")
         );
+        assert_eq!(
+            default_package_dir(&tool),
+            PathBuf::from("/exe/package")
+        );
     }
 
     #[test]
@@ -186,10 +197,6 @@ mod tests {
         assert_eq!(
             default_defs_output_dir(&root),
             PathBuf::from("/repo/src/core/dhara_storage_dal/resources")
-        );
-        assert_eq!(
-            default_package_dir(&root),
-            PathBuf::from("/repo/tooling/dhara_tool/package")
         );
         assert_eq!(
             default_defs_package_path(&root),

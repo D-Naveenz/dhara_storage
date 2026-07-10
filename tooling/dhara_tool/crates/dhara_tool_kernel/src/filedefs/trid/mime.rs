@@ -4,11 +4,11 @@ use once_cell::sync::Lazy;
 
 const IANA_MEDIA_TYPES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/mime/iana_media_types.txt"
+    "/data/mime/iana_media_types.txt"
 ));
 const CUSTOM_MEDIA_TYPES: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../assets/mime/custom_media_types.txt"
+    "/data/mime/custom_media_types.txt"
 ));
 const FUZZY_THRESHOLD: f32 = 0.70;
 
