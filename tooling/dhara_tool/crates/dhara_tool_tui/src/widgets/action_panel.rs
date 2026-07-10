@@ -3,7 +3,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
-    Button, ButtonState, ButtonVariant, Progress, ProgressStyle, SpinnerState,
+    Button, ButtonState, ButtonVariant, Progress, ProgressStyle, Spinner, SpinnerState,
 };
 use ratatui_interact::theme::Theme;
 use ratatui_interact::traits::ClickRegionRegistry;
@@ -30,7 +30,7 @@ pub fn render_action_panel(
     run_btn: &mut ButtonState,
     cancel_btn: &mut ButtonState,
     reset_btn: &mut ButtonState,
-    _spinner: &mut SpinnerState,
+    spinner: &mut SpinnerState,
     shell_clicks: &mut ClickRegionRegistry<TuiFocus>,
 ) {
     let focused_region = shell_focus.current().copied();
@@ -57,7 +57,7 @@ pub fn render_action_panel(
     .split(inner);
 
     render_progress(frame, layout[0], state, theme);
-    render_status(frame, layout[1], state);
+    render_status(frame, layout[1], state, spinner, theme);
 
     let running = state.active_run.is_some();
     let cancelable = state
@@ -147,8 +147,26 @@ fn format_status_line(state: &AppState) -> String {
     state.status_message.clone()
 }
 
-fn render_status(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    Paragraph::new(format_status_line(state))
-        .style(dhara_theme::status_style_for_tone(state.status_tone))
-        .render(area, frame.buffer_mut());
+fn render_status(
+    frame: &mut Frame<'_>,
+    area: Rect,
+    state: &AppState,
+    spinner: &mut SpinnerState,
+    theme: &Theme,
+) {
+    let status = format_status_line(state);
+    if state.active_run.is_some() && area.width > 4 {
+        let spin_area = Rect::new(area.x, area.y, 2, 1);
+        Spinner::new(spinner).theme(theme).render(spin_area, frame.buffer_mut());
+        Paragraph::new(status)
+            .style(dhara_theme::status_style_for_tone(state.status_tone))
+            .render(
+                Rect::new(area.x + 2, area.y, area.width.saturating_sub(2), 1),
+                frame.buffer_mut(),
+            );
+    } else {
+        Paragraph::new(status)
+            .style(dhara_theme::status_style_for_tone(state.status_tone))
+            .render(area, frame.buffer_mut());
+    }
 }

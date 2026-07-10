@@ -9,7 +9,7 @@ use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Paragraph, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
-    CheckBox, CheckBoxState, InputState, ScrollableContent, ScrollableContentState, Tab,
+    CheckBox, CheckBoxState, Input, InputState, ScrollableContent, ScrollableContentState, Tab,
     TabView, TabViewAction, TabViewState, TabViewStyle,
 };
 use ratatui_interact::theme::Theme;
@@ -47,6 +47,7 @@ pub fn render_center_panel(
     editing_form: bool,
     option_input: &InputState,
     option_checkbox: &CheckBoxState,
+    option_field_clicks: &mut ClickRegionRegistry<usize>,
 ) -> CenterPanelClicks {
     sync_tab_view_from_state(tab_state, state.main_tab);
     tab_state.focused = shell_focus.is_focused(&TuiFocus::MainTabs)
@@ -78,6 +79,7 @@ pub fn render_center_panel(
     tab_style.normal_style = Style::default().fg(dhara_theme::TEXT);
 
     let mut click_registry = ClickRegionRegistry::new();
+    option_field_clicks.clear();
     let tab_view = TabView::new(&tabs, tab_state)
         .style(tab_style)
         .content(|_, _, _| {});
@@ -92,8 +94,8 @@ pub fn render_center_panel(
     match selected_tab {
         0 => render_info_tab(chunks[1], frame.buffer_mut(), state, registry, info_scroll, theme),
         1 => render_options_tab(
+            frame,
             chunks[1],
-            frame.buffer_mut(),
             state,
             registry,
             form_field,
@@ -102,6 +104,7 @@ pub fn render_center_panel(
             option_checkbox,
             theme,
             content_focused,
+            option_field_clicks,
         ),
         2 => render_trouble_tab(chunks[1], frame.buffer_mut(), state, trouble_scroll, theme),
         3 => render_system_tab(chunks[1], frame.buffer_mut(), state, system_scroll, theme),
@@ -148,8 +151,8 @@ fn render_info_tab(
 }
 
 fn render_options_tab(
+    frame: &mut Frame,
     area: Rect,
-    buf: &mut ratatui::buffer::Buffer,
     state: &AppState,
     registry: &CommandRegistry,
     form_field: usize,
@@ -158,18 +161,20 @@ fn render_options_tab(
     _option_checkbox: &CheckBoxState,
     theme: &Theme,
     content_focused: bool,
+    option_field_clicks: &mut ClickRegionRegistry<usize>,
 ) {
     let Some(command) = state.selected_command(registry) else {
-        Paragraph::new("Select a task to edit options.").render(area, buf);
+        Paragraph::new("Select a task to edit options.").render(area, frame.buffer_mut());
         return;
     };
     let Some(form) = state.forms.get(command.id) else {
-        Paragraph::new("Loading form…").render(area, buf);
+        Paragraph::new("Loading form…").render(area, frame.buffer_mut());
         return;
     };
 
     if command.ui.fields.is_empty() {
-        Paragraph::new("No options for this task. Press Run or r.").render(area, buf);
+        Paragraph::new("No options for this task. Press Run or r.")
+            .render(area, frame.buffer_mut());
         return;
     }
 
@@ -190,27 +195,29 @@ fn render_options_tab(
             (FormValue::Boolean(value), FieldKind::Boolean) if selected && editing_form => {
                 let mut cb = CheckBoxState::new(*value);
                 cb.set_focused(true);
-                CheckBox::new(&field.label, &cb).theme(theme).render(row, buf);
+                let region = CheckBox::new(&field.label, &cb)
+                    .theme(theme)
+                    .render_stateful(row, frame.buffer_mut());
+                option_field_clicks.register(region.area, index);
             }
             (FormValue::Boolean(value), FieldKind::Boolean) => {
-                let label = format!(
-                    "{} {}",
-                    if selected { "▸" } else { " " },
-                    if *value { "[x]" } else { "[ ]" }
-                );
-                Paragraph::new(Line::styled(label, style)).render(row, buf);
+                let mut cb = CheckBoxState::new(*value);
+                cb.set_focused(selected && content_focused);
+                let region = CheckBox::new(&field.label, &cb)
+                    .theme(theme)
+                    .render_stateful(row, frame.buffer_mut());
+                option_field_clicks.register(region.area, index);
             }
             (
                 FormValue::Text(_),
                 FieldKind::Text | FieldKind::Path | FieldKind::BrowsablePath { .. },
             ) if selected && editing_form => {
-                let text = option_input.text();
-                let prefix = "▸ ";
-                Paragraph::new(Line::styled(
-                    format!("{prefix}{}: {text}", field.label),
-                    dhara_theme::selected_style(),
-                ))
-                .render(row, buf);
+                let region = Input::new(option_input)
+                    .label(&field.label)
+                    .with_border(false)
+                    .theme(theme)
+                    .render_stateful(frame, row);
+                option_field_clicks.register(region.area, index);
             }
             (
                 FormValue::Text(text),
@@ -221,7 +228,8 @@ fn render_options_tab(
                     format!("{prefix}{}: {text}", field.label),
                     style,
                 ))
-                .render(row, buf);
+                .render(row, frame.buffer_mut());
+                option_field_clicks.register(row, index);
             }
             (FormValue::Select(sel), FieldKind::Select(options)) => {
                 let value = options.get(*sel).copied().unwrap_or("");
@@ -230,14 +238,15 @@ fn render_options_tab(
                     format!("{prefix}{}: {value}", field.label),
                     style,
                 ))
-                .render(row, buf);
+                .render(row, frame.buffer_mut());
+                option_field_clicks.register(row, index);
             }
             _ => {
                 Paragraph::new(Line::styled(
                     format!("  {}: (unsupported)", field.label),
                     style,
                 ))
-                .render(row, buf);
+                .render(row, frame.buffer_mut());
             }
         }
         y += 1;

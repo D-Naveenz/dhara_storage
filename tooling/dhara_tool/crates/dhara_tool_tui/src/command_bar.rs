@@ -12,25 +12,13 @@ use crate::theme;
 pub struct FooterContext<'a> {
     pub state: &'a AppState,
     pub shell_focus: &'a ShellFocus,
-    pub repo_setup: bool,
+    pub modal_hints: Option<Vec<(&'static str, &'static str)>>,
     pub editing_form: bool,
 }
 
 pub fn footer_hints(ctx: &FooterContext<'_>) -> Vec<(&'static str, &'static str)> {
-    if ctx.repo_setup {
-        return vec![
-            ("Type", "path"),
-            ("Enter", "confirm"),
-            ("Esc", "quit"),
-        ];
-    }
-    if ctx.state.activation_prompt.is_some() {
-        return vec![
-            ("Tab", "buttons"),
-            ("Enter/Y", "apply"),
-            ("Esc/N", "decline"),
-            ("Click", "button"),
-        ];
+    if let Some(hints) = &ctx.modal_hints {
+        return hints.clone();
     }
 
     let running = ctx.state.active_run.is_some();
@@ -61,6 +49,7 @@ pub fn footer_hints(ctx: &FooterContext<'_>) -> Vec<(&'static str, &'static str)
             MainTab::Options => {
                 hints.push(("↑↓", "field"));
                 hints.push(("Enter", "edit"));
+                hints.push(("Click", "field"));
             }
             MainTab::Troubleshooting | MainTab::SystemConfigs => {
                 hints.push(("↑↓", "scroll"));
@@ -69,6 +58,7 @@ pub fn footer_hints(ctx: &FooterContext<'_>) -> Vec<(&'static str, &'static str)
             }
             MainTab::Info => {
                 hints.push(("↑↓", "scroll"));
+                hints.push(("Wheel", "scroll"));
             }
         },
         Some(TuiFocus::ActionRun) | Some(TuiFocus::ActionCancel) | Some(TuiFocus::ActionReset) => {
@@ -89,6 +79,7 @@ pub fn footer_hints(ctx: &FooterContext<'_>) -> Vec<(&'static str, &'static str)
         hints.push(("q", "quit"));
     } else {
         hints.push(("Tab", "next panel"));
+        hints.push(("Hover", "focus panel"));
         if !running {
             hints.push(("q", "quit"));
         } else if cancelable {

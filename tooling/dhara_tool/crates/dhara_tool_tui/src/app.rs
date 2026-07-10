@@ -5,12 +5,12 @@ use std::sync::mpsc::{self, Receiver};
 use std::time::Duration;
 
 use anyhow::{Context, Result};
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent};
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseEvent, MouseEventKind};
 use crossterm::execute;
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
-use dhara_tool_cli::command::{CommandRegistry, RunMode, ToolContext};
+use dhara_tool_cli::command::{CommandRegistry, FieldKind, RunMode, ToolContext};
 use dhara_tool_cli::interactive::{ActivationPrompt, AppState, MainTab};
 use dhara_tool_kernel::{
     ProgressSnapshot, activation::run_activation, ensure_workspace_state,
@@ -20,14 +20,14 @@ use dhara_tool_kernel::{
 };
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui_interact::components::{
-    ButtonState, CheckBoxState, InputState, MarqueeState, ScrollableContentState,
+    ButtonState, CheckBoxState, InputState, ScrollableContentState,
     SpinnerState, TabViewAction, TabViewState, TreeViewState as WidgetTreeState,
     handle_scrollable_content_key, handle_scrollable_content_mouse, handle_tab_view_key,
     handle_tab_view_mouse,
 };
 use ratatui_interact::events::{get_char, is_left_click};
 use ratatui_interact::theme::Theme;
-use ratatui_interact::traits::{ClickRegionRegistry, ContainerAction};
+use ratatui_interact::traits::ClickRegionRegistry;
 
 use crate::adapters::task_tree::{
     TreeKeyAction, apply_tree_selection, build_tree_nodes, handle_tree_key, handle_tree_mouse,
@@ -35,8 +35,8 @@ use crate::adapters::task_tree::{
 };
 use crate::boot::TuiBootParams;
 use crate::command_bar::{FooterContext, render_command_bar};
-use crate::focus::{ShellFocus, TuiFocus};
-use crate::screens::modals::{ModalLayer, RepoSetupPrompt};
+use crate::focus::{focus_panel_at_pointer, point_in_rect, ShellFocus, TuiFocus};
+use crate::screens::modals::{ModalHost, ModalOutcome};
 use crate::screens::{
     apply_option_widgets_to_form, cycle_form_field, render_center_panel, sync_option_widgets_from_form,
     sync_state_from_tab_view, tab_index,
@@ -54,7 +54,7 @@ pub struct DharaTui {
     pub exe_root: PathBuf,
     pub boot: TuiBootParams,
     pub context: Option<ToolContext>,
-    pub repo_setup: Option<RepoSetupPrompt>,
+    pub screen_rect: Rect,
     pub progress_rx: Arc<Mutex<Receiver<ProgressSnapshot>>>,
     pub shell_focus: ShellFocus,
     pub task_row: usize,
@@ -73,12 +73,15 @@ pub struct DharaTui {
     pub spinner: SpinnerState,
     pub option_input: InputState,
     pub option_checkbox: CheckBoxState,
-    pub modals: ModalLayer,
+    pub modals: ModalHost,
     pub shell_clicks: ClickRegionRegistry<TuiFocus>,
     pub tab_clicks: ClickRegionRegistry<TabViewAction>,
-    pub tree_marquee: MarqueeState,
+    pub option_field_clicks: ClickRegionRegistry<usize>,
+    pub task_tree_area: Rect,
     pub task_tree_inner: Rect,
+    pub center_panel_area: Rect,
     pub center_content_area: Rect,
+    pub action_panel_area: Rect,
 }
 
 pub fn run_tui(
@@ -104,7 +107,7 @@ pub fn run_tui(
             workspace,
             registry,
         );
-        let mut modals = ModalLayer::default();
+        let mut modals = ModalHost::default();
         if !pending_activation.is_empty() {
             state.activation_prompt = Some(ActivationPrompt::new(pending_activation));
             state.status_message =
@@ -117,7 +120,6 @@ pub fn run_tui(
             exe_root,
             boot,
             Some(context),
-            None,
             progress_rx,
             theme,
             modals,
@@ -126,15 +128,14 @@ pub fn run_tui(
         let initial = stale_repository_hint
             .as_ref()
             .map(|path| path.display().to_string());
-        let mut modals = ModalLayer::default();
-        modals.show_repo(initial.clone());
+        let mut modals = ModalHost::default();
+        modals.show_repository(initial);
         build_app(
             AppState::with_repository_label("repository required"),
             registry.clone(),
             exe_root,
             boot,
             None,
-            Some(RepoSetupPrompt::new(initial)),
             progress_rx,
             theme,
             modals,
@@ -153,10 +154,9 @@ fn build_app(
     exe_root: PathBuf,
     boot: TuiBootParams,
     context: Option<ToolContext>,
-    repo_setup: Option<RepoSetupPrompt>,
     progress_rx: Arc<Mutex<Receiver<ProgressSnapshot>>>,
     theme: Theme,
-    modals: ModalLayer,
+    modals: ModalHost,
 ) -> DharaTui {
     let task_tree_nodes = build_tree_nodes(&state.nav_tree);
     DharaTui {
@@ -165,7 +165,7 @@ fn build_app(
         exe_root,
         boot,
         context,
-        repo_setup,
+        screen_rect: Rect::default(),
         progress_rx,
         shell_focus: ShellFocus::default(),
         task_row: 0,
@@ -187,9 +187,12 @@ fn build_app(
         modals,
         shell_clicks: ClickRegionRegistry::new(),
         tab_clicks: ClickRegionRegistry::new(),
-        tree_marquee: MarqueeState::new(),
+        option_field_clicks: ClickRegionRegistry::new(),
+        task_tree_area: Rect::default(),
         task_tree_inner: Rect::default(),
+        center_panel_area: Rect::default(),
         center_content_area: Rect::default(),
+        action_panel_area: Rect::default(),
     }
 }
 
@@ -234,6 +237,10 @@ fn run_loop(
             app.task_row,
         );
 
+        if app.state.active_run.is_some() {
+            app.spinner.tick();
+        }
+
         terminal.draw(|frame| draw(frame, app))?;
 
         if app.state.should_quit {
@@ -255,6 +262,7 @@ fn run_loop(
 
 fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     let area = frame.area();
+    app.screen_rect = area;
 
     let layout = Layout::vertical([
         Constraint::Length(1),
@@ -277,6 +285,10 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     ])
     .split(layout[1]);
 
+    app.task_tree_area = body[0];
+    app.center_panel_area = body[1];
+    app.action_panel_area = body[2];
+
     app.shell_clicks.clear();
     app.tab_clicks.clear();
 
@@ -288,7 +300,6 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
         &app.task_tree_widget,
         &app.theme,
         tree_focused,
-        &mut app.tree_marquee,
     );
 
     let center_clicks = render_center_panel(
@@ -306,6 +317,7 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
         app.editing_form,
         &app.option_input,
         &app.option_checkbox,
+        &mut app.option_field_clicks,
     );
     app.tab_clicks = center_clicks.registry;
     let center_chunks = Layout::vertical([Constraint::Length(1), Constraint::Min(1)]).split(body[1]);
@@ -327,27 +339,20 @@ fn draw(frame: &mut ratatui::Frame<'_>, app: &mut DharaTui) {
     let footer = FooterContext {
         state: &app.state,
         shell_focus: &app.shell_focus,
-        repo_setup: app.repo_setup.is_some(),
+        modal_hints: app.modals.footer_hints(),
         editing_form: app.editing_form,
     };
     render_command_bar(frame, layout[2], &footer);
 
-    if app.state.activation_prompt.is_some() {
-        app.modals.render_activation(frame, &app.state, &app.theme);
-    }
-    if app.repo_setup.is_some() {
-        app.modals.render_repo(frame, &app.theme);
-    }
+    app.modals.render(frame, &app.state, &app.theme);
 }
 
 fn handle_key(app: &mut DharaTui, key: KeyEvent) -> Result<()> {
-    let screen = Rect::new(0, 0, 200, 60);
-
-    if app.repo_setup.is_some() {
-        return handle_repo_modal_key(app, key, screen);
-    }
-    if app.state.activation_prompt.is_some() {
-        return handle_activation_modal_key(app, key, screen);
+    if app.modals.is_blocking() {
+        if let Some(outcome) = app.modals.handle_key(key, app.screen_rect, &app.state) {
+            apply_modal_outcome(app, outcome);
+        }
+        return Ok(());
     }
 
     if app.editing_form {
@@ -502,25 +507,39 @@ fn handle_tab_content_key(app: &mut DharaTui, key: &KeyEvent) -> bool {
 }
 
 fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
-    let screen = Rect::new(0, 0, 200, 60);
-
-    if app.repo_setup.is_some() {
-        if let Some(action) = app.modals.handle_repo_mouse(mouse, screen) {
-            apply_repo_modal_action(app, action);
+    if app.modals.is_blocking() {
+        if let Some(outcome) = app.modals.handle_mouse(mouse, app.screen_rect) {
+            apply_modal_outcome(app, outcome);
         }
         return;
     }
-    if app.state.activation_prompt.is_some() {
-        if let Some(action) = app.modals.handle_activation_mouse(mouse, screen) {
-            apply_activation_action(app, action);
-        }
+
+    if matches!(mouse.kind, MouseEventKind::Moved) {
+        focus_panel_at_pointer(
+            &mut app.shell_focus,
+            app.task_tree_area,
+            app.center_panel_area,
+            app.action_panel_area,
+            mouse.column,
+            mouse.row,
+        );
         return;
     }
 
     if is_left_click(&mouse) {
+        focus_panel_at_pointer(
+            &mut app.shell_focus,
+            app.task_tree_area,
+            app.center_panel_area,
+            app.action_panel_area,
+            mouse.column,
+            mouse.row,
+        );
+
         if app.tab_clicks.handle_click(mouse.column, mouse.row).is_some() {
             handle_tab_view_mouse(&mut app.tab_view_state, &app.tab_clicks, &mouse);
             app.state.main_tab = sync_state_from_tab_view(&app.tab_view_state);
+            app.shell_focus.focus(TuiFocus::TabContent);
         }
 
         if handle_tree_mouse(
@@ -538,6 +557,29 @@ fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
             );
         }
 
+        if let Some(&field_index) = app.option_field_clicks.handle_click(mouse.column, mouse.row) {
+            app.shell_focus.focus(TuiFocus::TabContent);
+            app.state.main_tab = MainTab::Options;
+            app.tab_view_state.select(tab_index(MainTab::Options));
+            app.form_field = field_index;
+            if let Some(command) = app.state.selected_command(&app.registry).cloned() {
+                if let Some(form) = app.state.forms.get_mut(command.id) {
+                    form.selected_field = field_index;
+                }
+                if let Some(field) = command.ui.fields.get(field_index) {
+                    if matches!(field.kind, FieldKind::Boolean) {
+                        if let Some(form) = app.state.forms.get_mut(command.id) {
+                            if let dhara_tool_cli::forms::FormValue::Boolean(value) =
+                                &mut form.values[field_index]
+                            {
+                                *value = !*value;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         if let Some(focus) = app.shell_clicks.handle_click(mouse.column, mouse.row) {
             app.shell_focus.focus(focus.clone());
             if matches!(
@@ -548,7 +590,7 @@ fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
             }
         }
 
-        if app.shell_focus.is_focused(&TuiFocus::TabContent) {
+        if point_in_rect(app.center_content_area, mouse.column, mouse.row) {
             let tab = app.tab_view_state.selected_index;
             let h = app.center_content_area.height as usize;
             match tab {
@@ -582,59 +624,34 @@ fn handle_mouse(app: &mut DharaTui, mouse: MouseEvent) {
     }
 }
 
-fn handle_repo_modal_key(app: &mut DharaTui, key: KeyEvent, screen: Rect) -> Result<()> {
-    if let Some(action) = app.modals.handle_repo_key(key, screen) {
-        apply_repo_modal_action(app, action);
-    }
-    Ok(())
-}
-
-fn handle_activation_modal_key(app: &mut DharaTui, key: KeyEvent, screen: Rect) -> Result<()> {
-    if let Some(action) = app.modals.handle_activation_key(key, screen) {
-        apply_activation_action(app, action);
-    }
-    Ok(())
-}
-
-fn apply_repo_modal_action(app: &mut DharaTui, action: ContainerAction) {
-    match action {
-        ContainerAction::Submit => {
-            let path = app.modals.repo_state.children.path_input.text().trim().to_owned();
-            if path.is_empty() {
-                app.state.status_message = "Repository path is required.".to_owned();
-                return;
-            }
-            match resolve_and_persist_repository(&app.exe_root, PathBuf::from(path), true) {
+fn apply_modal_outcome(app: &mut DharaTui, outcome: ModalOutcome) {
+    match outcome {
+        ModalOutcome::RepositoryPathRequired => {
+            app.state.status_message = "Repository path is required.".to_owned();
+        }
+        ModalOutcome::RepositoryResolved(path) => {
+            match resolve_and_persist_repository(&app.exe_root, path, true) {
                 Ok(repo_root) => {
                     if finish_repository_setup(app, repo_root).is_err() {
-                        // error already in status
+                        // status set in finish
                     }
                 }
                 Err(error) => app.state.status_message = error.to_string(),
             }
         }
-        ContainerAction::Close => {
+        ModalOutcome::RepositoryCancelled => {
             app.state.should_quit = true;
         }
-        _ => {}
-    }
-}
-
-fn apply_activation_action(app: &mut DharaTui, action: ContainerAction) {
-    match action {
-        ContainerAction::Submit => {
+        ModalOutcome::ActivationConfirmed => {
             if let Some(context) = app.context.as_ref() {
                 if let Err(error) = app.state.apply_activation_confirm(&context.repo_root) {
                     app.state.status_message = error.to_string();
                 }
             }
-            app.modals.hide_activation();
         }
-        ContainerAction::Close => {
+        ModalOutcome::ActivationDeclined => {
             app.state.decline_activation();
-            app.modals.hide_activation();
         }
-        _ => {}
     }
 }
 
@@ -758,8 +775,7 @@ fn finish_repository_setup(app: &mut DharaTui, repo_root: PathBuf) -> Result<()>
         app.modals.hide_activation();
     }
     app.context = Some(context);
-    app.repo_setup = None;
-    app.modals.hide_repo();
+    app.modals.hide_repository();
     app.shell_focus.focus(TuiFocus::TaskTree);
     app.state.status_message = "Repository configured.".to_owned();
     Ok(())

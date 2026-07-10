@@ -6,11 +6,9 @@ use ratatui::style::Style;
 use ratatui::widgets::{Block, Borders, Widget};
 use ratatui::Frame;
 use ratatui_interact::components::{
-    MarqueeMode, MarqueeState, MarqueeStyle, MarqueeText, TreeNode, TreeStyle, TreeView,
-    TreeViewState as WidgetTreeState, get_selected_id,
+    TreeNode, TreeStyle, TreeView, TreeViewState as WidgetTreeState, get_selected_id,
 };
 use ratatui_interact::theme::Theme;
-use unicode_width::UnicodeWidthStr;
 
 use crate::theme as dhara_theme;
 
@@ -20,13 +18,6 @@ pub struct TaskTreeData {
     pub path_key: String,
     pub command_id: Option<&'static str>,
     pub has_children: bool,
-}
-
-struct FlatNode<'a> {
-    node: &'a TreeNode<TaskTreeData>,
-    depth: usize,
-    is_last: bool,
-    parent_is_last: Vec<bool>,
 }
 
 pub fn build_tree_nodes(nav: &NavTree) -> Vec<TreeNode<TaskTreeData>> {
@@ -111,39 +102,6 @@ pub fn visible_count(nodes: &[TreeNode<TaskTreeData>], widget: &WidgetTreeState)
     TreeView::new(nodes, widget).visible_count()
 }
 
-fn flatten_visible<'a>(
-    nodes: &'a [TreeNode<TaskTreeData>],
-    widget: &WidgetTreeState,
-) -> Vec<FlatNode<'a>> {
-    let mut result = Vec::new();
-    flatten_nodes(nodes, widget, 0, &mut result, &[]);
-    result
-}
-
-fn flatten_nodes<'a>(
-    nodes: &'a [TreeNode<TaskTreeData>],
-    widget: &WidgetTreeState,
-    depth: usize,
-    result: &mut Vec<FlatNode<'a>>,
-    parent_is_last: &[bool],
-) {
-    let count = nodes.len();
-    for (idx, node) in nodes.iter().enumerate() {
-        let is_last = idx == count - 1;
-        result.push(FlatNode {
-            node,
-            depth,
-            is_last,
-            parent_is_last: parent_is_last.to_vec(),
-        });
-        if node.has_children() && !widget.is_collapsed(&node.id) {
-            let mut parents = parent_is_last.to_vec();
-            parents.push(is_last);
-            flatten_nodes(&node.children, widget, depth + 1, result, &parents);
-        }
-    }
-}
-
 fn tree_style(theme: &Theme) -> TreeStyle {
     let mut style = TreeStyle::from(theme);
     style.selected_style = dhara_theme::tree_selected_style();
@@ -153,49 +111,6 @@ fn tree_style(theme: &Theme) -> TreeStyle {
     style
 }
 
-fn build_prefix(
-    style: &TreeStyle,
-    flat: &FlatNode<'_>,
-    is_selected: bool,
-    widget: &WidgetTreeState,
-) -> (String, Style) {
-    let mut prefix = String::new();
-    let row_style = if is_selected {
-        style.selected_style
-    } else {
-        style.normal_style
-    };
-
-    for &parent_is_last in &flat.parent_is_last {
-        let connector = if parent_is_last {
-            style.connector_space
-        } else {
-            style.connector_vertical
-        };
-        prefix.push_str(connector);
-    }
-
-    if flat.depth > 0 {
-        let connector = if flat.is_last {
-            style.connector_last
-        } else {
-            style.connector_branch
-        };
-        prefix.push_str(connector);
-    }
-
-    if flat.node.has_children() {
-        let icon = if widget.is_collapsed(&flat.node.id) {
-            style.collapsed_icon
-        } else {
-            style.expanded_icon
-        };
-        prefix.push_str(icon);
-    }
-
-    (prefix, row_style)
-}
-
 pub fn render_task_tree(
     frame: &mut Frame<'_>,
     area: Rect,
@@ -203,7 +118,6 @@ pub fn render_task_tree(
     widget: &WidgetTreeState,
     theme: &Theme,
     focused: bool,
-    tree_marquee: &mut MarqueeState,
 ) -> Rect {
     let block = Block::default()
         .title(" Tasks ")
@@ -228,60 +142,10 @@ pub fn render_task_tree(
         return tree_area;
     }
 
-    let style = tree_style(theme);
-    let visible = flatten_visible(nodes, widget);
-    let scroll = widget.scroll as usize;
-    let viewport_height = tree_area.height as usize;
-    let marquee_style = MarqueeStyle::from(theme);
-    let buf = frame.buffer_mut();
-
-    for (view_idx, flat_node) in visible
-        .iter()
-        .enumerate()
-        .skip(scroll)
-        .take(viewport_height)
-    {
-        let is_selected = view_idx == widget.selected_index;
-        let row_y = tree_area.y + (view_idx - scroll) as u16;
-        let row_area = Rect::new(tree_area.x, row_y, tree_area.width, 1);
-
-        let (prefix, row_style) = build_prefix(&style, flat_node, is_selected, widget);
-        if is_selected {
-            for x in row_area.x..row_area.x + row_area.width {
-                buf[(x, row_y)]
-                    .set_bg(dhara_theme::SELECTED_BG)
-                    .set_fg(dhara_theme::WARNING);
-            }
-        }
-        let prefix_width = prefix.width();
-        buf.set_string(row_area.x, row_area.y, &prefix, row_style);
-
-        let label_width = row_area.width.saturating_sub(prefix_width as u16);
-        if label_width == 0 {
-            continue;
-        }
-
-        let label_area = Rect::new(
-            row_area.x + prefix_width as u16,
-            row_area.y,
-            label_width,
-            1,
-        );
-        let label = &flat_node.node.data.label;
-
-        if is_selected {
-            tree_marquee.tick(label.width(), label_width as usize, &marquee_style);
-            MarqueeText::new(label, tree_marquee)
-                .mode(MarqueeMode::Continuous)
-                .text_style(row_style)
-                .render(label_area, buf);
-        } else {
-            MarqueeText::new(label, &mut MarqueeState::new())
-                .mode(MarqueeMode::Static)
-                .text_style(row_style)
-                .render(label_area, buf);
-        }
-    }
+    TreeView::new(nodes, widget)
+        .style(tree_style(theme))
+        .render_item(|node, _selected| node.data.label.clone())
+        .render(tree_area, frame.buffer_mut());
 
     tree_area
 }
