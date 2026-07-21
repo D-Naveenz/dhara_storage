@@ -3,11 +3,6 @@ members = [
     "src/core/dhara_storage_dal",
     "src/core/dhara_storage",
     "src/bindings/dharastorage-ffi",
-    "tooling/dhara_tool/crates/dhara_tool_kernel",
-    "tooling/dhara_tool/crates/dhara_tool_ops",
-    "tooling/dhara_tool/crates/dhara_tool_cli",
-    "tooling/dhara_tool/crates/dhara_tool_tui",
-    "tooling/dhara_tool/crates/dhara_tool",
 ]
 resolver = "3"
 
@@ -22,21 +17,9 @@ homepage = "https://github.com/D-Naveenz/dhara_storage"
 dhara_storage_dal = { version = "0.9.0", path = "src/core/dhara_storage_dal" }
 dhara_storage = { version = "0.9.0", path = "src/core/dhara_storage" }
 
-[patch.crates-io]
-dhara_storage_dal = { path = "src/core/dhara_storage_dal" }
-
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]
 codegen-units = 1   # Allows compiler to perform better optimization.
 lto = true          # Enables Link-time Optimization.
 opt-level = "s"     # Prioritizes small binary size. Use `3` if you prefer speed.
 strip = true        # Ensures debug symbols are removed.
-
-# Operator CLI — built on cache miss in pipeline platform jobs; profile.dist in root Cargo.toml
-[profile.dist]
-inherits = "release"
-opt-level = 3
-lto = true
-codegen-units = 1
-strip = "symbols"
-panic = "abort"

@@ -1,6 +1,6 @@
 # CI/CD Pipeline Flow
 
-Human-readable map of GitHub Actions workflows and where `dhara_tool` is used versus direct CLI commands.
+Human-readable map of GitHub Actions workflows and where `drot` is used versus direct CLI commands.
 
 ## Triggers
 
@@ -52,28 +52,28 @@ flowchart TB
 | Work | CI implementation |
 |------|-------------------|
 | `fmt` / `clippy` / `doc` (core + FFI) | Direct `cargo` on `ubuntu-latest` — **no tool**; [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib (`dhara_storage` / `file_icon_provider`) |
-| `fmt` on `dhara_tool` | Direct `cargo fmt` only (no clippy/doc for tool in CI) |
+| `fmt` on `drot` | Direct `cargo fmt` only (no clippy/doc for tool in CI) |
 | `cargo test` (core crates) | Direct `cargo test` on `platform (linux)` only |
 | `dotnet test` | Direct `dotnet test` on `platform (linux)` only |
 | Native staging (Linux/macOS) | Direct `cargo build -p dharastorage-ffi --release --target …` + copy into `runtimes/` |
-| Native staging (Windows) | `dhara_tool package stage-native --msvc-env` (MSVC re-exec stays in tool) |
-| `dhara_tool` dist build | `cargo build -p dhara_tool --profile dist` on cache miss — Windows (`stage-native`), Linux pack/verify jobs |
+| Native staging (Windows) | `drot package stage-native --msvc-env` (MSVC re-exec stays in tool) |
+| `drot` dist build | `cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist` on cache miss — Windows (`stage-native`), Linux pack/verify jobs |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
-| `package pack` | `dhara_tool package pack` on `NuGet package (linux)` with merged `--native-stage` |
-| `verify package` | `dhara_tool verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
+| `package pack` | `drot package pack` on `NuGet package (linux)` with merged `--native-stage` |
+| `verify package` | `drot verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
 | Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
 | NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
 
-**Linux GUI rule:** on Linux jobs that **link** `dhara_storage` (clippy/tests with default deps) or **build** `dhara_tool`, run [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) first (glib, gtk, pkg-config, wayland). Restoring a cached dist binary alone does not require those packages.
+**Linux GUI rule:** on Linux jobs that **link** `dhara_storage` (clippy/tests with default deps) or **build** `drot`, run [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) first (glib, gtk, pkg-config, wayland). Restoring a cached dist binary alone does not require those packages.
 
 **NativeAOT smoke on Linux:** `NuGet verify (linux)` installs `clang` and `zlib1g-dev` before `verify package`.
 
 ## Tool cache
 
-- **Cache key:** `dhara-tool-{source-hash}-{os-arch}` where `source-hash` is a SHA256 prefix over tracked `tooling/dhara_tool/**`, root `Cargo.toml`, and `Cargo.lock` (computed inline in workflow bash).
+- **Cache key:** `dhara-tool-{source-hash}-{os-arch}` where `source-hash` is a SHA256 prefix over tracked `tooling/drot/**`, root `Cargo.toml`, and `Cargo.lock` (computed inline in workflow bash).
 - **Warmers:** `platform (windows)` saves `windows-x64`; `NuGet package (linux)` and `NuGet verify (linux)` share `linux-x64`.
-- **Version metadata:** `[tool].version` in [`dhara.config.toml`](../dhara.config.toml) is for operator releases and local `ensure-dhara-tool-dist`; CI cache does not key on version.
-- **Binary path:** `target/dist/dhara_tool` (`.exe` on Windows), `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
+- **DROT artifacts:** storage CI downloads `drot-{os-arch}` from `dhara_repo_orchestration` for the pinned `tooling/drot` submodule SHA (secret `DROT_ARTIFACTS_TOKEN`). Local `ensure-drot-dist` builds from the submodule. Tool version is not in `dhara.config.toml`.
+- **Binary path:** `target/dist/drot` (`.exe` on Windows), `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
 
 ## Path-scoped merge publishes
 
@@ -90,9 +90,9 @@ NuGet CD still **requires PR artifacts** from `NuGet package (linux)` at merge s
 
 ### `code quality (linux)`
 
-Direct commands (no `dhara_tool`); [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib:
+Direct commands (no `drot`); [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib:
 
-- `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p dhara_tool --check`
+- `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p drot --check`
 - `cargo clippy` on `dhara_storage` (all targets/features), then `dhara_storage_dal` + `dharastorage-ffi`
 - `cargo doc --no-deps` on core + FFI only
 
@@ -100,8 +100,8 @@ Direct commands (no `dhara_tool`); [`setup-linux-tool-deps`](../.github/actions/
 
 After `code quality (linux)` — **native staging only**:
 
-1. Restore or build `windows-x64` `dhara_tool` from cache.
-2. `dhara_tool package stage-native --msvc-env`.
+1. Restore or build `windows-x64` `drot` from cache.
+2. `drot package stage-native --msvc-env`.
 3. Upload `native-stage-windows`.
 
 ### `platform (linux)`
@@ -121,15 +121,15 @@ After `code quality (linux)` — **native staging only**:
 1. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) on Linux ARM64.
 2. Direct `cargo build` for the platform RID; upload `native-stage-{linux-arm64,macos}`.
 
-CI does **not** run `cargo test -p dhara_tool`; developers validate the tool locally.
+CI does **not** run `cargo test -p drot`; developers validate the tool locally.
 
 ### `NuGet package (linux)`
 
 After all platform jobs:
 
-1. Restore or build `linux-x64` `dhara_tool` (with Linux GUI deps on build).
+1. Restore or build `linux-x64` `drot` (with Linux GUI deps on build).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
-3. `dhara_tool package pack --native-stage target/dist/artifacts/native-stage`
+3. `drot package pack --native-stage target/dist/artifacts/native-stage`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
 
 ### `NuGet verify (linux)`
@@ -137,9 +137,9 @@ After all platform jobs:
 After `NuGet package (linux)`:
 
 1. Install `clang` and `zlib1g-dev` for NativeAOT smoke.
-2. Restore or build `linux-x64` `dhara_tool` (shared cache key with pack job).
+2. Restore or build `linux-x64` `drot` (shared cache key with pack job).
 3. Download `release-native-stage` artifact.
-4. `dhara_tool verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `linux-x64`).
+4. `drot verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `linux-x64`).
 
 ## CD: `publish-crates`
 
@@ -156,14 +156,14 @@ After `NuGet package (linux)`:
 
 ## Local parity
 
-[`ensure-dhara-tool-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] version-gate the dist binary. [`verify-local.ps1`][verify-local-ps1] runs the full tool quality surface (including tool clippy/tests) — stricter than PR CI.
+[`ensure-drot-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] version-gate the dist binary. [`verify-local.ps1`][verify-local-ps1] runs the full tool quality surface (including tool clippy/tests) — stricter than PR CI.
 
 ## Related docs
 
 - [Workspace architecture][architecture] — tool crate DAG
 - [Multi-platform native packaging][native-packaging] — RID staging, artifact SHA pitfalls
 - [Logging conventions][logging] — audit logs under `{tool_root}/logs/`
-- [dhara_tool README][readme-tool] — full command surface
+- [drot README][readme-tool] — full command surface
 - [Docs index][docs-index]
 
 [pipeline-yml]: ../.github/workflows/pipeline.yml
@@ -172,10 +172,10 @@ After `NuGet package (linux)`:
 [workspace-cargo]: ../Cargo.toml
 [verify-local-ps1]: ../tooling/scripts/verify-local.ps1
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
-[ensure-dist-ps1]: ../tooling/scripts/ensure-dhara-tool-dist.ps1
-[ensure-dist-sh]: ../tooling/scripts/ensure-dhara-tool-dist.sh
+[ensure-dist-ps1]: ../tooling/scripts/ensure-drot-dist.ps1
+[ensure-dist-sh]: ../tooling/scripts/ensure-drot-dist.sh
 [logging]: logging.md
 [native-packaging]: native-packaging.md
 [architecture]: architecture.md
-[readme-tool]: ../tooling/dhara_tool/README.md
+[readme-tool]: ../tooling/drot/README.md
 [docs-index]: README.md

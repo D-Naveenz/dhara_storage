@@ -24,14 +24,14 @@ This monorepo has multiple READMEs; each is a real publish or discovery surface:
 | [`src/core/dhara_storage/README.md`][crate-dhara-storage] | **crates.io** (`readme` in Cargo.toml) |
 | [`src/core/dhara_storage_dal/README.md`][crate-dal] | **crates.io** |
 | [`src/bindings/dharastorage-ffi/README.md`][crate-dharastorage] | **crates.io** (`readme` in Cargo.toml) |
-| [`tooling/dhara_tool/README.md`][crate-tool] | **crates.io** |
+| [`tooling/drot/README.md`][crate-tool] | **DROT submodule** (operator CLI/TUI; not crates.io) |
 | [`src/bindings/csharp/Dhara.Storage/README.md`][nuget-readme] | **NuGet** (`PackageReadmeFile` / `dhara.config.toml`) |
 
 When editing a project README, **scope content to that package** — install, API, and examples for that crate or NuGet package only. Link to the root README or `docs/` for workspace-wide context; do not paste the whole monorepo story into every package README.
 
 When editing the **root** README, orient GitHub visitors: what the workspace is, how to build/verify, and where each published package lives.
 
-**Exception:** `tooling/dhara_tool/package/README.md` is internal operator notes for builder assets (excluded from `cargo package`), not a registry README — keep it short; use **reference-docs** tone, not the 8-section layout.
+**Exception:** `tooling/drot/package/README.md` is internal operator notes for builder assets, not a registry README — keep it short; use **reference-docs** tone, not the 8-section layout.
 
 ## Must do
 
@@ -55,6 +55,6 @@ When editing the **root** README, orient GitHub visitors: what the workspace is,
 [crate-dhara-storage]: ../src/core/dhara_storage/README.md
 [crate-dal]: ../src/core/dhara_storage_dal/README.md
 [crate-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
-[crate-tool]: ../tooling/dhara_tool/README.md
+[crate-tool]: ../tooling/drot/README.md
 [nuget-readme]: ../src/bindings/csharp/Dhara.Storage/README.md
 [docs-index]: ../docs/README.md

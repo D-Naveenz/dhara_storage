@@ -1,0 +1,3 @@
+[submodule "tooling/drot"]
+	path = tooling/drot
+	url = https://github.com/D-Naveenz/dhara_repo_orchestration.git

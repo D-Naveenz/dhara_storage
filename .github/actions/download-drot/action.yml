@@ -1,0 +1,49 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Download DROT CLI
+description: Download the drot binary artifact from dhara_repo_orchestration for the tooling/drot submodule SHA
+
+inputs:
+  artifact_name:
+    description: Artifact name (drot-windows-x64 or drot-linux-x64)
+    required: true
+  github_token:
+    description: Token with read access to DROT workflow artifacts
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve DROT submodule SHA
+      id: drot-sha
+      shell: bash
+      run: |
+        set -euo pipefail
+        sha="$(git rev-parse HEAD:tooling/drot)"
+        echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+        echo "DROT submodule SHA: ${sha}"
+
+    - name: Download DROT artifact
+      uses: dawidd6/action-download-artifact@v21
+      with:
+        github_token: ${{ inputs.github_token }}
+        repo: D-Naveenz/dhara_repo_orchestration
+        commit: ${{ steps.drot-sha.outputs.sha }}
+        workflow: pipeline.yml
+        workflow_conclusion: success
+        name: ${{ inputs.artifact_name }}
+        path: target/dist
+
+    - name: Require DROT binary
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -f target/dist/drot.exe ]; then
+          exit 0
+        fi
+        if [ -f target/dist/drot ]; then
+          chmod +x target/dist/drot
+          exit 0
+        fi
+        echo "::error::DROT binary not found in target/dist after artifact download (expected drot or drot.exe)"
+        ls -la target/dist || true
+        exit 1

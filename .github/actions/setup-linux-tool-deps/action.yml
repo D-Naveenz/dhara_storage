@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: Setup Linux tool build dependencies
-description: System packages required to compile dhara_tool and link dhara_storage (file_icon_provider/GTK) on Ubuntu runners
+description: System packages required to link dhara_storage (file_icon_provider/GTK) on Ubuntu runners
 
 runs:
   using: composite

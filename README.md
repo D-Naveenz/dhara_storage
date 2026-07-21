@@ -6,7 +6,7 @@
 
 Dhara Storage is a Rust-first storage and file-analysis workspace with a Windows-first delivery story.
 It ships a native runtime, a C ABI layer, a .NET NuGet package, and operator tooling from one repo.
-Current release line: **0.9.0** (workspace crates and NuGet; `dhara_tool` is independently versioned at **0.8.9**).
+Current release line: **0.9.0** (workspace crates and NuGet; operator tool `drot` is independently versioned in the [DROT](https://github.com/D-Naveenz/dhara_repo_orchestration) submodule).
 
 ## ✨ Key Features
 
@@ -25,7 +25,7 @@ Current release line: **0.9.0** (workspace crates and NuGet; `dhara_tool` is ind
 | Definitions DAL | FlatBuffers, embedded `filedefs.dat` |
 | Native interop | `cdylib` C ABI (`dharastorage`) |
 | Managed bindings | .NET 10 (`Dhara.Storage`) |
-| Operator surface | `dhara_tool` (Clap + ratatui TUI) |
+| Operator surface | `drot` CLI + `drot_tui` (submodule) |
 | CI / release | GitHub Actions, `dhara.config.toml` |
 
 ```
@@ -38,8 +38,8 @@ dhara_storage/
 │   │   ├── dharastorage-ffi/    # C ABI (`dharastorage` cdylib)
 │   │   └── csharp/              # Dhara.Storage NuGet source
 ├── tooling/
-│   ├── dhara_tool/              # Operator CLI (nested workspace)
-│   ├── scripts/                 # ensure-dhara-tool-dist, verify-local (dist quality run)
+│   ├── drot/                    # DROT submodule (operator CLI + TUI)
+│   ├── scripts/                 # ensure-drot-dist, verify-local (dist quality run)
 │   └── output/                  # staged packages (gitignored)
 ├── docs/                        # technical reference
 ├── dhara.config.toml            # shared version + publish metadata
@@ -52,7 +52,7 @@ dhara_storage/
 | `dhara_storage_dal` | [crate readme][readme-dal] | crates.io |
 | `dharastorage` | [crate readme][readme-dharastorage] | native asset in NuGet |
 | `Dhara.Storage` | [package readme][readme-nuget] | NuGet.org |
-| `dhara_tool` | [tool readme][readme-tool] | workspace-only |
+| `drot` | [tool readme][readme-tool] | workspace-only |
 
 ## 🚀 Getting Started & Installation
 
@@ -85,9 +85,9 @@ Shared release metadata lives in [dhara.config.toml][dhara-config] (versions, Nu
 | `CARGO_REGISTRY_TOKEN` | *(secret)* | crates.io publish (`release run`) |
 | `NUGET_API_KEY` | *(secret)* | NuGet.org publish |
 | `NUGET_SOURCE` | `https://api.nuget.org/v3/index.json` | NuGet feed URL |
-| `TOOL_MAX_WORKERS` | `4` | Caps Rayon workers in `dhara_tool` defs builds |
+| `TOOL_MAX_WORKERS` | `4` | Caps Rayon workers in `drot` defs builds |
 
-Local secrets belong in `.env.local`, not in git. Run `cargo run -p dhara_tool -- config env init` to scaffold from the example file.
+Local secrets belong in `.env.local`, not in git. Run `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- config env init` to scaffold from the example file.
 
 ## 🛠️ Usage Examples
 
@@ -115,14 +115,14 @@ dotnet add package Dhara.Storage --version 0.9.0
 **Operator** — verify package shape and dry-run release:
 
 ```powershell
-cargo run -p dhara_tool -- verify package
-cargo run -p dhara_tool -- release run --dry-run
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- verify package
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- release run --dry-run
 ```
 
 **Troubleshooting**
 
 - Missing native RID at runtime → ensure the NuGet package includes your `runtimes/{rid}/native` asset; see [CI/CD reference][ci-cd].
-- Local `dotnet pack` blocked → use `dhara_tool` staging; single-runtime packs are intentionally guarded.
+- Local `dotnet pack` blocked → use `drot` staging; single-runtime packs are intentionally guarded.
 - Wrong worker count in defs builds → set `-w` / `--workers` or `TOOL_MAX_WORKERS`; see [logging reference][logging].
 
 ## ✅ Testing & Quality Assurance
@@ -137,7 +137,7 @@ cargo test -p dhara_storage_dal
 cargo test -p dharastorage-ffi
 
 # NuGet package verification (after native staging)
-cargo run -p dhara_tool -- verify package
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- verify package
 ```
 
 Skip `cargo doc` with `./tooling/scripts/verify-local.ps1 -SkipDocs` when iterating quickly.
@@ -154,7 +154,7 @@ Licensed under [Apache-2.0][license]. See per-crate `Cargo.toml` and the NuGet p
 [readme-dal]: src/core/dhara_storage_dal/README.md
 [readme-dharastorage]: src/bindings/dharastorage-ffi/README.md
 [readme-nuget]: src/bindings/csharp/Dhara.Storage/README.md
-[readme-tool]: tooling/dhara_tool/README.md
+[readme-tool]: tooling/drot/README.md
 [verify-local]: tooling/scripts/verify-local.ps1
 [setup-github-ssh]: tooling/scripts/setup-github-ssh.ps1
 [env-example]: .env.example

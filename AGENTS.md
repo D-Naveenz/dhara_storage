@@ -14,25 +14,25 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 - `src/core/dhara_storage` is the Rust-native core runtime for Dhara Storage.
 - `src/bindings/dharastorage-ffi` is the C ABI layer for managed/native hosts.
 - `src/bindings/csharp/Dhara.Storage` is the active .NET binding project.
-- `dhara_tool` and `dhara.config.toml` are the supported operator surface for configuration, verification, packaging, and publishing flows.
+- Submodule [`tooling/drot`](tooling/drot) ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) provides the operator CLI (`drot`) and TUI (`drot_tui`); `dhara.config.toml` is the product workspace config (not tool version).
 
 ## Local Commands
 
-- Ensure production-shaped tool binary: `./tooling/scripts/ensure-dhara-tool-dist.ps1` (rebuilds only when `target/dist/` version ≠ `tooling/dhara_tool/Cargo.toml`)
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — ensures dist, then `target/dist/dhara_tool -r <repo> quality run` (or rely on `runtime.toml` after first run)
+- Init submodule: `git submodule update --init --recursive`
+- Ensure production-shaped CLI: `./tooling/scripts/ensure-drot-dist.ps1` (rebuilds when `target/dist/drot` version ≠ `tooling/drot/Cargo.toml`)
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — ensures dist, then `target/dist/drot -r <repo> quality run`
 - Windows GitHub SSH + LFS setup: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
-- Active tool development: `cargo run -p dhara_tool` / `cargo test -p dhara_tool` (dev profile; does not replace dist until version bump + ensure)
-- Verify NuGet package shape: `target/dist/dhara_tool -r . --yes verify package` (after ensure) or `cargo run -p dhara_tool -- -r . --yes verify package`
-- **Tool version bump:** update `[tool].version` in `dhara.config.toml` and `[workspace.package].version` in `tooling/dhara_tool/Cargo.toml` in the same commit. **Workspace/NuGet manifest drift** is reconciled on the next tool run (confirm activation, or pass `--yes` in CI/scripts).
+- Active DROT development: work in the orchestration repo (or submodule); `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
+- Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)
+- **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. **Workspace/NuGet manifest drift** is reconciled on the next `drot` run (confirm activation, or pass `--yes` in CI/scripts).
 
 ## CI/CD
 
 - PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
-- **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only; no GUI libs). **Tool** is used for Windows `stage-native --msvc-env`, Linux `package pack` / `verify package`, and optional local/CD flows documented in `docs/`.
-- **Tool cache** in CI is keyed by source hash (`tooling/dhara_tool/**`, root `Cargo.toml`, `Cargo.lock`); Windows platform and Linux pack/verify jobs warm `windows-x64` / `linux-x64` respectively. **Linux tool builds** must run [`setup-linux-tool-deps`](.github/actions/setup-linux-tool-deps/action.yml) first.
+- **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
-- **Tool ↔ DAL:** `dhara_tool_kernel` pins published `dhara_storage_dal` from crates.io; root `[patch.crates-io]` for local co-dev only.
+- **DROT ↔ DAL:** `drot_kernel` pins published `dhara_storage_dal` from crates.io; optional `[patch.crates-io]` inside the DROT workspace for local co-dev.
 
 ## Local Guardrails
 

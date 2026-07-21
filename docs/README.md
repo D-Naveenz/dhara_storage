@@ -9,11 +9,11 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 
 | Doc | Audience | Topic |
 |-----|----------|-------|
-| [Logging conventions][logging] | Operators, agents | `dhara_tool` audit tiers, session lifecycle, TrID phase lines |
+| [Logging conventions][logging] | Operators, agents | `drot` audit tiers, session lifecycle, TrID phase lines |
 | [TUI operation progress][tui-progress] | Operators, agents | Interactive progress bar, discover→commit→tick, per-command rollout |
 | [filedefs.dat / DSFD format][filedefs-dat] | Implementers | Binary layout, metadata footer, defs build pipeline |
 | [Typed C-compatible ABI][typed-abi] | FFI authors | `#[repr(C)]` rules, ownership, Rust ↔ C# marshalling |
-| [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `dhara_tool` touchpoints |
+| [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `drot` touchpoints |
 | [Workspace architecture][architecture] | Agents, contributors | Tool crate DAG, bindings layout, publish split, DAL coupling |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
@@ -26,7 +26,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [dhara_storage_dal][readme-dal] | crates.io |
 | [dharastorage][readme-dharastorage] | Native ABI (NuGet asset) |
 | [Dhara.Storage][readme-nuget] | NuGet.org package readme |
-| [dhara_tool][readme-tool] | Operator CLI (workspace) |
+| [drot][readme-tool] | Operator CLI (workspace) |
 
 ## Conventions
 
@@ -45,7 +45,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [readme-dal]: ../src/core/dhara_storage_dal/README.md
 [readme-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
 [readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
-[readme-tool]: ../tooling/dhara_tool/README.md
+[readme-tool]: ../tooling/drot/README.md
 [logging]: logging.md
 [tui-progress]: tui-progress.md
 [filedefs-dat]: filedefs-dat.md

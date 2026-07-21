@@ -3,12 +3,6 @@ name: Pipeline
 on:
   pull_request:
   workflow_dispatch:
-    inputs:
-      force_tool_rebuild:
-        description: Rebuild dhara_tool dist binaries even when cache exists
-        required: false
-        default: false
-        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -31,6 +25,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -47,7 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p dhara_tool --check
+          cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi --check
           cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
           cargo clippy -p dhara_storage_dal -p dharastorage-ffi --all-targets -- -D warnings
           cargo doc -p dhara_storage --no-deps --all-features
@@ -63,6 +58,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -73,51 +69,17 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Compute dhara_tool source hash
-        id: tool-hash
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256_file() {
-            if command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "$@"
-            else
-              shasum -a 256 "$@"
-            fi
-          }
-          hash=$(
-            {
-              git ls-files 'tooling/dhara_tool'
-              git ls-files 'Cargo.toml' 'Cargo.lock'
-            } | sort -u | while read -r file; do
-              [ -f "$file" ] && sha256_file "$file"
-            done | sha256_file | awk '{print substr($1, 1, 16)}'
-          )
-          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
-
-      - name: Restore dhara_tool cache
-        id: tool-cache
-        uses: actions/cache/restore@v6
+      - name: Download DROT CLI
+        uses: ./.github/actions/download-drot
         with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
-
-      - name: Build dhara_tool on cache miss
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        run: cargo build -p dhara_tool --profile dist
-
-      - name: Save dhara_tool cache
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v6
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-windows-x64
+          artifact_name: drot-windows-x64
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
 
       - name: Stage native assets
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool.exe -r "$GITHUB_WORKSPACE" --yes package stage-native --msvc-env
+          target/dist/drot.exe -r "$GITHUB_WORKSPACE" --yes package stage-native --msvc-env
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -135,6 +97,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -196,6 +159,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -237,6 +201,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -275,6 +240,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -289,49 +255,11 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Compute dhara_tool source hash
-        id: tool-hash
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256_file() {
-            if command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "$@"
-            else
-              shasum -a 256 "$@"
-            fi
-          }
-          hash=$(
-            {
-              git ls-files 'tooling/dhara_tool'
-              git ls-files 'Cargo.toml' 'Cargo.lock'
-            } | sort -u | while read -r file; do
-              [ -f "$file" ] && sha256_file "$file"
-            done | sha256_file | awk '{print substr($1, 1, 16)}'
-          )
-          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
-
-      - name: Restore dhara_tool cache
-        id: tool-cache
-        uses: actions/cache/restore@v6
+      - name: Download DROT CLI
+        uses: ./.github/actions/download-drot
         with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
-
-      - name: Setup Linux tool build dependencies
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: ./.github/actions/setup-linux-tool-deps
-
-      - name: Build dhara_tool on cache miss
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        run: cargo build -p dhara_tool --profile dist
-
-      - name: Save dhara_tool cache
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v6
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
+          artifact_name: drot-linux-x64
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
 
       - name: Download native stages
         uses: actions/download-artifact@v8
@@ -369,7 +297,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes package pack \
+          target/dist/drot -r "$GITHUB_WORKSPACE" --yes package pack \
             --native-stage target/dist/artifacts/native-stage
 
       - name: Write release metadata
@@ -413,6 +341,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           lfs: true
+          submodules: true
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@master
@@ -434,49 +363,11 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Compute dhara_tool source hash
-        id: tool-hash
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256_file() {
-            if command -v sha256sum >/dev/null 2>&1; then
-              sha256sum "$@"
-            else
-              shasum -a 256 "$@"
-            fi
-          }
-          hash=$(
-            {
-              git ls-files 'tooling/dhara_tool'
-              git ls-files 'Cargo.toml' 'Cargo.lock'
-            } | sort -u | while read -r file; do
-              [ -f "$file" ] && sha256_file "$file"
-            done | sha256_file | awk '{print substr($1, 1, 16)}'
-          )
-          echo "hash=${hash}" >> "${GITHUB_OUTPUT}"
-
-      - name: Restore dhara_tool cache
-        id: tool-cache
-        uses: actions/cache/restore@v6
+      - name: Download DROT CLI
+        uses: ./.github/actions/download-drot
         with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
-
-      - name: Setup Linux tool build dependencies
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: ./.github/actions/setup-linux-tool-deps
-
-      - name: Build dhara_tool on cache miss
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        run: cargo build -p dhara_tool --profile dist
-
-      - name: Save dhara_tool cache
-        if: steps.tool-cache.outputs.cache-hit != 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_tool_rebuild)
-        uses: actions/cache/save@v6
-        with:
-          path: target/dist
-          key: dhara-tool-${{ steps.tool-hash.outputs.hash }}-linux-x64
+          artifact_name: drot-linux-x64
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
 
       - name: Download merged native stage
         uses: actions/download-artifact@v8
@@ -488,5 +379,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/dhara_tool -r "$GITHUB_WORKSPACE" --yes verify package \
+          target/dist/drot -r "$GITHUB_WORKSPACE" --yes verify package \
             --native-stage target/dist/artifacts/native-stage

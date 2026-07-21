@@ -116,7 +116,7 @@ FileStorage::from_existing("input.bin")?.copy_to_with_options(
 
 **Troubleshooting**
 
-- Analysis misses expected types → refresh embedded defs via workspace `dhara_tool defs sync-embedded`; see [filedefs reference][filedefs-dat].
+- Analysis misses expected types → refresh embedded defs via workspace `drot defs sync-embedded`; see [filedefs reference][filedefs-dat].
 - No log output → install a `tracing` subscriber before first crate call.
 
 ## ✅ Testing & Quality Assurance

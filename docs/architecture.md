@@ -16,12 +16,12 @@ flowchart TB
     csharp[csharp Dhara.Storage]
   end
 
-  subgraph tool [tooling/dhara_tool]
-    kernel[dhara_tool_kernel]
-    ops[dhara_tool_ops]
-    cli[dhara_tool_cli]
-    tui[dhara_tool_tui]
-    bin[dhara_tool binary]
+  subgraph tool [tooling/drot]
+    kernel[drot_kernel]
+    ops[drot_ops]
+    cli[drot_cli]
+    tui[drot_tui]
+    bin[drot binary]
   end
 
   dal --> runtime
@@ -41,16 +41,16 @@ flowchart TB
 | `src/core/dhara_storage` | Rust-native runtime (crates.io) |
 | `src/bindings/dharastorage-ffi` | C ABI crate (`dharastorage-ffi` package, `dharastorage` lib name) |
 | `src/bindings/csharp/` | `Dhara.Storage` NuGet source, tests, consumer smoke |
-| `tooling/dhara_tool/crates/*` | Nested workspace: kernel → ops → cli/tui → binary |
+| `tooling/drot/crates/*` | Nested workspace: kernel → ops → cli/tui → binary |
 | `dhara.config.toml` | Workspace semver, tool semver, NuGet/CI metadata |
 
 ## Operator tool crates
 
-The operator surface is a **nested Cargo workspace** under `tooling/dhara_tool/`. Version authority for the tool is `[workspace.package].version` in `tooling/dhara_tool/Cargo.toml`, pinned in CI via `[tool].version` in `dhara.config.toml`.
+The operator surface is a **nested Cargo workspace** under `tooling/drot/`. Version authority for the tool is `[workspace.package].version` in `tooling/drot/Cargo.toml`, owned by DROT; storage pins a submodule gitlink only.
 
 ```mermaid
 flowchart LR
-  subgraph kernel [dhara_tool_kernel]
+  subgraph kernel [drot_kernel]
     paths[paths]
     config[repo_config / activation]
     logging[logging]
@@ -59,7 +59,7 @@ flowchart LR
     ctx[ToolContext / CommandResult]
   end
 
-  subgraph ops [dhara_tool_ops]
+  subgraph ops [drot_ops]
     quality[quality]
     verify[verify]
     release[release]
@@ -67,14 +67,14 @@ flowchart LR
     native[native_merge / native_rids]
   end
 
-  subgraph cli [dhara_tool_cli]
+  subgraph cli [drot_cli]
     commands[commands / registry]
     forms[forms]
     runner[runner]
     interactive[interactive state]
   end
 
-  subgraph tui [dhara_tool_tui]
+  subgraph tui [drot_tui]
     screens[screens / widgets]
     app[app.rs event loop]
   end
@@ -83,7 +83,7 @@ flowchart LR
   kernel --> cli
   ops --> cli
   cli --> tui
-  cli --> bin[dhara_tool bin]
+  cli --> bin[drot bin]
   tui --> bin
 ```
 
@@ -91,30 +91,30 @@ flowchart LR
 
 | Layer | Responsibility | Example |
 |-------|----------------|---------|
-| **CLI** (`dhara_tool_cli`) | Arg parsing, command registry, dispatch, form schemas | `version show`, `quality clippy` argv → handler |
-| **Ops** (`dhara_tool_ops`) | Domain workflows shared by CLI and TUI | `quality::run_clippy`, `release::run_cargo_release` |
-| **Kernel** (`dhara_tool_kernel`) | Paths, config activation, logging, defs I/O, subprocess helpers, weighted progress | `detect_config_drift`, `operation_progress` |
+| **CLI** (`drot_cli`) | Arg parsing, command registry, dispatch, form schemas | `version show`, `quality clippy` argv → handler |
+| **Ops** (`drot_ops`) | Domain workflows shared by CLI and TUI | `quality::run_clippy`, `release::run_cargo_release` |
+| **Kernel** (`drot_kernel`) | Paths, config activation, logging, defs I/O, subprocess helpers, weighted progress | `detect_config_drift`, `operation_progress` |
 
-**Version bump example:** `version bump patch` in CLI calls `repo_config::bump_workspace_version` in kernel, which writes `dhara.config.toml` and (on activation) syncs root `Cargo.toml` workspace deps. Tool-only bumps update `[tool].version` and `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` together.
+**Version bump example:** `version bump patch` in CLI calls `repo_config::bump_workspace_version` in kernel, which writes `dhara.config.toml` and (on activation) syncs root `Cargo.toml` workspace deps. Tool version bumps happen only in the DROT repo Cargo.toml.
 
 `app.rs` lives in the **binary crate** because it orchestrates CLI and TUI; neither `cli` nor `tui` can depend on each other without a cycle.
 
-### TUI layout (`dhara_tool_tui`)
+### TUI layout (`drot_tui`)
 
 | Region | Role |
 |--------|------|
-| **Tasks tree** | Favorites + command hierarchy from `dhara_tool_cli::interactive::tree` |
+| **Tasks tree** | Favorites + command hierarchy from `drot_cli::interactive::tree` |
 | **Tabs** | Info, Options, Troubleshooting (warn/error only), System configs (read-only) |
 | **Action panel** | Unit-sum progress bar with % overlay, stage status line, Run/Cancel/Reset |
 | **Chrome** | Title bar (version + repo), bottom command shortcut bar |
 
-Progress is driven by `dhara_tool_kernel::operation_progress` (analyze → discover totals → commit plan → tick stages; unit-sum %). Workflows in `dhara_tool_ops` call progress hooks at subprocess boundaries — not stdout parsing. See [TUI operation progress](tui-progress.md). `dhara_tool_cli::runner` installs `OperationProgressGuard` for interactive runs (no placeholder single-step plan).
+Progress is driven by `drot_kernel::operation_progress` (analyze → discover totals → commit plan → tick stages; unit-sum %). Workflows in `drot_ops` call progress hooks at subprocess boundaries — not stdout parsing. See [TUI operation progress](tui-progress.md). `drot_cli::runner` installs `OperationProgressGuard` for interactive runs (no placeholder single-step plan).
 
-`dhara_tool_cli::registry` is split by command section (`config`, `defs`, `quality`, `package`, `release`) with shared `ui` metadata helpers.
+`drot_cli::registry` is split by command section (`config`, `defs`, `quality`, `package`, `release`) with shared `ui` metadata helpers.
 
 ## Path resolution and config
 
-`dhara_tool` separates **exe_path** (directory of the running binary) from **repo_path** (directory containing `dhara.config.toml`).
+`drot` separates **exe_path** (directory of the running binary) from **repo_path** (directory containing `dhara.config.toml`).
 
 | Anchor | Resolution | Outputs |
 |--------|------------|---------|
@@ -127,7 +127,7 @@ Progress is driven by `dhara_tool_kernel::operation_progress` (analyze → disco
 
 ## Publish pipelines (ops)
 
-Release logic in `dhara_tool_ops::release` splits cleanly for CI:
+Release logic in `drot_ops::release` splits cleanly for CI:
 
 | Workflow | Ops entry | Flags |
 |----------|-----------|-------|
@@ -140,7 +140,7 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 
 | Concern | Mechanism |
 |---------|-----------|
-| **Compile-time DAL** | `dhara_tool_kernel` pins `dhara_storage_dal = { version = "0.9.0" }` from crates.io |
+| **Compile-time DAL** | `drot_kernel` pins `dhara_storage_dal = { version = "0.9.0" }` from crates.io |
 | **Local co-dev** | Root `[patch.crates-io] dhara_storage_dal = { path = "src/core/dhara_storage_dal" }` only |
 | **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `resources/filedefs.dat` — data path, not a path dependency |
 | **Package version read** | `defs_package_version()` uses `dhara_storage_dal::PACKAGE_VERSION` from the linked crate |
@@ -148,10 +148,10 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 | Artifact | Version authority | Typical bump |
 |----------|-------------------|--------------|
 | `dhara_storage` / `_dal` | `[versions].workspace` in `dhara.config.toml` | Minor release |
-| `dhara_tool` | `[tool].version` + `tooling/dhara_tool/Cargo.toml` | Independent tool releases |
-| Tool's `dhara_storage_dal` dep | Semver pin in `dhara_tool_kernel/Cargo.toml` | Patch when publishing hotfix DAL |
+| `drot` | `tooling/drot/Cargo.toml` only | Independent tool releases via submodule pin |
+| Tool's `dhara_storage_dal` dep | Semver pin in `drot_kernel/Cargo.toml` | Patch when publishing hotfix DAL |
 
-CI `pipeline.yml` platform jobs build `dhara_tool` from source on cache miss (patch applies in full workspace builds on developer machines).
+CI `pipeline.yml` platform jobs build `drot` from source on cache miss (patch applies in full workspace builds on developer machines).
 
 ## Related docs
 

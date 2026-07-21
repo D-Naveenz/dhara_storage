@@ -5,7 +5,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/D-Naveenz/dhara_storage/blob/main/LICENSE.txt)
 
 `dhara_storage_dal` is the FlatBuffers-backed data access layer for Dhara Storage file definitions.
-It owns the DSFD on-disk layout, schema-generated accessors, and the runtime `filedefs.dat` package consumed by [dhara_storage][repo-dhara-storage] and [dhara_tool][repo-tool].
+It owns the DSFD on-disk layout, schema-generated accessors, and the runtime `filedefs.dat` package consumed by [dhara_storage][repo-dhara-storage] and [drot][repo-tool].
 
 ## ✨ Key Features
 
@@ -26,7 +26,7 @@ It owns the DSFD on-disk layout, schema-generated accessors, and the runtime `fi
 dhara_storage_dal/
 ├── schema/filedefs.fbs     # canonical FlatBuffers schema
 ├── src/generated/          # flatc output
-├── resources/filedefs.dat  # runtime package (rebuilt by dhara_tool)
+├── resources/filedefs.dat  # runtime package (rebuilt by drot)
 └── src/                    # encode, decode, bundled package loader
 ```
 
@@ -48,7 +48,7 @@ No runtime environment variables. The embedded package path is fixed at `resourc
 Refresh the embedded artifact from the workspace:
 
 ```powershell
-cargo run -p dhara_tool -- defs sync-embedded
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs sync-embedded
 ```
 
 Regenerate Rust accessors after editing the schema:
@@ -69,7 +69,7 @@ Direct DAL entry points include:
 Inspect a built package from the workspace:
 
 ```powershell
-cargo run -p dhara_tool -- defs inspect
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs inspect
 ```
 
 **Troubleshooting**
@@ -94,7 +94,7 @@ Operator build pipeline and audit logs: [filedefs reference][filedefs-dat], [log
 
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
 [repo-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage
-[repo-tool]: https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool
+[repo-tool]: https://github.com/D-Naveenz/dhara_repo_orchestration
 [filedefs-dat]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/filedefs-dat.md
 [logging]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/logging.md
 [docs-rs]: https://docs.rs/dhara_storage_dal

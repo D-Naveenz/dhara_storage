@@ -1,10 +1,10 @@
 # Logging Conventions
 
-This document describes how `dhara_tool` writes operator audit logs — for humans and AI agents diagnosing runs from plain-text files. Prefer one fact per line over JSON or field soup.
+This document describes how `drot` writes operator audit logs — for humans and AI agents diagnosing runs from plain-text files. Prefer one fact per line over JSON or field soup.
 
 ## Run modes
 
-`dhara_tool` picks **direct** or **interactive** automatically (no manual flag):
+`drot` picks **direct** or **interactive** automatically (no manual flag):
 
 | Mode | When | Console | Command stdout | File log |
 |------|------|---------|----------------|----------|
@@ -31,8 +31,8 @@ Generated operator logs live next to the running binary (`tool_root`), not under
 
 | Concept | Meaning |
 |---------|---------|
-| **`tool_root`** | Directory containing the `dhara_tool` executable (canonicalized). Default logs, artifacts, NuGet output. |
-| **`repo_root`** | Dhara Storage workspace root (`dhara.config.toml` + `tooling/dhara_tool/Cargo.toml`). |
+| **`tool_root`** | Directory containing the `drot` executable (canonicalized). Default logs, artifacts, NuGet output. |
+| **`repo_root`** | Dhara Storage workspace root (`dhara.config.toml` + `tooling/drot/Cargo.toml`). |
 
 | Profile | Typical `tool_root` | Default log directory |
 |---------|---------------------|------------------------|
@@ -40,7 +40,7 @@ Generated operator logs live next to the running binary (`tool_root`), not under
 | `cargo run` (dev) | `target/debug/` | `target/debug/logs/` |
 
 - Directory: `{tool_root}/logs/` (override with `--logs-dir`; relative paths join `tool_root`)
-- **One file per calendar day:** `{YYYY-MM-DD}_dhara_tool.log` — all process invocations that day **append** to the same file.
+- **One file per calendar day:** `{YYYY-MM-DD}_drot.log` — all process invocations that day **append** to the same file.
 - After each process exit, a **file-only session record** (separator block) is appended for grep-friendly scanning between invocations.
 
 Session DEBUG records `repo_root`, `tool_root`, `output_dir`, `logs_dir`, flags, and the log path.
@@ -73,7 +73,7 @@ flowchart TB
 
 | Layer | Scope | INFO examples |
 |-------|-------|---------------|
-| **Session bookends** | Whole `dhara_tool` process | `dhara_tool … started`; `dhara_tool exiting …` |
+| **Session bookends** | Whole `drot` process | `drot … started`; `drot exiting …` |
 | **Command run** | One registered command (`CommandRun` RAII) | `building definitions package…`; `built definitions package in 43.7s` |
 | **Pipeline phase** | TrID sub-stages inside a long command | DEBUG only — `phase extract started` |
 
@@ -84,17 +84,17 @@ Timed duration on close belongs to the **command run**, not the session bookend.
 ```mermaid
 flowchart TD
   start[Process start] --> init[Initialize logging]
-  init --> sessionOpen["INFO: dhara_tool VERSION started — mode=..., workers=..."]
+  init --> sessionOpen["INFO: drot VERSION started — mode=..., workers=..."]
   sessionOpen --> debugFlags["DEBUG: flags, log path, resolved paths"]
   debugFlags --> command[CommandRun execute]
-  command --> sessionClose["INFO: dhara_tool exiting CODE — summary"]
+  command --> sessionClose["INFO: drot exiting CODE — summary"]
   sessionClose --> record[File-only session record separator]
 ```
 
 ### Session open (INFO)
 
 ```
-dhara_tool 0.9.0 started — mode=direct, workers=4
+drot 0.9.0 started — mode=direct, workers=4
 ```
 
 Do **not** include the log file path on INFO.
@@ -102,7 +102,7 @@ Do **not** include the log file path on INFO.
 ### Session close (INFO)
 
 ```
-dhara_tool exiting 0 at 2026-07-03T10:25:49.706Z — completed defs.build-trid-xml
+drot exiting 0 at 2026-07-03T10:25:49.706Z — completed defs.build-trid-xml
 ```
 
 ### Session record (file only)
@@ -139,14 +139,14 @@ flowchart LR
 Example slice (defs build in direct mode):
 
 ```
-INFO  dhara_tool 0.9.0 started — mode=direct, workers=4
+INFO  drot 0.9.0 started — mode=direct, workers=4
 INFO  building definitions package…
 DEBUG phase extract started
 DEBUG phase extract finished in 15.4s — extracted archive
 DEBUG phase parse started
 DEBUG TrID transform — parsed=21692, kept=5500, …
 INFO  built definitions package in 43.7s — Output=..., Final Kept=5500
-INFO  dhara_tool exiting 0 at … — completed defs.build-trid-xml
+INFO  drot exiting 0 at … — completed defs.build-trid-xml
 ================================================================================
 session end  exit=0  module=defs.build-trid-xml
 ================================================================================
@@ -158,12 +158,12 @@ During a command run in interactive mode:
 
 - INFO audit lines go to the **file only** (console is OFF).
 - WARN/ERROR go to the **Troubleshooting** panel.
-- The action panel **progress bar** and **status line** come from `ProgressSnapshot` via [`operation_progress`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/operation_progress.rs). See [TUI operation progress](tui-progress.md) for the full lifecycle.
+- The action panel **progress bar** and **status line** come from `ProgressSnapshot` via [`operation_progress`](../tooling/drot/crates/drot_kernel/src/operation_progress.rs). See [TUI operation progress](tui-progress.md) for the full lifecycle.
 - Status priority: **active step detail** (`Parsing definitions (5000/21692)`) → analyzing message → command `activity_label` fallback.
 - The action panel title is fixed (`Actions`).
 - After **4 seconds** (`ELAPSED_UI_THRESHOLD`), elapsed time appends to the status line without overwriting step text. Elapsed is computed on the worker thread at publish time (`install_run_clock`); there is no background progress reporter.
 - Long workflows (defs, quality, package, verify, release) install multi-step plans at runtime; short commands may jump straight to 100% on completion.
-- TrID archive extract reports entry-level progress in the TUI (`Extracting archive (k/N)`) when [`sevenz-rust`](../tooling/dhara_tool/crates/dhara_tool_kernel/Cargo.toml) succeeds; `tar` fallback stays indeterminate.
+- TrID archive extract reports entry-level progress in the TUI (`Extracting archive (k/N)`) when [`sevenz-rust`](../tooling/drot/crates/drot_kernel/Cargo.toml) succeeds; `tar` fallback stays indeterminate.
 
 ## Console progress (direct mode)
 
@@ -200,21 +200,21 @@ TrID transform — parsed=21692, kept=5500, mime_corrected=258, …
 
 ## Message templates (Rust / tracing)
 
-Target: `dhara_tool::audit` for audit events.
+Target: `drot::audit` for audit events.
 
 ```rust
 // Session bookends
-info!(target: "dhara_tool::audit", "dhara_tool {version} started — mode={mode}, workers={workers}");
-info!(target: "dhara_tool::audit", "dhara_tool exiting {code} at {timestamp} — …");
+info!(target: "drot::audit", "drot {version} started — mode={mode}, workers={workers}");
+info!(target: "drot::audit", "drot exiting {code} at {timestamp} — …");
 
 // Command run (via CommandRun)
-info!(target: "dhara_tool::audit", "building definitions package…");
-info!(target: "dhara_tool::audit", "built definitions package in {duration} — {summary}");
+info!(target: "drot::audit", "building definitions package…");
+info!(target: "drot::audit", "built definitions package in {duration} — {summary}");
 
 // Pipeline phase
-debug!(target: "dhara_tool::audit", "phase {name} started");
-debug!(target: "dhara_tool::audit", "phase {name} finished in {duration} — {summary}");
-debug!(target: "dhara_tool::audit", "TrID transform — parsed=…, kept=…, …");
+debug!(target: "drot::audit", "phase {name} started");
+debug!(target: "drot::audit", "phase {name} finished in {duration} — {summary}");
+debug!(target: "drot::audit", "TrID transform — parsed=…, kept=…, …");
 ```
 
 ## Anti-patterns
@@ -232,11 +232,11 @@ debug!(target: "dhara_tool::audit", "TrID transform — parsed=…, kept=…, �
 
 When diagnosing from logs alone:
 
-1. Open `{tool_root}/logs/{date}_dhara_tool.log` for today.
-2. Find `dhara_tool … started` — note mode and workers.
+1. Open `{tool_root}/logs/{date}_drot.log` for today.
+2. Find `drot … started` — note mode and workers.
 3. Find command run open/close: `building …` / `built … in`.
 4. For TrID depth, grep `phase ` and `TrID transform —` (DEBUG; need `--trace` run or default DEBUG visibility).
-5. Read `dhara_tool exiting` and the following `session end` record.
+5. Read `drot exiting` and the following `session end` record.
 
 Grep hints:
 
@@ -253,14 +253,14 @@ grep "session end" logfile
 ## Related docs
 
 - [TUI operation progress][tui-progress] — progress bar lifecycle and per-command rollout
-- [dhara_tool README][readme-tool] — commands, flags, output layout
+- [drot README][readme-tool] — commands, flags, output layout
 - [filedefs.dat / DSFD format][filedefs-dat] — TrID build phases referenced in audit logs
 - [CI/CD pipelines][ci-cd] — direct mode in CI vs interactive GUI locally
 - [Docs index][docs-index]
 
-[command-run]: ../tooling/dhara_tool/crates/dhara_tool_kernel/src/logging/operation.rs
+[command-run]: ../tooling/drot/crates/drot_kernel/src/logging/operation.rs
 [tui-progress]: tui-progress.md
-[readme-tool]: ../tooling/dhara_tool/README.md
+[readme-tool]: ../tooling/drot/README.md
 [filedefs-dat]: filedefs-dat.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md

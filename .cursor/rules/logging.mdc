@@ -30,9 +30,9 @@ TRACE           — line-by-line / per-item detail; highest volume
 
 Do **not** emit DEBUG/TRACE content at INFO. Do **not** use INFO for progress counters when console throttling or `--trace` detail is the right tier.
 
-## Rust / tracing (`dhara_tool`)
+## Rust / tracing (`drot`)
 
-Use `tracing` macros with explicit targets. Audit/operator events: `target: "dhara_tool::audit"`.
+Use `tracing` macros with explicit targets. Audit/operator events: `target: "drot::audit"`.
 
 `log` crate severity (lower number = more severe): Error=1, Warn=2, Info=3, Debug=4, Trace=5.
 
@@ -51,15 +51,15 @@ Logs are for **humans and agents**, not aggregators. Write plain sentences, one 
 
 | Layer | INFO | DEBUG |
 | ----- | ---- | ----- |
-| **Session bookends** | `dhara_tool started`; `dhara_tool exiting` | flags, log path, resolved paths |
+| **Session bookends** | `drot started`; `drot exiting` | flags, log path, resolved paths |
 | **Command run** (`CommandRun`) | `building …`; `built … in {duration}` | command args when needed |
 | **Pipeline phase** | — | `phase {name} started/finished`; `TrID transform —` |
 
 ### Must do
 
 - Wrap every command execute in `CommandRun::begin` / `complete` — always emit close INFO with duration.
-- Session INFO: `dhara_tool {version} started — mode=…, workers=…` — **no log path on INFO**.
-- Daily log: one `{date}_dhara_tool.log` append file + file-only `session end` record after `exiting`.
+- Session INFO: `drot {version} started — mode=…, workers=…` — **no log path on INFO**.
+- Daily log: one `{date}_drot.log` append file + file-only `session end` record after `exiting`.
 - Interactive: TUI `activity_label` + `elapsed_secs` after 4s; no INFO on console.
 - Reduce stage: **no** `(N/total) reduce in progress` lines at any level.
 - `--trace` reduce lines: `({current}/{total}) {file_type} — accepted|rejected: …`; stats once via `TrID transform —` at DEBUG.
@@ -75,4 +75,4 @@ Logs are for **humans and agents**, not aggregators. Write plain sentences, one 
 
 ### When diagnosing
 
-Read `{tool_root}/logs/{date}_dhara_tool.log` → `started` → `building…` / `built … in` → `exiting` → `session end` record. Use `phase ` / `TrID transform` at DEBUG for TrID depth.
+Read `{tool_root}/logs/{date}_drot.log` → `started` → `building…` / `built … in` → `exiting` → `session end` record. Use `phase ` / `TrID transform` at DEBUG for TrID depth.

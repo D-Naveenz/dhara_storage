@@ -1,5 +1,5 @@
-# Ensures target/dist/dhara_tool matches tooling/dhara_tool/Cargo.toml workspace.package.version.
-# Bump [tool].version in dhara.config.toml and workspace.package.version in tooling/dhara_tool/Cargo.toml together when shipping tool changes.
+# Ensures target/dist/drot matches tooling/drot/Cargo.toml workspace.package.version.
+# Tool version lives only in the DROT submodule (https://github.com/D-Naveenz/dhara_repo_orchestration).
 param(
     [switch] $Force
 )
@@ -9,14 +9,17 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 
-$manifestPath = Join-Path $repoRoot "tooling\dhara_tool\Cargo.toml"
+$manifestPath = Join-Path $repoRoot "tooling\drot\Cargo.toml"
+if (-not (Test-Path $manifestPath)) {
+    throw "DROT submodule missing at tooling\drot - run: git submodule update --init --recursive"
+}
 $manifestContent = Get-Content $manifestPath -Raw
 if ($manifestContent -notmatch '(?ms)\[workspace\.package\][^\[]*?version\s*=\s*"([^"]+)"') {
     throw "missing workspace.package.version in $manifestPath"
 }
 $expectedVersion = $Matches[1]
 
-$bin = Join-Path $repoRoot "target\dist\dhara_tool.exe"
+$bin = Join-Path $repoRoot "target\dist\drot.exe"
 $needBuild = [bool]$Force
 
 if (-not $needBuild) {
@@ -40,7 +43,8 @@ else {
 }
 
 if ($needBuild) {
-    cargo build -p dhara_tool --profile dist
+    $env:CARGO_TARGET_DIR = Join-Path $repoRoot "target"
+    cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }

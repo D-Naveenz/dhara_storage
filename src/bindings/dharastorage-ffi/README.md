@@ -43,7 +43,7 @@ Build from the workspace root:
 cargo build -p dharastorage-ffi --release
 ```
 
-Multi-RID packaging uses [dhara_tool `package stage-native`][repo-tool] and [`native merge`][repo-tool] in CI — see [CI/CD reference][ci-cd].
+Multi-RID packaging uses [drot `package stage-native`][repo-tool] and [`native merge`][repo-tool] in CI — see [CI/CD reference][ci-cd].
 
 ## 🔧 Configuration & Environment Variables
 
@@ -89,6 +89,6 @@ Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
 [repo-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage
 [repo-nuget]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/csharp/Dhara.Storage
-[repo-tool]: https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool
+[repo-tool]: https://github.com/D-Naveenz/dhara_repo_orchestration
 [typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md
 [ci-cd]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/ci-cd-pipelines.md

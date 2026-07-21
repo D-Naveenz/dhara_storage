@@ -95,7 +95,7 @@ Upload directly to Skia, ImageSharp, or similar. Encode to PNG in managed code i
 
 - `PlatformNotSupportedException` → check RID matches a packaged `runtimes/{rid}/native` asset.
 - Missing native DLL on local `dotnet build` → build `dharastorage` first; workspace dev copies the local native lib.
-- Do not rely on bare `dotnet pack` for release-shaped packages — use workspace [dhara_tool][repo-tool] staging.
+- Do not rely on bare `dotnet pack` for release-shaped packages — use workspace [drot][repo-tool] staging.
 
 ## ✅ Testing & Quality Assurance
 
@@ -114,6 +114,6 @@ Part of the [Dhara Storage workspace][repo-root]. NuGet package licensed under A
 
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
 [repo-dharastorage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/bindings/dharastorage-ffi
-[repo-tool]: https://github.com/D-Naveenz/dhara_storage/tree/main/tooling/dhara_tool
+[repo-tool]: https://github.com/D-Naveenz/dhara_repo_orchestration
 [typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md
 [ci-cd]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/ci-cd-pipelines.md

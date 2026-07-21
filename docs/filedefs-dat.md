@@ -2,7 +2,7 @@
 
 This document describes the on-disk **Dhara Storage File Definition (DSFD)** package
 used for content-based file-type identification. The canonical runtime artifact is
-`src/core/dhara_storage_dal/resources/filedefs.dat`. It is built by `dhara_tool`, embedded into
+`src/core/dhara_storage_dal/resources/filedefs.dat`. It is built by `drot`, embedded into
 `dhara_storage_dal` at compile time, and consumed by `dhara_storage` at runtime.
 
 ## Overview
@@ -129,7 +129,7 @@ payload:
 ## `packageRevision` semantics
 
 `packageRevision` is a **per-packaging-version build counter**, not a global lifetime
-counter. `dhara_tool` assigns it when building from TrID sources.
+counter. `drot` assigns it when building from TrID sources.
 
 | Existing `filedefs.dat` | `packageVersion` vs current DAL | Next revision |
 |-------------------------|----------------------------------|---------------|
@@ -144,38 +144,38 @@ embedded payload is stale — `defs sync-embedded` compares definition content a
 Example: three rebuilds at DAL `0.6.0` produce revisions `1`, `2`, `3`. After a DAL
 version bump to `0.8.0`, the next build starts again at `1`.
 
-At startup, `dhara_tool` reads the canonical output path, caches revision and version
+At startup, `drot` reads the canonical output path, caches revision and version
 for logging and the GUI workspace snapshot, and updates the cache after each successful write.
-See [`tooling/dhara_tool/crates/dhara_tool_kernel/src/workspace.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/workspace.rs).
+See [`tooling/drot/crates/drot_kernel/src/workspace.rs`](../tooling/drot/crates/drot_kernel/src/workspace.rs).
 
 ## `tags` field
 
 `tags` is a builder-defined `u32` bitfield. The TrID XML pipeline currently writes
-`48` (`VALIDATED_TAGS` in `dhara_tool`). Treat unspecified bits as reserved for
+`48` (`VALIDATED_TAGS` in `drot`). Treat unspecified bits as reserved for
 future builder features.
 
 ## Build pipeline and artifact locations
 
 | Path | Role |
 |------|------|
-| `tooling/dhara_tool/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
-| `tooling/dhara_tool/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
+| `tooling/drot/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
+| `tooling/drot/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
 | `{tool_root}/package/` | Runtime default for TrID input (copied beside binary at build) |
 | `src/core/dhara_storage_dal/resources/filedefs.dat` | Embedded runtime package (published with crate) |
 | `src/core/dhara_storage_dal` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
-| `tooling/dhara_tool/crates/dhara_tool_kernel/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
+| `tooling/drot/crates/drot_kernel/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
 Typical operator commands:
 
 ```powershell
 # Build from the default TrID archive into src/core/dhara_storage_dal/resources/filedefs.dat
-cargo run -p dhara_tool -- defs build-trid-xml -v
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs build-trid-xml -v
 
 # Inspect the current package
-cargo run -p dhara_tool -- defs inspect
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs inspect
 
 # Re-copy / rebuild the embedded runtime artifact when needed
-cargo run -p dhara_tool -- defs sync-embedded
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs sync-embedded
 ```
 
 The sidecar TOML uses the source stem (`triddefs_xml.source.toml` beside
@@ -188,7 +188,7 @@ normalizes to ISO `YYYY-MM-DD` in the output metadata.
 |----------------|----------------|
 | `dhara_storage_dal` | Owns DSFD layout, FlatBuffers schema, XML metadata, encode/decode |
 | `dhara_storage` | Runtime analysis; loads bundled package through DAL |
-| `dhara_tool` | Builds, inspects, syncs, and assigns `packageRevision` |
+| `drot` | Builds, inspects, syncs, and assigns `packageRevision` |
 | `dharastorage` | C ABI for managed hosts; does not parse DSFD layout directly |
 
 Public DAL entry points:
@@ -214,14 +214,14 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 ## Related docs
 
-- [Logging conventions][logging] — audit log format for `dhara_tool` builds
+- [Logging conventions][logging] — audit log format for `drot` builds
 - [dhara_storage_dal README][readme-dal] — crate-local quick reference
-- [dhara_tool package/ notes][package-readme] — shipped TrID build inputs
+- [drot package/ notes][package-readme] — shipped TrID build inputs
 - [CI/CD pipelines][ci-cd] — defs build in release flow
 - [Docs index][docs-index]
 
 [logging]: logging.md
 [readme-dal]: ../src/core/dhara_storage_dal/README.md
-[package-readme]: ../tooling/dhara_tool/package/README.md
+[package-readme]: ../tooling/drot/package/README.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md
