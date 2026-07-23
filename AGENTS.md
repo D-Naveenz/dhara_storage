@@ -1,42 +1,138 @@
 # AGENTS.md
 
-This workspace can use MindVault as optional local AI memory. Keep this file short: it is a router and quick reference, not the knowledge base.
+Read this file before large changes in this workspace. It is the durable product note and AI/dev router for Dhara Storage. MindVault is **not** used here.
 
-## MindVault
+## Human vs AI docs
 
-- Use `$mindvault` / MindVault MCP to resolve the local vault and workspace evidence.
-- Workspace identity is stored in `mindvault.toml` as `workspace_id`.
-- If MindVault tools are unavailable, continue from repo files only.
-- Store durable lessons and cross-workspace principles in MindVault, not in this repository.
+| Surface | Audience | Role |
+|---------|----------|------|
+| `README.md` (root and packages) | Humans | What / why / how to use — outcome language only |
+| This file (`AGENTS.md`) | Humans + AI | Ambition, lineage, architecture, commands, CI, guardrails |
+| `docs/**` | Implementers | ABI, CI maps, DSFD, logging, and other deep reference |
 
-## Purpose
+Cursor rule: [`.cursor/rules/human-ai-docs.mdc`](.cursor/rules/human-ai-docs.mdc).
 
-- `src/core/dhara_storage` is the Rust-native core runtime for Dhara Storage.
-- `src/bindings/dharastorage-ffi` is the C ABI layer for managed/native hosts.
-- `src/bindings/csharp/Dhara.Storage` is the active .NET binding project.
-- Submodule [`tooling/drot`](tooling/drot) ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) provides the operator CLI (`drot`) and TUI (`drot_tui`); `dhara.config.toml` is the product workspace config (not tool version).
+---
 
-## Local Commands
+## Product intent
+
+### Ambition
+
+Cross-platform **local** storage runtime with a handle-based file/directory model and first-class **content-based** file intelligence bundled with storage ops. Not a thin MIME add-on. Not cloud/object storage.
+
+### Goals
+
+- Usable from ordinary libraries and desktop apps (no OS-app / UWP / WinAppSDK lock-in)
+- Same mental model on Windows, Linux, and macOS
+- Transfers with progress and cancellation; directory watching; shell metadata where useful
+- Rust core for memory safety, thread safety, and fearless concurrency under heavy I/O and analysis
+
+### Design lineage (named here — not in READMEs)
+
+Started as a portable answer to `Windows.Storage` (`StorageFile` / `StorageFolder`) limits: those APIs are WinRT/Windows-shaped (capabilities, pickers, known folders, app data) and hard to reuse from a normal library or another OS.
+
+Microsoft Learn documents that [`StorageFile.ContentType`](https://learn.microsoft.com/uwp/api/windows.storage.storagefile.contenttype) is an **extension association** — it does not inspect bytes (rename `.txt` → `.jpg` → reports `image/jpeg`).
+
+A pure C# mimic hit concurrency and system-level limits. The conclusion: implement content signature definitions and the storage runtime in Rust. Today Dhara is **not** a Windows.Storage mimic — it is the stronger, unrestricted model.
+
+### Comparison (agents)
+
+| Topic | Typical platform storage (`Windows.Storage`) | Dhara |
+|-------|-----------------------------------------------|-------|
+| Model | `StorageFile` / `StorageFolder` handles (often brokered) | `StorageFile` / `StorageDirectory` (Rust: `FileStorage` / `DirectoryStorage`) over ordinary absolute paths |
+| “Content type” | Extension association (MS docs) | Opt-in content signatures via bundled `filedefs.dat` → ranked MIME / type |
+| Platform | Windows / WinRT sandbox & pickers | Multi-RID desktop; usable from libraries |
+| Transfers / watch | Uneven progress; watch often external | Progress + cancel; debounced directory watch; shell icon RGBA (+ Windows shell details) |
+
+### Intentionally omitted from READMEs
+
+Agents editing READMEs must **not** add:
+
+- “Inspired by Windows.Storage” or UWP / WinAppSDK war stories
+- Version number as the hero pitch
+- Stack-first / “Rust-first / Windows-first delivery” framing
+- NuGet / C ABI / monorepo trees as the primary story
+- Operator / `drot` / CI / env-secret essays (link `docs/` or this file instead)
+- Architecture dumps, implementation logs, or creation history
+
+### Locked human pitch (source of truth for README leads)
+
+> Dhara Storage is a cross-platform local storage runtime for applications. You work with file and directory handles—read, write, copy, move, watch, and metadata—and when you need to know what a file really is, you get **content-based type intelligence**, not a guess from the extension.
+>
+> Ordinary file APIs stop at paths and bytes. Platform “content type” fields often stop at the name. Dhara combines a storage-handle model with signature-based analysis in one runtime, so business apps and libraries can classify and manage files without a separate MIME stack—and without being locked to one OS app model.
+>
+> The core is written in Rust for memory safety, thread safety, and fearless concurrency under heavy I/O and analysis workloads.
+
+**Why-you-might-use-it (human bullets):**
+
+- Know the real type from file bytes (bundled definitions), not just the extension
+- File and directory handles with transfers that support progress and cancellation
+- Built-in directory watching and shell-aware metadata where the OS provides it
+- Use it from libraries and desktop apps on Windows, Linux, and macOS—same idea everywhere
+- Rust core when concurrency and system-level correctness matter
+
+---
+
+## Architecture map
+
+| Path | Role |
+|------|------|
+| `src/core/dhara_storage` | Rust runtime — analysis, storage handles, ops, watching, metadata |
+| `src/core/dhara_storage_dal` | FlatBuffers DAL + embedded `filedefs.dat` |
+| `src/bindings/dharastorage-ffi` | C ABI (`dharastorage` cdylib) for non-Rust hosts |
+| `src/bindings/csharp/Dhara.Storage` | .NET 10 NuGet — thin managed API over the ABI |
+| `tooling/drot` | Submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) — operator CLI/TUI |
+| `dhara.config.toml` | Shared product versions, NuGet metadata, RIDs (not DROT tool version) |
+
+**Design choices**
+
+- Keep `dhara_storage` Rust-native; solve .NET interop in FFI + `Dhara.Storage`.
+- Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
+- Current product line: **0.9.0** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule.
+
+Deep reference: [docs/README.md](docs/README.md).
+
+---
+
+## Local commands
 
 - Init submodule: `git submodule update --init --recursive`
 - Ensure production-shaped CLI: `./tooling/scripts/ensure-drot-dist.ps1` (rebuilds when `target/dist/drot` version ≠ `tooling/drot/Cargo.toml`)
 - Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — ensures dist, then `target/dist/drot -r <repo> quality run`
-- Windows GitHub SSH + LFS setup: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
+- Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
 - Active DROT development: work in the orchestration repo (or submodule); `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
 - Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)
-- **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. **Workspace/NuGet manifest drift** is reconciled on the next `drot` run (confirm activation, or pass `--yes` in CI/scripts).
+- **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. Workspace/NuGet manifest drift reconciles on the next `drot` run (confirm activation, or `--yes` in CI/scripts).
+
+### Release / env (operator)
+
+Shared metadata: [dhara.config.toml](dhara.config.toml). Secrets in `.env.local` (from `.env.example`), not git.
+
+| Variable | Purpose |
+|----------|---------|
+| `CARGO_REGISTRY_TOKEN` | crates.io publish |
+| `NUGET_API_KEY` | NuGet.org publish |
+| `NUGET_SOURCE` | NuGet feed URL |
+| `TOOL_MAX_WORKERS` | Caps Rayon workers in `drot` defs builds |
+
+Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- config env init`.
+
+---
 
 ## CI/CD
 
-- PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
+- PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
 - **DROT ↔ DAL:** `drot_dhara_storage` pins published `dhara_storage_dal` from crates.io; optional `[patch.crates-io]` inside the DROT workspace for local co-dev.
 
-## Local Guardrails
+---
 
-- Keep `dhara_storage` Rust-native; solve .NET interop constraints in `dharastorage-ffi` and `src/bindings/csharp/Dhara.Storage`.
-- Treat Windows as the primary developer workstation; ship all five 64-bit RIDs via CI merge (`package stage-native` per OS + `native merge`).
-- Repo code, manifests, tests, and workflow files win if a vault note drifts.
-- Do not add local private paths or personal vault locations to this file.
+## Guardrails
+
+- Keep `dhara_storage` Rust-native; interop constraints stay in FFI and `Dhara.Storage`.
+- Treat Windows as the primary workstation; ship all five 64-bit RIDs via CI merge.
+- When rewriting README marketing, use **Product intent → Locked human pitch** above — do not invent a new story.
+- Do not add local private paths to this file.
+- Breaking changes are acceptable pre-1.0; see [`.cursor/rules/breaking-changes.mdc`](.cursor/rules/breaking-changes.mdc).

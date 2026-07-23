@@ -4,97 +4,35 @@
 [![docs.rs](https://img.shields.io/docsrs/dhara_storage_dal)](https://docs.rs/dhara_storage_dal)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/D-Naveenz/dhara_storage/blob/main/LICENSE.txt)
 
-`dhara_storage_dal` is the FlatBuffers-backed data access layer for Dhara Storage file definitions.
-It owns the DSFD on-disk layout, schema-generated accessors, and the runtime `filedefs.dat` package consumed by [dhara_storage][repo-dhara-storage] and [drot][repo-tool].
+`dhara_storage_dal` is the data access layer for Dhara Storage **file definitions**—the signature data that powers content-based type intelligence.
 
-## ✨ Key Features
+It owns the DSFD on-disk layout, FlatBuffers accessors, and the embedded `filedefs.dat` package used at runtime by [dhara_storage][repo-dhara-storage].
 
-- **DSFD container** — fixed header, FlatBuffers payload, XML metadata footer
-- **Encode / decode** — round-trip definition packages to and from disk
-- **Bundled runtime package** — `resources/filedefs.dat` embedded via `include_bytes!`
-- **Shared schema** — one FlatBuffers schema for analysis, tooling, and verification
+Most applications depend on `dhara_storage` instead of this crate directly.
 
-## 📦 Tech Stack & Architecture
-
-| Piece | Role |
-|-------|------|
-| FlatBuffers | Compact binary definition records |
-| `quick-xml` | XML metadata footer parsing |
-| `serde` | Supporting serialization for tooling paths |
-
-```
-dhara_storage_dal/
-├── schema/filedefs.fbs     # canonical FlatBuffers schema
-├── src/generated/          # flatc output
-├── resources/filedefs.dat  # runtime package (rebuilt by drot)
-└── src/                    # encode, decode, bundled package loader
-```
-
-Full binary layout: [filedefs.dat / DSFD reference][filedefs-dat].
-
-## 🚀 Getting Started & Installation
-
-**Prerequisites:** Rust stable. Most apps depend on [dhara_storage][repo-dhara-storage] instead of this crate directly.
+## Install
 
 ```toml
 [dependencies]
 dhara_storage_dal = "0.9.0"
 ```
 
-## 🔧 Configuration & Environment Variables
+## What you get
 
-No runtime environment variables. The embedded package path is fixed at `resources/filedefs.dat` inside this crate.
+- Encode / decode definition packages (DSFD: header, FlatBuffers payload, XML footer)
+- Bundled runtime package at `resources/filedefs.dat`
+- Shared schema for analysis and operator tooling
 
-Refresh the embedded artifact from the workspace:
+Layout details: [filedefs.dat / DSFD reference][filedefs-dat].
 
-```powershell
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs sync-embedded
-```
+## Usage
 
-Regenerate Rust accessors after editing the schema:
+Typical path: call analysis APIs on [dhara_storage][repo-dhara-storage]. Direct DAL entry points include `encode_definition_package`, `decode_definition_package`, `root_definition_package`, and `bundled_definition_package`.
 
-```powershell
-flatc --rust -o src/core/dhara_storage_dal/src/generated src/core/dhara_storage_dal/schema/filedefs.fbs
-```
+## License
 
-## 🛠️ Usage Examples
-
-Typical consumption is indirect through `dhara_storage` analysis APIs.
-Direct DAL entry points include:
-
-- `encode_definition_package` / `decode_definition_package` — full file round-trip
-- `root_definition_package` — borrowed view over an in-memory buffer
-- `bundled_definition_package` — compile-time embedded runtime package
-
-Inspect a built package from the workspace:
-
-```powershell
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs inspect
-```
-
-**Troubleshooting**
-
-- Stale analysis after defs update → run `defs sync-embedded` and rebuild dependents.
-- Schema drift → regenerate `src/generated/` with `flatc` after editing `filedefs.fbs`.
-
-## ✅ Testing & Quality Assurance
-
-```powershell
-cargo test -p dhara_storage_dal
-cargo clippy -p dhara_storage_dal --all-targets -- -D warnings
-```
-
-API docs: [docs.rs/dhara_storage_dal][docs-rs].
-
-## 🤝 Contributing & License
-
-Part of the [Dhara Storage workspace][repo-root]. Licensed under Apache-2.0.
-
-Operator build pipeline and audit logs: [filedefs reference][filedefs-dat], [logging conventions][logging].
+Apache-2.0. Part of the [Dhara Storage workspace][repo-root].
 
 [repo-root]: https://github.com/D-Naveenz/dhara_storage
 [repo-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/tree/main/src/core/dhara_storage
-[repo-tool]: https://github.com/D-Naveenz/dhara_repo_orchestration
 [filedefs-dat]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/filedefs-dat.md
-[logging]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/logging.md
-[docs-rs]: https://docs.rs/dhara_storage_dal
