@@ -1,57 +1,40 @@
 ---
-description: Human README contract, publish surfaces, and docs/ conventions
-alwaysApply: true
+description: Dhara Storage documentation customizations; follow human-project-docs when editing READMEs/AGENTS/docs
+globs: README.md,**/README.md,AGENTS.md,docs/**/*.md
+alwaysApply: false
 ---
 
-# Documentation
+# Documentation (dhara_storage)
 
-Follow [human-ai-docs](human-ai-docs.mdc) for the README vs AGENTS.md boundary. For product “why / ambition / comparison,” read [AGENTS.md → Product intent](../../AGENTS.md) before rewriting marketing prose.
+When creating or editing documentation in this repo, **read and follow the `human-project-docs` skill first**, then apply the customizations below.
 
-## Human README contract
+## Product intent
 
-When creating or editing any `README.md` **except** `docs/README.md`:
+Pitch, exclusions, and design lineage: **[AGENTS.md → Product intent](../../AGENTS.md)**. Do not invent a new product story. Do not put Windows.Storage name-drops or war stories in READMEs.
 
-1. **Overview & pitch** — what it is, why it matters (outcome language; see Product intent).
-2. **Why use it** (root / major packages) — short value bullets.
-3. **Quick start** — prerequisites + one minimal install/usage example.
-4. **Features that matter** — capabilities users feel; not stack trees as the hero.
-5. **Packages / links** — point to sibling READMEs or `docs/` for depth.
-6. **Contributing & license** — brief; no agent prompts or Cursor rules in README body.
-
-Discover facts from that package’s manifest (`Cargo.toml`, `.csproj`, `dhara.config.toml`), code, and workflows. Use **reference-style** markdown links. Prefer linking `docs/` over duplicating ABI, pipeline, or architecture essays.
-
-## Publish and discovery surfaces
+## Publish surfaces
 
 | README | Audience / surface |
 |--------|-------------------|
-| [`README.md`][root-readme] | **GitHub** — product pitch, dual quick start, package map |
-| [`src/core/dhara_storage/README.md`][crate-dhara-storage] | **crates.io** |
-| [`src/core/dhara_storage_dal/README.md`][crate-dal] | **crates.io** |
-| [`src/bindings/dharastorage-ffi/README.md`][crate-dharastorage] | Native ABI (workspace; NuGet asset) |
-| [`src/bindings/csharp/Dhara.Storage/README.md`][nuget-readme] | **NuGet** |
-| [`tooling/drot/README.md`][crate-tool] | **DROT submodule** (operator CLI; not crates.io) |
-| Folder READMEs under `src/`, `tooling/` | **GitHub folder discovery** — short blurbs only |
+| [`README.md`](../../README.md) | GitHub — product overview, package routing |
+| [`src/core/dhara_storage/README.md`](../../src/core/dhara_storage/README.md) | crates.io — Rust runtime |
+| [`src/core/dhara_storage_dal/README.md`](../../src/core/dhara_storage_dal/README.md) | crates.io — definitions DAL |
+| [`src/bindings/dharastorage-ffi/README.md`](../../src/bindings/dharastorage-ffi/README.md) | Native C ABI (NuGet asset) |
+| [`src/bindings/csharp/Dhara.Storage/README.md`](../../src/bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
+| [`tooling/drot/README.md`](../../tooling/drot/README.md) | DROT submodule — operators |
 
-Scope package READMEs to that package. Root README: pitch + how to try it + where packages live — not CI/operator essays.
+No folder-container READMEs. Submodule project READMEs follow the same convention.
 
-**Exception:** `tooling/drot/src/drot_dhara_storage/package/README.md` is internal operator notes — keep short; not the human publish layout.
+## Audience map
 
-## `docs/**` (including `docs/README.md`)
+| Package | Speak to |
+|---------|----------|
+| `dhara_storage`, `dhara_storage_dal` | Rust |
+| `Dhara.Storage` | .NET (native = speed/packaging fact, not a Rust tutorial) |
+| `dharastorage-ffi` | FFI integrators; steer .NET users to NuGet |
+| `drot` | Operators |
 
-- Filename: `docs/<topic>.md` (kebab-case); optional assets under `docs/references/`.
-- Update [docs/README.md][docs-index] when adding a top-level doc.
-- Tone: implementer/operator reference — not product marketing.
+## Exceptions
 
-## Must not
-
-- Put agent prompts, Cursor rules, or skill instructions in any README.
-- Assume only the repo-root README exists or matters.
-- Paste design lineage or stack-first delivery stories that Product intent says to omit from READMEs.
-
-[root-readme]: ../../README.md
-[crate-dhara-storage]: ../../src/core/dhara_storage/README.md
-[crate-dal]: ../../src/core/dhara_storage_dal/README.md
-[crate-dharastorage]: ../../src/bindings/dharastorage-ffi/README.md
-[crate-tool]: ../../tooling/drot/README.md
-[nuget-readme]: ../../src/bindings/csharp/Dhara.Storage/README.md
-[docs-index]: ../../docs/README.md
+- `tooling/drot/src/drot_dhara_storage/package/README.md` — internal operator notes; keep short; not the publish layout.
+- Do not rewrite `docs/**` as product marketing unless asked.

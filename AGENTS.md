@@ -6,11 +6,11 @@ Read this file before large changes in this workspace. It is the durable product
 
 | Surface | Audience | Role |
 |---------|----------|------|
-| `README.md` (root and packages) | Humans | What / why / how to use — outcome language only |
+| `README.md` (root and **project** packages) | Humans | What / why / how to use — outcome language only |
 | This file (`AGENTS.md`) | Humans + AI | Ambition, lineage, architecture, commands, CI, guardrails |
 | `docs/**` | Implementers | ABI, CI maps, DSFD, logging, and other deep reference |
 
-Cursor rule: [`.cursor/rules/human-ai-docs.mdc`](.cursor/rules/human-ai-docs.mdc).
+**Agents:** follow the global **`human-project-docs`** skill, then [`.cursor/rules/documentation.mdc`](.cursor/rules/documentation.mdc) (repo customizations). Project/registry READMEs have priority over the root README. No folder-container READMEs. Submodule project READMEs use the same convention.
 
 ---
 
