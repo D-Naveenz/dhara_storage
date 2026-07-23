@@ -158,12 +158,12 @@ During a command run in interactive mode:
 
 - INFO audit lines go to the **file only** (console is OFF).
 - WARN/ERROR go to the **Troubleshooting** panel.
-- The action panel **progress bar** and **status line** come from `ProgressSnapshot` via [`operation_progress`](../tooling/drot/crates/drot_kernel/src/operation_progress.rs). See [TUI operation progress](tui-progress.md) for the full lifecycle.
+- The action panel **progress bar** and **status line** come from `ProgressSnapshot` via [`operation_progress`](../tooling/drot/src/drot_kernel/src/operation_progress.rs). See [TUI operation progress](tui-progress.md) for the full lifecycle.
 - Status priority: **active step detail** (`Parsing definitions (5000/21692)`) → analyzing message → command `activity_label` fallback.
 - The action panel title is fixed (`Actions`).
 - After **4 seconds** (`ELAPSED_UI_THRESHOLD`), elapsed time appends to the status line without overwriting step text. Elapsed is computed on the worker thread at publish time (`install_run_clock`); there is no background progress reporter.
 - Long workflows (defs, quality, package, verify, release) install multi-step plans at runtime; short commands may jump straight to 100% on completion.
-- TrID archive extract reports entry-level progress in the TUI (`Extracting archive (k/N)`) when [`sevenz-rust`](../tooling/drot/crates/drot_kernel/Cargo.toml) succeeds; `tar` fallback stays indeterminate.
+- TrID archive extract reports entry-level progress in the TUI (`Extracting archive (k/N)`) when [`sevenz-rust`](../tooling/drot/src/drot_dhara_storage/Cargo.toml) succeeds; `tar` fallback stays indeterminate.
 
 ## Console progress (direct mode)
 
@@ -258,7 +258,7 @@ grep "session end" logfile
 - [CI/CD pipelines][ci-cd] — direct mode in CI vs interactive GUI locally
 - [Docs index][docs-index]
 
-[command-run]: ../tooling/drot/crates/drot_kernel/src/logging/operation.rs
+[command-run]: ../tooling/drot/src/drot_kernel/src/logging/operation.rs
 [tui-progress]: tui-progress.md
 [readme-tool]: ../tooling/drot/README.md
 [filedefs-dat]: filedefs-dat.md

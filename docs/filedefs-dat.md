@@ -146,7 +146,7 @@ version bump to `0.8.0`, the next build starts again at `1`.
 
 At startup, `drot` reads the canonical output path, caches revision and version
 for logging and the GUI workspace snapshot, and updates the cache after each successful write.
-See [`tooling/drot/crates/drot_kernel/src/workspace.rs`](../tooling/drot/crates/drot_kernel/src/workspace.rs).
+See [`tooling/drot/src/drot_kernel/src/workspace.rs`](../tooling/drot/src/drot_kernel/src/workspace.rs).
 
 ## `tags` field
 
@@ -158,12 +158,12 @@ future builder features.
 
 | Path | Role |
 |------|------|
-| `tooling/drot/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
-| `tooling/drot/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
+| `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
+| `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
 | `{tool_root}/package/` | Runtime default for TrID input (copied beside binary at build) |
 | `src/core/dhara_storage_dal/resources/filedefs.dat` | Embedded runtime package (published with crate) |
 | `src/core/dhara_storage_dal` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
-| `tooling/drot/crates/drot_kernel/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
+| `tooling/drot/src/drot_dhara_storage/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
 Typical operator commands:
 
@@ -222,6 +222,6 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 [logging]: logging.md
 [readme-dal]: ../src/core/dhara_storage_dal/README.md
-[package-readme]: ../tooling/drot/package/README.md
+[package-readme]: ../tooling/drot/src/drot_dhara_storage/package/README.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md

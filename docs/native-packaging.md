@@ -130,8 +130,8 @@ Directory watch integration tests should **poll for the created file path** afte
 [ci-cd]: ci-cd-pipelines.md
 [readme-tool]: ../tooling/drot/README.md
 [tooling-scripts]: ../tooling/scripts/
-[nuget-rs]: ../tooling/drot/crates/drot_ops/src/nuget.rs
-[native-rids-rs]: ../tooling/drot/crates/drot_ops/src/native_rids.rs
+[nuget-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/nuget.rs
+[native-rids-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
 [csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj

@@ -31,7 +31,7 @@ When editing a project README, **scope content to that package** — install, AP
 
 When editing the **root** README, orient GitHub visitors: what the workspace is, how to build/verify, and where each published package lives.
 
-**Exception:** `tooling/drot/package/README.md` is internal operator notes for builder assets, not a registry README — keep it short; use **reference-docs** tone, not the 8-section layout.
+**Exception:** `tooling/drot/src/drot_dhara_storage/package/README.md` is internal operator notes for builder assets, not a registry README — keep it short; use **reference-docs** tone, not the 8-section layout.
 
 ## Must do
 

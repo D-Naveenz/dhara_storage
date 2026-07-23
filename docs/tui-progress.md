@@ -4,9 +4,9 @@ This document describes how `drot` reports progress in the interactive TUI (and 
 
 ## Problem this solves
 
-Long-running commands previously showed a **0% bar until completion** because [`runner.rs`](../tooling/drot/crates/drot_cli/src/runner.rs) installed a placeholder `begin_single_shot("Running")` step that blocked real multi-step plans. Status text was often overwritten by generic command labels from [`CommandRun`](../tooling/drot/crates/drot_kernel/src/logging/operation.rs).
+Long-running commands previously showed a **0% bar until completion** because [`runner.rs`](../tooling/drot/src/drot_kernel/src/runner.rs) installed a placeholder `begin_single_shot("Running")` step that blocked real multi-step plans. Status text was often overwritten by generic command labels from [`CommandRun`](../tooling/drot/src/drot_kernel/src/logging/operation.rs).
 
-The fix is a **shared discover → commit → tick** lifecycle in [`operation_progress.rs`](../tooling/drot/crates/drot_kernel/src/operation_progress.rs), wired into defs, quality, package, verify, and release workflows.
+The fix is a **shared discover → commit → tick** lifecycle in [`operation_progress.rs`](../tooling/drot/src/drot_kernel/src/operation_progress.rs), wired into defs, quality, package, verify, and release workflows.
 
 ## Lifecycle
 
@@ -49,7 +49,7 @@ Runtime totals come from measured work (file counts, enabled checks, RIDs to bui
 | `ProgressSession` | Thin RAII-style helper wrapping the above |
 | `has_committed_progress_plan()` | True when a real multi-step plan is active |
 
-**Ops helper:** [`workflow_progress.rs`](../tooling/drot/crates/drot_ops/src/workflow_progress.rs) — `begin_workflow`, `run_planned_step`, `run_workflow_step`.
+**Ops helper:** [`workflow_progress.rs`](../tooling/drot/src/drot_dhara_storage/src/ops/workflow_progress.rs) — `begin_workflow`, `run_planned_step`, `run_workflow_step`.
 
 ### Rules for new workflows
 
@@ -62,8 +62,8 @@ Runtime totals come from measured work (file counts, enabled checks, RIDs to bui
 
 | Mode | Sink | Notes |
 | ---- | ---- | ----- |
-| **Interactive (TUI)** | `ProgressSnapshot` channel → [`action_panel.rs`](../tooling/drot/crates/drot_tui/src/widgets/action_panel.rs) | Do not draw `indicatif` to stderr (conflicts with ratatui) |
-| **Direct CLI** | [`logging/progress.rs`](../tooling/drot/crates/drot_kernel/src/logging/progress.rs) throttled stderr | TrID counters on TTY |
+| **Interactive (TUI)** | `ProgressSnapshot` channel → [`action_panel.rs`](../tooling/drot/src/drot_tui/src/widgets/action_panel.rs) | Do not draw `indicatif` to stderr (conflicts with ratatui) |
+| **Direct CLI** | [`trid_progress.rs`](../tooling/drot/src/drot_dhara_storage/src/filedefs/trid_progress.rs) throttled stderr | TrID counters on TTY |
 
 Status line priority in the TUI:
 
@@ -79,13 +79,13 @@ Elapsed seconds (after 4s) append to the step line without clobbering stage text
 
 ## Status flicker fix (thread-local plan)
 
-`OperationPlan` lives in a **`thread_local!`** slot in [`operation_progress.rs`](../tooling/drot/crates/drot_kernel/src/operation_progress.rs). A prior `ElapsedActivityReporter` spawned a background thread that called `publish_snapshot()` every second on that thread’s **empty** plan, alternating the TUI between the command milestone (`building definitions package…`) and real step text (`Parsing definitions (N/M)`).
+`OperationPlan` lives in a **`thread_local!`** slot in [`operation_progress.rs`](../tooling/drot/src/drot_kernel/src/operation_progress.rs). A prior `ElapsedActivityReporter` spawned a background thread that called `publish_snapshot()` every second on that thread’s **empty** plan, alternating the TUI between the command milestone (`building definitions package…`) and real step text (`Parsing definitions (N/M)`).
 
 Fix:
 
-1. Removed the background reporter; [`CommandRun`](../tooling/drot/crates/drot_kernel/src/logging/operation.rs) calls `install_run_clock` on the worker thread only.
+1. Removed the background reporter; [`CommandRun`](../tooling/drot/src/drot_kernel/src/logging/operation.rs) calls `install_run_clock` on the worker thread only.
 2. `elapsed_secs` is derived in `snapshot_from_plan` from the worker-thread clock — not stored on the plan or updated from another thread.
-3. [`progress.rs`](../tooling/drot/crates/drot_kernel/src/logging/progress.rs) no longer calls `set_run_activity` on TrID phase changes; the committed step plan owns status text.
+3. [`trid_progress.rs`](../tooling/drot/src/drot_dhara_storage/src/filedefs/trid_progress.rs) no longer calls `set_run_activity` on TrID phase changes; the committed step plan owns status text. Kernel [`logging/progress.rs`](../tooling/drot/src/drot_kernel/src/logging/progress.rs) is settings-only.
 
 Do not publish progress snapshots from helper threads unless they also own the plan (they should not).
 
@@ -108,7 +108,7 @@ Do not publish progress snapshots from helper threads unless they also own the p
 
 1. **Load source** → `begin_analyzing("Analyzing TrID source…")`
 2. **Analyze archive** → `Analyzing archive …` while entry count is discovered
-3. **Extract archive** → step `extract`, total = archive entry count; ticks every 50 entries via [`sevenz-rust`](https://docs.rs/sevenz-rust) in [`source.rs`](../tooling/drot/crates/drot_kernel/src/filedefs/trid/source.rs). Falls back to `tar -xf` (indeterminate `0/1`) when sevenz fails.
+3. **Extract archive** → step `extract`, total = archive entry count; ticks every 50 entries via [`sevenz-rust`](https://docs.rs/sevenz-rust) in [`source.rs`](../tooling/drot/src/drot_dhara_storage/src/filedefs/trid/source.rs). Falls back to `tar -xf` (indeterminate `0/1`) when sevenz fails.
 4. **Enumerate XML files** → `Reading definition files (N found)` then `set_step_total("parse", N)` and same for `reduce`
 5. **Parse** → `tick_step` every 250 files (sequential and parallel via `emit_trid_progress`)
 6. **Reduce / finalize** → throttled ticks with survivor detail
@@ -130,16 +130,17 @@ Parallel parse uses thread-safe `emit_trid_progress` (mutex in dispatch) instead
 
 | File | Role |
 | ---- | ---- |
-| [`operation_progress.rs`](../tooling/drot/crates/drot_kernel/src/operation_progress.rs) | Plan state, snapshot, `ProgressSession` |
-| [`workflow_progress.rs`](../tooling/drot/crates/drot_ops/src/workflow_progress.rs) | Ops step helpers |
-| [`runner.rs`](../tooling/drot/crates/drot_cli/src/runner.rs) | `OperationProgressGuard`; no placeholder plan |
-| [`operation.rs`](../tooling/drot/crates/drot_kernel/src/logging/operation.rs) | `CommandRun`; elapsed without clobbering steps |
-| [`progress.rs`](../tooling/drot/crates/drot_kernel/src/logging/progress.rs) | TrID dispatch + direct stderr |
-| [`source.rs`](../tooling/drot/crates/drot_kernel/src/filedefs/trid/source.rs) | sevenz extract ticks, enumerate message, parallel parse ticks |
-| [`quality.rs`](../tooling/drot/crates/drot_ops/src/quality.rs) | Quality workflow steps |
-| [`nuget.rs`](../tooling/drot/crates/drot_ops/src/nuget.rs) | Pack / verify / publish / stage-native |
-| [`release.rs`](../tooling/drot/crates/drot_ops/src/release.rs) | Release workflow steps |
-| [`action_panel.rs`](../tooling/drot/crates/drot_tui/src/widgets/action_panel.rs) | Bar + status rendering |
+| [`operation_progress.rs`](../tooling/drot/src/drot_kernel/src/operation_progress.rs) | Plan state, snapshot, `ProgressSession` |
+| [`workflow_progress.rs`](../tooling/drot/src/drot_dhara_storage/src/ops/workflow_progress.rs) | Ops step helpers |
+| [`runner.rs`](../tooling/drot/src/drot_kernel/src/runner.rs) | `OperationProgressGuard`; no placeholder plan |
+| [`operation.rs`](../tooling/drot/src/drot_kernel/src/logging/operation.rs) | `CommandRun`; elapsed without clobbering steps |
+| [`logging/progress.rs`](../tooling/drot/src/drot_kernel/src/logging/progress.rs) | Progress settings only |
+| [`trid_progress.rs`](../tooling/drot/src/drot_dhara_storage/src/filedefs/trid_progress.rs) | TrID dispatch + direct stderr |
+| [`source.rs`](../tooling/drot/src/drot_dhara_storage/src/filedefs/trid/source.rs) | sevenz extract ticks, enumerate message, parallel parse ticks |
+| [`quality.rs`](../tooling/drot/src/drot_dhara_storage/src/ops/quality.rs) | Quality workflow steps |
+| [`nuget.rs`](../tooling/drot/src/drot_dhara_storage/src/ops/nuget.rs) | Pack / verify / publish / stage-native |
+| [`release.rs`](../tooling/drot/src/drot_dhara_storage/src/ops/release.rs) | Release workflow steps |
+| [`action_panel.rs`](../tooling/drot/src/drot_tui/src/widgets/action_panel.rs) | Bar + status rendering |
 
 ## Deferred
 

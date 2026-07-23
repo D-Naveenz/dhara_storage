@@ -32,7 +32,7 @@ This workspace can use MindVault as optional local AI memory. Keep this file sho
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
-- **DROT ↔ DAL:** `drot_kernel` pins published `dhara_storage_dal` from crates.io; optional `[patch.crates-io]` inside the DROT workspace for local co-dev.
+- **DROT ↔ DAL:** `drot_dhara_storage` pins published `dhara_storage_dal` from crates.io; optional `[patch.crates-io]` inside the DROT workspace for local co-dev.
 
 ## Local Guardrails
 
