@@ -1,3 +1,5 @@
+//! Error JSON serialization and status helpers for FFI callers.
+
 use std::path::Path;
 
 use serde::Serialize;

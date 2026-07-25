@@ -1,3 +1,5 @@
+//! Shared transfer options, progress reporting, and path utilities for operations.
+
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};

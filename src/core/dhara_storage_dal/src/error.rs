@@ -1,3 +1,5 @@
+//! Errors while encoding or decoding definition packages.
+
 use thiserror::Error;
 
 /// Errors returned while encoding or decoding definition packages.

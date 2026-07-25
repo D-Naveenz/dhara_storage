@@ -1,3 +1,5 @@
+//! Tokio async wrappers around blocking storage operations (`async-tokio` feature).
+
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 

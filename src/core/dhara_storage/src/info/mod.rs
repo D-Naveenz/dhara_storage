@@ -1,3 +1,5 @@
+//! File and directory information snapshots, shell icons, and related metadata types.
+
 mod common;
 mod directory;
 mod file;

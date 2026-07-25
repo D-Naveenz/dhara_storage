@@ -1,3 +1,5 @@
+//! Domain model for definition packages, records, and signatures.
+
 use crate::generated::dhara::storage::dal as fb;
 
 /// Human-readable signature stored in the XML metadata footer.

@@ -1,3 +1,5 @@
+//! Sync file read/write/copy/move/delete helpers.
+
 use std::fs;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};

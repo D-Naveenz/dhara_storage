@@ -9,8 +9,12 @@ using Dhara.Storage.Models.Watching;
 namespace Dhara.Storage;
 
 /// <summary>
-/// Represents a path-based directory wrapper backed by the native Dhara Storage runtime.
+/// Path-based directory wrapper backed by the native Dhara Storage runtime.
 /// </summary>
+/// <remarks>
+/// Prefer <see cref="DharaStorage.Directory"/> from application code. Supports listing,
+/// transfers, and optional debounced watching via <see cref="Changed"/>.
+/// </remarks>
 public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
 {
     private DirectoryInformation? _cachedInformation;
@@ -22,6 +26,7 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     /// <summary>
     /// Initializes a new instance of the <see cref="StorageDirectory"/> class.
     /// </summary>
+    /// <param name="path">Directory path to wrap; may point to an existing directory or a future create destination.</param>
     public StorageDirectory(string path) : base(path)
     {
     }

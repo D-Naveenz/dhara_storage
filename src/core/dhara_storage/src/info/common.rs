@@ -1,3 +1,5 @@
+//! Shared size formatting and filesystem metadata helpers for info types.
+
 use std::fs::{self, Metadata};
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;

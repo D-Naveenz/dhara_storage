@@ -1,3 +1,5 @@
+//! [`DirectoryInfo`] — opt-in directory metadata and recursive summary.
+
 use std::fs;
 use std::path::Path;
 use std::thread;

@@ -1,3 +1,5 @@
+//! Typed errors for analysis, metadata, and storage operations.
+
 use std::io;
 use std::path::PathBuf;
 

@@ -1,12 +1,14 @@
 ---
-description: Dhara Storage documentation customizations; follow human-project-docs when editing READMEs/AGENTS/docs
+description: Dhara Storage project-surface docs customizations; follow project-docs for README/AGENTS/docs
 globs: README.md,**/README.md,AGENTS.md,docs/**/*.md
 alwaysApply: false
 ---
 
-# Documentation (dhara_storage)
+# Project docs (dhara_storage)
 
-When creating or editing documentation in this repo, **read and follow the `human-project-docs` skill first**, then apply the customizations below.
+When creating or editing README / AGENTS / `docs/` in this repo, **read and follow the `project-docs` skill first**, then apply the customizations below.
+
+Source **documentation comments**, file headers, and why-comments → global skill **`inline-code-docs`** (not this rule).
 
 ## Product intent
 

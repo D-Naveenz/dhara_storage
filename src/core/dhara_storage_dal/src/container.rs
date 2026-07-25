@@ -1,3 +1,5 @@
+//! DSFD on-disk container: header, payload, and XML metadata footer.
+
 use crate::error::DefinitionPackageError;
 use crate::metadata_xml::{deserialize_metadata, serialize_metadata};
 use crate::model::{

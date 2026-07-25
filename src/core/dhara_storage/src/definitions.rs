@@ -1,3 +1,5 @@
+//! Runtime loading and decoding of the bundled file-definition database.
+
 use std::collections::BTreeSet;
 
 use dhara_storage_dal as dal;

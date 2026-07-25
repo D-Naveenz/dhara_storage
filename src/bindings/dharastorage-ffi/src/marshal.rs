@@ -1,3 +1,5 @@
+//! UTF-8 path/string marshalling helpers for FFI boundaries.
+
 use std::ffi::{CStr, c_char};
 use std::path::PathBuf;
 use std::ptr;

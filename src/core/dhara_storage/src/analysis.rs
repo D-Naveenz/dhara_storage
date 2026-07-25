@@ -1,3 +1,7 @@
+//! Content-based file analysis against the bundled definition package.
+//!
+//! Rank paths or readers by signature matches and report MIME / type candidates.
+
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fs::File;
@@ -64,6 +68,14 @@ impl AnalysisReport {
 }
 
 /// Analyze a file on disk using shared-read semantics on Windows.
+///
+/// Scans file bytes against the bundled definition database and returns ranked
+/// type matches (MIME, extensions, content kind).
+///
+/// # Errors
+///
+/// Returns [`StorageError`] when the path cannot be opened or read, or when the
+/// definition package cannot be loaded.
 pub fn analyze_path(path: impl AsRef<Path>) -> Result<AnalysisReport, StorageError> {
     let path = path.as_ref();
     info!(target: "dhara_storage::analysis", path = %path.display(), "starting path analysis");

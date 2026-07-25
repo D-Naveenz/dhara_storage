@@ -1,12 +1,11 @@
-#![deny(missing_docs)]
-
-//! Rust-native storage analysis primitives for the Dhara rewrite.
+//! Rust-native storage and content-analysis primitives for Dhara Storage.
 //!
-//! This crate currently focuses on the first two rewrite milestones:
-//! immutable metadata and content-based analysis backed by the bundled
-//! `filedefs.dat` package, plus a Rust-native file and directory operations
-//! layer with optional async wrappers. The package loader reads filedefs
-//! packages through the shared `dhara_storage_dal` FlatBuffers crate.
+//! This crate provides definition-driven file typing (bundled `filedefs.dat`),
+//! path-based file and directory handles, transfers with optional progress, and
+//! debounced directory watching. The definition package is loaded through
+//! `dhara_storage_dal`.
+
+#![deny(missing_docs)]
 
 /// Content-based file analysis and heuristic classification helpers.
 pub mod analysis;

@@ -1,3 +1,5 @@
+//! Streaming write-session exports for managed hosts.
+
 use std::ffi::c_char;
 use std::fs::{self, OpenOptions};
 use std::ptr;

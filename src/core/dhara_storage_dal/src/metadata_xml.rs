@@ -1,3 +1,5 @@
+//! XML metadata footer serialization for DSFD packages.
+
 use serde::{Deserialize, Serialize};
 
 use crate::error::DefinitionPackageError;

@@ -1,3 +1,5 @@
+//! Shared DTO shaping between Rust core types and FFI JSON/typed paths.
+
 use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 

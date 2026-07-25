@@ -1,3 +1,5 @@
+//! [`FileInfo`] — opt-in file metadata and analysis snapshot.
+
 use std::path::Path;
 use std::thread;
 

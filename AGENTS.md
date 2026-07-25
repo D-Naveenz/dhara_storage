@@ -10,7 +10,7 @@ Read this file before large changes in this workspace. It is the durable product
 | This file (`AGENTS.md`) | Humans + AI | Ambition, lineage, architecture, commands, CI, guardrails |
 | `docs/**` | Implementers | ABI, CI maps, DSFD, logging, and other deep reference |
 
-**Agents:** follow the global **`human-project-docs`** skill, then [`.cursor/rules/documentation.mdc`](.cursor/rules/documentation.mdc) (repo customizations). Project/registry READMEs have priority over the root README. No folder-container READMEs. Submodule project READMEs use the same convention.
+**Agents:** follow the global **`project-docs`** skill, then [`.cursor/rules/project-docs.mdc`](.cursor/rules/project-docs.mdc) (repo customizations) for README / AGENTS / `docs/`. For source **documentation comments**, headers, and why-comments, follow **`inline-code-docs`**. Project/registry READMEs have priority over the root README. No folder-container READMEs. Submodule project READMEs use the same convention.
 
 ---
 

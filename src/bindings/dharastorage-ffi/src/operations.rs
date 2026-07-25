@@ -1,3 +1,5 @@
+//! Background file/directory operations exposed over the C ABI.
+
 use std::ffi::c_char;
 use std::io::Cursor;
 use std::sync::Arc;

@@ -1,3 +1,5 @@
+//! Access to the compile-time embedded `filedefs.dat` package.
+
 use once_cell::sync::Lazy;
 use tracing::debug;
 
