@@ -25,13 +25,13 @@ Use this crate when you want those capabilities from Rust—with memory safety, 
 
 ```toml
 [dependencies]
-dhara_storage = "0.9.0"
+dhara_storage = "0.9.6"
 ```
 
 Optional async:
 
 ```toml
-dhara_storage = { version = "0.9.0", features = ["async-tokio"] }
+dhara_storage = { version = "0.9.6", features = ["async-tokio"] }
 ```
 
 ## Usage

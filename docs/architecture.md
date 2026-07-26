@@ -36,8 +36,8 @@ flowchart TB
 
 | Path | Role |
 |------|------|
-| `src/core/dhara_storage_core` | DSFD framework (schema, model, encode/decode); no embedded defs |
-| `src/core/dhara_storage` | Rust-native runtime; embeds `filedefs.dat` |
+| `src/core/dhara_storage_core` | Framework / abstraction layer (`definitions` = DSFD today; no embedded defs) |
+| `src/core/dhara_storage` | Business runtime; embeds `filedefs.dat` |
 | `src/bindings/dharastorage-ffi` | C ABI crate (`dharastorage-ffi` package, `dharastorage` lib name) |
 | `src/bindings/csharp/` | `Dhara.Storage` NuGet source, tests, consumer smoke |
 | `tooling/drot/src/*` | Nested workspace: kernel → plugin → hosts (tui / binary) |
@@ -137,19 +137,18 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 
 | Concern | Mechanism |
 |---------|-----------|
-| **Compile-time core (Phase A)** | `drot_dhara_storage` depends with `version` + `path` to `../../../../src/core/dhara_storage_core` |
-| **Compile-time core (Phase B)** | crates.io pin `dhara_storage_core = "0.9.0"` plus DROT workspace `[patch.crates-io]` to the local path |
+| **Compile-time codec (interim)** | `drot_dhara_storage` pins published `dhara_storage_dal` from crates.io so orchestration CI builds without a local core tree |
+| **Compile-time core (after publish)** | Switch plugin dep to `dhara_storage_core = "0.9.6"`; optional DROT workspace `[patch.crates-io]` to the local path |
 | **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `src/core/dhara_storage/resources/filedefs.dat` — data path, not a path dependency |
-| **Package version read** | Builder stamps `packageVersion` from `dhara_storage_core::PACKAGE_VERSION` |
+| **Package version read** | Builder stamps `packageVersion` from linked codec crate `PACKAGE_VERSION` (dal interim; core after cutover) |
 
 | Artifact | Version authority | Typical bump |
 |----------|-------------------|--------------|
 | `dhara_storage` / `dhara_storage_core` | `[versions].workspace` in `dhara.config.toml` | Minor release |
 | `drot` | `tooling/drot/Cargo.toml` only | Independent tool releases via submodule pin |
-| Tool's `dhara_storage_core` dep | Semver pin (Phase B) or path+version (Phase A) | Patch when publishing hotfix core |
+| Tool codec dep | crates.io `dhara_storage_dal` (interim) → `dhara_storage_core` after publish | Patch when publishing hotfix codec |
 
-CI `pipeline.yml` platform jobs build `drot` from source on cache miss (path/patch applies in monorepo builds).
-
+CI `pipeline.yml` may download DROT artifacts or build from source; the interim dal pin keeps orchestration artifact builds green.
 ## Related docs
 
 - [CI/CD pipelines][ci-cd] — four-workflow map and path filters

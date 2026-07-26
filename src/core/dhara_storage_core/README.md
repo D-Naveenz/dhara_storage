@@ -4,15 +4,15 @@
 [![docs.rs](https://img.shields.io/docsrs/dhara_storage_core)](https://docs.rs/dhara_storage_core)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/D-Naveenz/dhara_storage/blob/main/LICENSE.txt)
 
-DSFD definition-package framework for Dhara Storage—schema, owned model, and encode/decode for content-signature packages.
+Framework crate for Dhara Storage — the abstraction layer that [`dhara_storage`][runtime] builds on.
 
-Most applications depend on [`dhara_storage`][runtime] instead of this crate. Use `dhara_storage_core` when you need to encode, decode, or inspect definition packages directly. The compile-time embedded `filedefs.dat` asset lives in the runtime crate, not here.
+Most applications depend on the runtime. Use this crate when you need framework primitives directly. The framework grows over time; today it ships **definition-package (DSFD)** support. The compile-time embedded `filedefs.dat` asset lives in the runtime crate, not here.
 
 ## Why this crate
 
-- DSFD on-disk layout (header, FlatBuffers payload, XML footer)
-- Encode / decode definition packages
-- Shared packaging authority semver (`PACKAGE_VERSION`) for tooling
+- Shared foundation for the storage runtime (not a thin rename of a data-access layer)
+- Definition packages: DSFD on-disk layout, encode / decode, owned model
+- Packaging authority semver (`PACKAGE_VERSION`) for tooling
 
 ## Prerequisites
 
@@ -22,16 +22,16 @@ Most applications depend on [`dhara_storage`][runtime] instead of this crate. Us
 
 ```toml
 [dependencies]
-dhara_storage_core = "0.9.0"
+dhara_storage_core = "0.9.6"
 ```
 
 ## Usage
 
-### 1. Prefer the runtime for analysis
+### 1. Prefer the runtime for applications
 
-For typing files in an application, use [`dhara_storage`][runtime] analysis APIs. They consume the bundled package from the runtime crate.
+For typing files and storage handles, use [`dhara_storage`][runtime]. It embeds definitions and owns the business APIs.
 
-### 2. Work with packages directly
+### 2. Work with definition packages
 
 Entry points include:
 

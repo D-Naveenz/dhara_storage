@@ -1,8 +1,8 @@
 //! Encode and decode FlatBuffers definition payloads.
 
-use crate::error::DefinitionPackageError;
-use crate::generated::dhara::storage::core as fb;
-use crate::model::{
+use crate::definitions::error::DefinitionPackageError;
+use crate::definitions::generated::dhara::storage::core as fb;
+use crate::definitions::model::{
     DefinitionPackage, DefinitionPackageView, DefinitionRecord, SignatureDefinition,
     SignaturePattern,
 };
@@ -211,8 +211,8 @@ fn estimate_capacity(package: &DefinitionPackage) -> usize {
 #[cfg(test)]
 mod tests {
     use super::{decode_flatbuffer_payload, encode_flatbuffer_payload, root_flatbuffer_package};
-    use crate::error::DefinitionPackageError;
-    use crate::model::{
+    use crate::definitions::error::DefinitionPackageError;
+    use crate::definitions::model::{
         DefinitionPackage, DefinitionRecord, SignatureDefinition, SignaturePattern,
     };
 

@@ -32,7 +32,7 @@ Pick the surface that matches how you build. Each link is the install-and-usage 
 | If you are… | Use | Guide |
 |-------------|-----|-------|
 | Building in **Rust** | `dhara_storage` | [crates.io / README][readme-dhara-storage] |
-| Working with **file definition** data | `dhara_storage_core` | [crates.io / README][readme-core] |
+| Building on the **framework** (defs encode/decode today) | `dhara_storage_core` | [crates.io / README][readme-core] |
 | Integrating via **C ABI** | `dharastorage` | [FFI README][readme-dharastorage] |
 | Building in **.NET** | `Dhara.Storage` | [NuGet / README][readme-nuget] |
 | Operating releases / defs / packaging | `drot` | [DROT README][readme-tool] |

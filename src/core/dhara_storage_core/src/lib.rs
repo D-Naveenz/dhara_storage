@@ -1,29 +1,24 @@
 #![deny(missing_docs)]
 
-//! Framework crate for Dhara Storage file-definition packages (DSFD).
+//! Framework crate for Dhara Storage — the abstraction layer `dhara_storage` builds on.
 //!
-//! Owns the on-disk package format, FlatBuffers schema, owned model types, and
-//! encode/decode helpers used by the runtime and repository tooling. The
-//! compile-time embedded `filedefs.dat` asset lives in `dhara_storage`, not here.
+//! Today this crate ships definition-package (DSFD) primitives: schema, owned model,
+//! and encode/decode. The business runtime (`dhara_storage`) embeds `filedefs.dat` and
+//! owns analysis, handles, and I/O. Further framework pieces (for example process and
+//! queue primitives) are planned here; they are not part of this release.
 
-mod error;
-mod format;
-mod model;
+pub mod definitions;
 
-/// Generated FlatBuffers accessors.
-pub mod generated {
-    #![allow(clippy::missing_safety_doc)]
-    #![allow(missing_docs)]
-    include!("generated/filedefs_generated.rs");
-}
-
-pub use error::DefinitionPackageError;
-pub use format::{decode_definition_package, encode_definition_package, root_definition_package};
-pub use model::{
+pub use definitions::{
     DEFINITION_PACKAGE_IDENTIFIER, DEFINITION_PACKAGE_SIGNATURE, DSFD_FILE_HEADER_LEN,
-    DSFD_FORMAT_VERSION, DSFD_METADATA_XMLNS, DefinitionPackage, DefinitionPackageView,
-    DefinitionRecord, FILEDEFS_DAT_FILE_NAME, SignatureDefinition, SignaturePattern,
+    DSFD_FORMAT_VERSION, DSFD_METADATA_XMLNS, DefinitionPackage, DefinitionPackageError,
+    DefinitionPackageView, DefinitionRecord, FILEDEFS_DAT_FILE_NAME, SignatureDefinition,
+    SignaturePattern, decode_definition_package, encode_definition_package,
+    root_definition_package,
 };
+
+/// Generated FlatBuffers accessors (stable path for tooling).
+pub use definitions::generated;
 
 /// Semver of the DSFD packaging authority (`dhara_storage_core`).
 pub const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");

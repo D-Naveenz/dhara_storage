@@ -51,8 +51,8 @@ file magic.
 Version 1 (duplicate `DSFD` markers inside the payload and at EOF) is not supported.
 
 Constants and encode/decode logic live in
-[`src/core/dhara_storage_core/src/format/container.rs`](../src/core/dhara_storage_core/src/format/container.rs)
-and [`model.rs`](../src/core/dhara_storage_core/src/model/mod.rs).
+[`src/core/dhara_storage_core/src/definitions/format/container.rs`](../src/core/dhara_storage_core/src/definitions/format/container.rs)
+and [`model`](../src/core/dhara_storage_core/src/definitions/model/mod.rs).
 
 ## FlatBuffers payload
 
@@ -91,7 +91,7 @@ are defined entirely by `payload_length` in the file header.
 Regenerate Rust accessors after editing the schema:
 
 ```powershell
-flatc --rust -o src/core/dhara_storage_core/src/generated src/core/dhara_storage_core/schema/filedefs.fbs
+flatc --rust -o src/core/dhara_storage_core/src/definitions/generated src/core/dhara_storage_core/schema/filedefs.fbs
 ```
 
 ## XML metadata footer
@@ -109,7 +109,7 @@ Machine-readable schema:
 [`src/core/dhara_storage_core/schema/dsfd-metadata.xsd`](../src/core/dhara_storage_core/schema/dsfd-metadata.xsd)
 
 The `xmlns` attribute on the root `dsfd` element must match `DSFD_METADATA_XMLNS` in
-[`model.rs`](../src/core/dhara_storage_core/src/model/mod.rs). That constant is a raw
+[`model`](../src/core/dhara_storage_core/src/definitions/model/mod.rs). That constant is a raw
 GitHub URL to the XSD on the default branch. Local tools validate against the
 checked-in XSD file; the URL is for external consumers once the file is published.
 

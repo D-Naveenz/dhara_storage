@@ -2,7 +2,7 @@
 
 mod constants;
 
-use crate::generated::dhara::storage::core as fb;
+use crate::definitions::generated::dhara::storage::core as fb;
 
 pub(crate) use constants::DSFD_METADATA_XMLNS_LEGACY;
 pub use constants::{

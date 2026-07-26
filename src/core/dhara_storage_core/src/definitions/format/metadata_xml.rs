@@ -2,8 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::error::DefinitionPackageError;
-use crate::model::{
+use crate::definitions::error::DefinitionPackageError;
+use crate::definitions::model::{
     DEFINITION_PACKAGE_SIGNATURE, DSFD_METADATA_XMLNS, DSFD_METADATA_XMLNS_LEGACY,
     DefinitionPackage,
 };
@@ -110,7 +110,7 @@ pub fn deserialize_metadata(
 #[cfg(test)]
 mod tests {
     use super::{deserialize_metadata, serialize_metadata};
-    use crate::model::{DefinitionPackage, DefinitionRecord};
+    use crate::definitions::model::{DefinitionPackage, DefinitionRecord};
 
     fn sample_package() -> DefinitionPackage {
         DefinitionPackage {

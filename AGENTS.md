@@ -77,8 +77,8 @@ Agents editing READMEs must **not** add:
 
 | Path | Role |
 |------|------|
-| `src/core/dhara_storage` | Rust runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
-| `src/core/dhara_storage_core` | DSFD framework — schema, model, encode/decode (no embedded defs) |
+| `src/core/dhara_storage` | Business runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
+| `src/core/dhara_storage_core` | Framework / abstraction layer for the runtime (DSFD definitions today; planned: process/queue primitives) |
 | `src/bindings/dharastorage-ffi` | C ABI (`dharastorage` cdylib) for non-Rust hosts |
 | `src/bindings/csharp/Dhara.Storage` | .NET 10 NuGet — thin managed API over the ABI |
 | `tooling/drot` | Submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) — operator CLI/TUI |
@@ -86,9 +86,10 @@ Agents editing READMEs must **not** add:
 
 **Design choices**
 
+- `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
 - Keep `dhara_storage` Rust-native; solve .NET interop in FFI + `Dhara.Storage`.
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
-- Current product line: **0.9.0** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule.
+- Current product line: **0.9.6** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule.
 
 Deep reference: [docs/README.md](docs/README.md).
 
@@ -125,7 +126,7 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
-- **DROT ↔ core:** While `dhara_storage_core` is unpublished, `drot_dhara_storage` uses `version` + `path` into `src/core/dhara_storage_core`. After crates.io publish: version pin plus optional `[patch.crates-io]` in the DROT workspace for monorepo co-dev.
+- **DROT ↔ core:** Until `dhara_storage_core` is on crates.io, `drot_dhara_storage` keeps compiling against published `dhara_storage_dal` for encode/decode (orchestration CI). Embed sync still writes `src/core/dhara_storage/resources/filedefs.dat`. After core is published: switch the plugin dep to `dhara_storage_core` and optional `[patch.crates-io]` for monorepo co-dev.
 
 ---
 

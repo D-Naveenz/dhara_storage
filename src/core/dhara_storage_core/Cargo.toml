@@ -5,10 +5,10 @@ edition.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "DSFD definition-package framework for Dhara Storage (schema, model, encode/decode)."
+description = "Framework crate for Dhara Storage — abstraction layer used by the business runtime."
 readme = "README.md"
 documentation = "https://docs.rs/dhara_storage_core"
-keywords = ["flatbuffers", "storage", "definitions", "dsfd", "dhara"]
+keywords = ["storage", "framework", "flatbuffers", "definitions", "dhara"]
 categories = ["encoding", "filesystem"]
 
 [lib]

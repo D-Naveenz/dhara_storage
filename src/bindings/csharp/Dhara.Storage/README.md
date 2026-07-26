@@ -23,7 +23,7 @@ The package ships **native** libraries for supported runtimes so storage and ana
 ## Install
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.9.0
+dotnet add package Dhara.Storage --version 0.9.6
 ```
 
 | OS | RIDs |
