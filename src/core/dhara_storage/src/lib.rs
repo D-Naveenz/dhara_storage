@@ -2,8 +2,8 @@
 //!
 //! This crate provides definition-driven file typing (bundled `filedefs.dat`),
 //! path-based file and directory handles, transfers with optional progress, and
-//! debounced directory watching. The definition package is loaded through
-//! `dhara_storage_dal`.
+//! debounced directory watching. Definition package encode/decode lives in
+//! `dhara_storage_core`; this crate embeds and indexes the runtime `filedefs.dat`.
 
 #![deny(missing_docs)]
 

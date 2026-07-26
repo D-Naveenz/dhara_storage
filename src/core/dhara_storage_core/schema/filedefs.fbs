@@ -1,4 +1,4 @@
-namespace dhara.storage.dal;
+namespace dhara.storage.core;
 
 file_extension "dat";
 

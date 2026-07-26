@@ -23,7 +23,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 |--------|---------|
 | [Workspace][root-readme] | GitHub repo landing |
 | [dhara_storage][readme-dhara-storage] | crates.io |
-| [dhara_storage_dal][readme-dal] | crates.io |
+| [dhara_storage_core][readme-core] | crates.io |
 | [dharastorage][readme-dharastorage] | Native ABI (NuGet asset) |
 | [Dhara.Storage][readme-nuget] | NuGet.org package readme |
 | [drot][readme-tool] | Operator CLI (workspace) |
@@ -42,7 +42,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 
 [root-readme]: ../README.md
 [readme-dhara-storage]: ../src/core/dhara_storage/README.md
-[readme-dal]: ../src/core/dhara_storage_dal/README.md
+[readme-core]: ../src/core/dhara_storage_core/README.md
 [readme-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
 [readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: ../tooling/drot/README.md

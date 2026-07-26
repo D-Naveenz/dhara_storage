@@ -99,7 +99,7 @@ Install a `tracing` subscriber in your app if you want structured logs.
 
 ## Related
 
-- File definitions package: [dhara_storage_dal][dal]
+- DSFD framework: [dhara_storage_core][core]
 - Product overview: [Dhara Storage][root]
 - API docs: [docs.rs/dhara_storage][docs-rs]
 
@@ -107,6 +107,6 @@ Install a `tracing` subscriber in your app if you want structured logs.
 
 Apache-2.0.
 
-[dal]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage_dal/README.md
+[core]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage_core/README.md
 [root]: https://github.com/D-Naveenz/dhara_storage
 [docs-rs]: https://docs.rs/dhara_storage

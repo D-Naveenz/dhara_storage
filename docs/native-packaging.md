@@ -118,7 +118,7 @@ Directory watch integration tests should **poll for the created file path** afte
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |
-| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p drot` |
+| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p drot` |
 
 ## Related docs
 

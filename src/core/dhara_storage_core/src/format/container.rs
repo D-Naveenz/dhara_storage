@@ -1,13 +1,15 @@
 //! DSFD on-disk container: header, payload, and XML metadata footer.
 
 use crate::error::DefinitionPackageError;
-use crate::metadata_xml::{deserialize_metadata, serialize_metadata};
+use crate::format::metadata_xml::{deserialize_metadata, serialize_metadata};
 use crate::model::{
     DEFINITION_PACKAGE_IDENTIFIER, DSFD_FILE_HEADER_LEN, DSFD_FORMAT_VERSION, DefinitionPackage,
     DefinitionPackageView,
 };
 
-use super::codec::{decode_flatbuffer_payload, encode_flatbuffer_payload, root_flatbuffer_package};
+use crate::format::codec::{
+    decode_flatbuffer_payload, encode_flatbuffer_payload, root_flatbuffer_package,
+};
 
 const METADATA_LENGTH_LEN: usize = 4;
 
@@ -138,8 +140,8 @@ fn split_file(bytes: &[u8]) -> Result<(&[u8], &[u8]), DefinitionPackageError> {
 #[cfg(test)]
 mod tests {
     use super::{decode_definition_package, encode_definition_package, root_definition_package};
-    use crate::codec::{decode_flatbuffer_payload, encode_flatbuffer_payload};
     use crate::error::DefinitionPackageError;
+    use crate::format::codec::{decode_flatbuffer_payload, encode_flatbuffer_payload};
     use crate::model::{
         DEFINITION_PACKAGE_IDENTIFIER, DefinitionPackage, DefinitionRecord, SignatureDefinition,
         SignaturePattern,

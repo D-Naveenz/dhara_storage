@@ -10,7 +10,7 @@ pub mod dhara {
 pub mod storage {
 
 #[allow(unused_imports, dead_code)]
-pub mod dal {
+pub mod core {
 
 
 pub enum ByteBlobOffset {}

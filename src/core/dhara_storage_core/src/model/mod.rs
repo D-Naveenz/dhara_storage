@@ -1,27 +1,14 @@
 //! Domain model for definition packages, records, and signatures.
 
-use crate::generated::dhara::storage::dal as fb;
+mod constants;
 
-/// Human-readable signature stored in the XML metadata footer.
-pub const DEFINITION_PACKAGE_SIGNATURE: &str = "Dhara Storage File Definition package - DSFD";
+use crate::generated::dhara::storage::core as fb;
 
-/// Four-byte file magic at the start of `filedefs.dat`.
-pub const DEFINITION_PACKAGE_IDENTIFIER: &str = "DSFD";
-
-// SCHEMA_URL — replace branch/tag if the canonical path changes.
-// This URL resolves only after the XSD is committed on the default branch.
-// Local builds validate against the checked-in file; the URL is for consumers.
-/// XML namespace for DSFD metadata documents.
-pub const DSFD_METADATA_XMLNS: &str = "https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd";
-
-/// Current on-disk container format version.
-pub const DSFD_FORMAT_VERSION: u16 = 2;
-
-/// Byte length of the fixed file header at the start of `filedefs.dat`.
-pub const DSFD_FILE_HEADER_LEN: usize = 10;
-
-/// Default file name for embedded file-definition packages.
-pub const FILEDEFS_DAT_FILE_NAME: &str = "filedefs.dat";
+pub(crate) use constants::DSFD_METADATA_XMLNS_LEGACY;
+pub use constants::{
+    DEFINITION_PACKAGE_IDENTIFIER, DEFINITION_PACKAGE_SIGNATURE, DSFD_FILE_HEADER_LEN,
+    DSFD_FORMAT_VERSION, DSFD_METADATA_XMLNS, FILEDEFS_DAT_FILE_NAME,
+};
 
 /// Borrowed FlatBuffers root view over a definition package payload.
 pub type DefinitionPackageView<'a> = fb::DefinitionPackage<'a>;
@@ -29,7 +16,7 @@ pub type DefinitionPackageView<'a> = fb::DefinitionPackage<'a>;
 /// Serialized file-definition package loaded from `filedefs.dat`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DefinitionPackage {
-    /// Version of `dhara_tool` used to build the package.
+    /// Version of the DSFD packaging authority used to build the package.
     pub package_version: String,
     /// ISO `YYYY-MM-DD` release date of the upstream TrID definitions dataset.
     pub definitions_release: String,

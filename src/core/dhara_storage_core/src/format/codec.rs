@@ -1,7 +1,7 @@
 //! Encode and decode FlatBuffers definition payloads.
 
 use crate::error::DefinitionPackageError;
-use crate::generated::dhara::storage::dal as fb;
+use crate::generated::dhara::storage::core as fb;
 use crate::model::{
     DefinitionPackage, DefinitionPackageView, DefinitionRecord, SignatureDefinition,
     SignaturePattern,

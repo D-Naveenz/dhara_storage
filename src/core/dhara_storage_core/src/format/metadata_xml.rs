@@ -3,7 +3,10 @@
 use serde::{Deserialize, Serialize};
 
 use crate::error::DefinitionPackageError;
-use crate::model::{DEFINITION_PACKAGE_SIGNATURE, DSFD_METADATA_XMLNS, DefinitionPackage};
+use crate::model::{
+    DEFINITION_PACKAGE_SIGNATURE, DSFD_METADATA_XMLNS, DSFD_METADATA_XMLNS_LEGACY,
+    DefinitionPackage,
+};
 
 /// Parsed XML metadata from the DSFD file footer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,7 +17,7 @@ pub struct DsfdMetadataXml {
     pub xmlns: String,
     /// Human-readable package signature.
     pub signature: String,
-    /// Semver of the DSFD packaging authority (`dhara_storage_dal`) that produced the file.
+    /// Semver of the DSFD packaging authority (`dhara_storage_core`) that produced the file.
     #[serde(rename = "packageVersion")]
     pub package_version: String,
     /// ISO release date of the upstream definitions dataset.
@@ -47,7 +50,7 @@ impl DsfdMetadataXml {
         self,
         package: &mut DefinitionPackage,
     ) -> Result<(), DefinitionPackageError> {
-        if self.xmlns != DSFD_METADATA_XMLNS {
+        if self.xmlns != DSFD_METADATA_XMLNS && self.xmlns != DSFD_METADATA_XMLNS_LEGACY {
             return Err(DefinitionPackageError::InvalidMetadata {
                 message: format!("unexpected xmlns '{}'", self.xmlns),
             });

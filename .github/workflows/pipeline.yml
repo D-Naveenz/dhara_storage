@@ -42,11 +42,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi --check
+          cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi --check
           cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
-          cargo clippy -p dhara_storage_dal -p dharastorage-ffi --all-targets -- -D warnings
+          cargo clippy -p dhara_storage_core -p dharastorage-ffi --all-targets -- -D warnings
           cargo doc -p dhara_storage --no-deps --all-features
-          cargo doc --no-deps -p dhara_storage_dal -p dharastorage-ffi
+          cargo doc --no-deps -p dhara_storage_core -p dharastorage-ffi
 
   platform-windows:
     name: platform (windows)
@@ -120,7 +120,7 @@ jobs:
         run: |
           set -euo pipefail
           cargo test -p dhara_storage --all-features
-          cargo test -p dhara_storage_dal
+          cargo test -p dhara_storage_core
           cargo test -p dharastorage-ffi
 
       - name: .NET tests

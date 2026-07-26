@@ -40,11 +40,4 @@ pub enum DefinitionPackageError {
         /// Semantic validation failure message.
         message: String,
     },
-
-    /// The bundled package could not be loaded.
-    #[error("failed to load bundled definition package: {message}")]
-    BundledLoad {
-        /// Decode or validation failure message.
-        message: String,
-    },
 }

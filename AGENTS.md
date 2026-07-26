@@ -77,8 +77,8 @@ Agents editing READMEs must **not** add:
 
 | Path | Role |
 |------|------|
-| `src/core/dhara_storage` | Rust runtime — analysis, storage handles, ops, watching, metadata |
-| `src/core/dhara_storage_dal` | FlatBuffers DAL + embedded `filedefs.dat` |
+| `src/core/dhara_storage` | Rust runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
+| `src/core/dhara_storage_core` | DSFD framework — schema, model, encode/decode (no embedded defs) |
 | `src/bindings/dharastorage-ffi` | C ABI (`dharastorage` cdylib) for non-Rust hosts |
 | `src/bindings/csharp/Dhara.Storage` | .NET 10 NuGet — thin managed API over the ABI |
 | `tooling/drot` | Submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) — operator CLI/TUI |
@@ -125,7 +125,7 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
-- **DROT ↔ DAL:** `drot_dhara_storage` pins published `dhara_storage_dal` from crates.io; optional `[patch.crates-io]` inside the DROT workspace for local co-dev.
+- **DROT ↔ core:** While `dhara_storage_core` is unpublished, `drot_dhara_storage` uses `version` + `path` into `src/core/dhara_storage_core`. After crates.io publish: version pin plus optional `[patch.crates-io]` in the DROT workspace for monorepo co-dev.
 
 ---
 

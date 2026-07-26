@@ -81,7 +81,7 @@ flowchart TB
 
 | Filter | Paths (illustrative) | Skips when merge only touches |
 |--------|----------------------|-------------------------------|
-| **cargo_scope** | `src/core/dhara_storage/**`, `src/core/dhara_storage_dal/**`, `dhara.config.toml`, root manifests | `tooling/**`, `docs/**`, bindings-only |
+| **cargo_scope** | `src/core/dhara_storage/**`, `src/core/dhara_storage_core/**`, `dhara.config.toml`, root manifests | `tooling/**`, `docs/**`, bindings-only |
 | **nuget_scope** | `src/core/**`, `src/bindings/**`, `dhara.config.toml`, root manifests | `tooling/**`, `docs/**`, pure markdown |
 
 NuGet CD still **requires PR artifacts** from `NuGet package (linux)` at merge second parent (`HEAD^2`).
@@ -92,8 +92,8 @@ NuGet CD still **requires PR artifacts** from `NuGet package (linux)` at merge s
 
 Direct commands (no `drot`); [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib:
 
-- `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p drot --check`
-- `cargo clippy` on `dhara_storage` (all targets/features), then `dhara_storage_dal` + `dharastorage-ffi`
+- `cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p drot --check`
+- `cargo clippy` on `dhara_storage` (all targets/features), then `dhara_storage_core` + `dharastorage-ffi`
 - `cargo doc --no-deps` on core + FFI only
 
 ### `platform (windows)`
@@ -109,7 +109,7 @@ After `code quality (linux)` — **native staging only**:
 After `code quality (linux)` — **primary test gate**:
 
 1. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml).
-2. Direct Rust tests (`dhara_storage`, `dhara_storage_dal`, `dharastorage-ffi`).
+2. Direct Rust tests (`dhara_storage`, `dhara_storage_core`, `dharastorage-ffi`).
 3. `dotnet test` on `Dhara.Storage.Tests`.
 4. Direct `cargo build` for `linux-x64` native staging.
 5. Upload `native-stage-linux`.
