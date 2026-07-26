@@ -128,7 +128,9 @@ jobs:
         run: |
           set -euo pipefail
           tests_project=$(grep -E '^\s*tests_project\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-          dotnet test "$tests_project"
+          # GTK shell icons need a display; runners are headless without Xvfb.
+          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
+            dotnet test "$tests_project"
 
       - name: Stage native assets
         shell: bash

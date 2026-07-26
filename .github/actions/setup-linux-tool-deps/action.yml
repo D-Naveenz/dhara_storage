@@ -15,5 +15,7 @@ runs:
           pkg-config \
           libglib2.0-dev \
           libgtk-3-dev \
+          libegl-mesa0 \
           libwayland-dev \
-          libxkbcommon-dev
+          libxkbcommon-dev \
+          xvfb
