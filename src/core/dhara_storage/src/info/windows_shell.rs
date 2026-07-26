@@ -1,3 +1,5 @@
+//! Windows shell display name and type metadata (Windows only).
+
 /// Windows shell display metadata loaded lazily when requested.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShellDetails {

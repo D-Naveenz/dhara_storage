@@ -1,3 +1,5 @@
+//! Debounced directory watching and change-event types.
+
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};

@@ -57,4 +57,4 @@ NativeFileInformationV1 + V2 both mapped; old JSON export kept “for compatibil
 #[deprecated] old_fn that forwards to new_fn indefinitely.
 ```
 
-After breaking work: update in-repo call sites, `dhara_tool` verify paths, binding tests, and README when behavior or packaging changes.
+After breaking work: update in-repo call sites, `drot` verify paths, binding tests, and README when behavior or packaging changes.

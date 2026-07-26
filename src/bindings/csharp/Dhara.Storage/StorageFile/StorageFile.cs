@@ -9,8 +9,12 @@ using Dhara.Storage.Models.Progress;
 namespace Dhara.Storage;
 
 /// <summary>
-/// Represents a path-based file wrapper backed by the native Dhara Storage runtime.
+/// Path-based file wrapper backed by the native Dhara Storage runtime.
 /// </summary>
+/// <remarks>
+/// Prefer <see cref="DharaStorage.File"/> from application code. The wrapper caches
+/// metadata snapshots; call <see cref="RefreshInformation"/> after external changes.
+/// </remarks>
 public sealed class StorageFile : StorageItemBase, IStorageFile
 {
     private FileInformation? _cachedInformation;
@@ -19,6 +23,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     /// <summary>
     /// Initializes a new instance of the <see cref="StorageFile"/> class.
     /// </summary>
+    /// <param name="path">File path to wrap; may point to an existing file or a future write destination.</param>
     public StorageFile(string path) : base(path)
     {
     }

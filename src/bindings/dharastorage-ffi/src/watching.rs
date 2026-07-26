@@ -1,3 +1,5 @@
+//! Directory watch handle exports for the C ABI.
+
 use std::ffi::c_char;
 use std::ptr;
 use std::time::Duration;

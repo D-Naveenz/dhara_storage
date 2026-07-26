@@ -2,15 +2,15 @@
   "version": "0.2.0",
   "inputs": [
     {
-      "id": "dharaToolArgs",
+      "id": "drotArgs",
       "type": "promptString",
-      "description": "dhara_tool CLI args after '--' (empty for GUI / no subcommand)",
+      "description": "drot CLI args after '--' (empty prints help)",
       "default": ""
     }
   ],
   "configurations": [
     {
-      "name": "Debug dhara_tool (dev)",
+      "name": "Debug drot (dev)",
       "type": "lldb",
       "request": "launch",
       "cwd": "${workspaceFolder}",
@@ -18,46 +18,55 @@
       "cargo": {
         "args": [
           "run",
+          "--manifest-path",
+          "tooling/drot/Cargo.toml",
           "-p",
-          "dhara_tool",
+          "drot",
           "--"
         ],
         "filter": {
-          "name": "dhara_tool",
+          "name": "drot",
           "kind": "bin"
         }
       },
       "args": []
     },
     {
-      "name": "Debug dhara_tool tests",
+      "name": "Debug drot_tui (dev)",
       "type": "lldb",
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "sourceLanguages": ["rust"],
       "cargo": {
-        "args": ["test", "-p", "dhara_tool", "--no-run"],
+        "args": [
+          "run",
+          "--manifest-path",
+          "tooling/drot/Cargo.toml",
+          "-p",
+          "drot_tui",
+          "--"
+        ],
         "filter": {
-          "name": "dhara_tool",
-          "kind": "lib"
+          "name": "drot_tui",
+          "kind": "bin"
         }
       },
       "args": []
     },
     {
-      "name": "Run dhara_tool (dist)",
+      "name": "Run drot (dist)",
       "type": "lldb",
       "request": "launch",
-      "preLaunchTask": "dhara-tool: ensure dist",
+      "preLaunchTask": "drot: ensure dist",
       "cwd": "${workspaceFolder}",
       "windows": {
-        "program": "${workspaceFolder}/target/dist/dhara_tool.exe"
+        "program": "${workspaceFolder}/target/dist/drot.exe"
       },
       "linux": {
-        "program": "${workspaceFolder}/target/dist/dhara_tool"
+        "program": "${workspaceFolder}/target/dist/drot"
       },
       "osx": {
-        "program": "${workspaceFolder}/target/dist/dhara_tool"
+        "program": "${workspaceFolder}/target/dist/drot"
       }
     },
     {

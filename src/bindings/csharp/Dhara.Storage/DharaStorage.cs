@@ -8,6 +8,15 @@ namespace Dhara.Storage;
 /// <summary>
 /// Entry points for creating strongly typed storage wrappers and running direct metadata queries.
 /// </summary>
+/// <remarks>
+/// <para>
+/// Prefer these factories from application code. Paths may refer to existing items or future
+/// destinations. Content analysis uses the native definition database (not extension-only MIME).
+/// </para>
+/// <para>
+/// The package loads a native runtime for supported RIDs so I/O and analysis run at native speed.
+/// </para>
+/// </remarks>
 public static class DharaStorage
 {
     /// <summary>

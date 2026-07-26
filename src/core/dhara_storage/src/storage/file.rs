@@ -1,3 +1,5 @@
+//! [`FileStorage`] — path-based file handle for I/O, transfers, and metadata.
+
 use std::io::Read;
 use std::path::{Path, PathBuf};
 

@@ -1,144 +1,122 @@
 # Changelog
 
-All notable changes to Dhara Storage are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
-uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] — 2026-07-02
-
-Compared to [v0.8.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.8.0).
+## Unreleased - 2026-07-09
 
 ### Added
-
-- **Portable repository anchoring** — `-r` / `--repository` (directory or `dhara.config.toml`); `{exe_path}/runtime.toml` caches the repo for repeat launches; GUI blocking repository picker with browse dialog.
-- **NuGet branding assets** — package icon under `src/bindings/csharp/Dhara.Storage/assets/`.
-- **Monorepo bindings layout** — C ABI crate at `src/bindings/dharastorage-ffi` (package `dharastorage-ffi`, stable `dharastorage` lib/DLL name); .NET projects under `src/bindings/csharp/`.
-- **Nested `dhara_tool` workspace** — `dhara_tool_kernel`, `dhara_tool_ops`, `dhara_tool_cli`, `dhara_tool_gui`, and slim binary crate under `tooling/dhara_tool/crates/`.
-- **GUI primitives-first layout** — iced widgets (`panel`, `button`, `field`, `input`, `select`, `tabs`, `scroll_area`, `separator`, `progress`, `stepper`, `path_field`) plus promoted compositions (`tab_view`, `tree_row`, `action_bar`, `modal_overlay`); screens split into `shell`, `nav`, `options`, `terminal`, `history`, `activation`, `repo_setup`.
-- **CLI module splits** — `dhara_tool_cli::commands` by domain (`config`, `defs`, `quality`, `package`); `registry` by section (`config`, `defs`, `quality`, `package`, `release`) with shared `ui` metadata.
-- **Split publish workflows** — `publish-crates.yml` and `publish-nuget.yml` with path-scoped triggers; `pipeline.yml` is PR-only (artifacts). `workflow_dispatch` remains the manual escape hatch.
-- **`docs/architecture.md`** — tool crate DAG, bindings layout, GUI widget tiers, publish split, and registry DAL coupling.
-- **Interactive GUI** — iced-based operator UI (tabs, tree navigation, command forms) replaces the prior TUI.
-- **Granular `dhara_tool` CI commands** — `quality *`, `native merge`, and `package stage-native --msvc-env` replace removed shell wrappers.
-- **Startup config activation** — on launch, `dhara_tool` detects manifest drift from `dhara.config.toml` and prompts to apply (`--yes`/`-y` for CI); replaces `config sync`.
-- **`dhara-tool-build` workflow** — version-keyed Actions cache builds `profile.dist` binaries per OS; pipeline jobs restore cached tools instead of compiling each run.
-- **Independent tool versioning** — `[tool].version` in `dhara.config.toml` keys CI cache; after **0.9.0**, tool semver can diverge from workspace crates (bump `[tool].version` and `tooling/dhara_tool/Cargo.toml` `[workspace.package].version` together).
+- Added ratatui-based TUI replacing iced GUI with a three-panel layout and interactive task tree adapter module supporting keyboard and mouse input.
+- Added multi-step operation progress bar and status tracking in TUI with detailed extract progress reporting (e.g., "Extracting archive (k/N)").
+- Added CommandRun RAII guard for consistent audit logging of command lifecycle events with elapsed time.
+- Added InteractiveDiagnosticLayer to route WARN/ERROR logs to TUI panel in interactive mode.
+- Added mouse event handling and marquee text support for task tree UI.
+- Added modal dialogs for repository setup and activation prompts with full keyboard and mouse support.
+- Added daily log file appending with session end records for improved log aggregation.
+- Added CLI launch logic to detect interactive terminals and launch TUI instead of GUI.
+- Added Linux GUI and pkg-config dependency installation step in CI workflows.
+- Added semantic version snapshot comparison in cargo_toml sync to avoid unnecessary rewrites.
 
 ### Changed
-
-- **Version bump** — workspace crates (`dhara_storage`, `dhara_storage_dal`, `dharastorage-ffi`), NuGet package metadata, embedded `filedefs.dat`, and `dhara_tool` synchronized to **0.9.0**.
-- **Tool crate versioning** — `dhara_tool` member crates inherit `[workspace.package].version` via `version.workspace = true`; no per-crate version pins.
-- **Repository detection** — `is_repo_root` requires only `dhara.config.toml`; no cwd/exe discovery.
-- **Operator output paths** — logs, scratch artifacts, and NuGet output anchor to `exe_path` (`{tool_root}/logs`, `{tool_root}/artifacts`, `{tool_root}/output`); workspace sources (`filedefs.dat`, TrID inputs) stay repo-relative.
-- **Embedded defs** — `filedefs.dat` package metadata at **0.9.0**; `sync-embedded` treats `package_version` drift as stale.
-- **Tool ↔ DAL coupling** — `dhara_tool_kernel` pins published `dhara_storage_dal` from crates.io; root `[patch.crates-io]` supports local co-development only.
-- **Build profiles** — removed `[profile.ci]`; operator CLI uses `[profile.dist]` (optimized; rebuild on tool version bump).
-- **Pipeline** — PR jobs invoke `target/dist/dhara_tool -r $GITHUB_WORKSPACE …`; `verify-local` passes `-r` to the repo root.
-- **`dhara-tool-build`** — `cargo test -p dhara_tool` runs once on Linux; matrix legs only compile `profile.dist` per OS (binaries are not portable).
-- **Linux-primary orchestration** — `quality`, `publish-readiness`, and CD publish jobs run on `ubuntu-latest` with `linux-x64` tool cache; `platform-windows` remains on `windows-latest` for MSVC native DLL builds.
-- **Config activation** — `dhara.config.toml` is truth for workspace/NuGet metadata; manifests sync on confirmed startup (or `--yes`).
-- **PR tool cache** — `restore-dhara-tool` builds `profile.dist` on cache miss so PR pipelines do not depend on caches warmed only on `development`/`main`.
+- Replaced iced-based GUI with ratatui-based TUI for dhara_tool operator interface.
+- Simplified action panel title to constant "Actions" and standardized progress step labels without dynamic counts or "— done" suffix.
+- Improved TrID .7z archive extraction using sevenz-rust with fallback to tar extraction.
+- Refined TUI UI styling: bold warning style for tree view selection, removed cursor indicators, reduced vertical spacing, and simplified command bar and title bar styling.
+- Refactored TUI app state to include focus management, tab views, and modular input handling using ratatui_interact.
+- Refactored quality, package, verify, and release workflows to use planned multi-step progress lifecycle with nested plan detection.
+- Changed daily log files to append all sessions instead of overwriting.
+- Updated CLI to launch TUI on interactive terminals and fallback to terminal launch.
+- Refined cargo_toml sync logic to preserve content when versions match.
+- Updated CI workflows to run tests and verification on Linux runners instead of Windows.
+- Removed background elapsed time reporter; elapsed time computed on worker thread snapshots.
+- Updated documentation and progress logic to reflect new progress reporting and archive extraction fallback.
 
 ### Fixed
+- Fixed progress flicker by limiting worker-thread snapshots and removing background reporter.
+- Fixed status flicker by isolating OperationPlan per thread and using command milestone for panel title.
+- Fixed cargo_toml sync to ignore formatting differences and avoid unnecessary file rewrites.
+- Fixed MSVC relaunch quoting on Windows CI by using temporary batch files and stripping quotes.
+- Fixed Linux clippy unused-import warnings by gating Windows-only imports.
+- Fixed merge-native PowerShell input array handling in publish readiness job.
+- Fixed macOS watcher path normalization to handle /var vs /private/var symlinks.
+- Fixed TrID archive extraction progress reporting with entry-level ticks.
+- Fixed CI workflows to install Linux GUI dependencies before building on cache miss.
 
-- **FFI integration tests** — fixture path corrected after `dharastorage-ffi` move under `src/bindings/`.
-- **NuGet packaging** — icon asset relative path fixed after C# projects moved to `src/bindings/csharp/`.
-- **Quality gates** — `cargo` package name updated to `dharastorage-ffi` in fmt/clippy/test invocations.
-
-### Removed
-
-- **`config sync` command** — replaced by startup activation (`--yes` in CI).
-- **Staging/release shell scripts** — `merge-native`, `stage-native-*`, `verify-package`, and `release-run-windows` scripts deleted in favor of `dhara_tool` commands.
-- **Monolithic CD `publish` job** — merge publishes live in `publish-crates.yml` and `publish-nuget.yml`.
-- **Monolithic GUI modules** — `panels.rs` and `form.rs` replaced by `gui/widgets/` and `gui/screens/`.
-
-## [0.8.0] — 2026-06-30
-
-Compared to [v0.7.1](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.7.1).
-
-### Added
-
-- **Cross-platform native asset staging** — CI and release workflows build and stage native libraries for all five 64-bit RIDs (`win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`).
-- **Shell icon support** — OS shell icon RGBA pixels via `file_icon_provider`, exposed through file and directory information APIs and .NET bindings.
-- **Unified GitHub Actions pipeline** — single `.github/workflows/pipeline.yml` for PR checks, platform tests, publish readiness, and release; replaces separate CI and release workflows.
-- **Breaking changes policy** — `.cursor/rules/breaking-changes.mdc` documents pre-1.0 no-legacy, no-deprecation stance.
-- **Documentation overhaul** — package-scoped READMEs, `docs/README.md` reference index, and expanded ABI, DSFD, CI/CD, and logging docs.
-
-### Changed
-
-- **Typed native ABI only** — removed legacy JSON ABI functions, DTOs, and `_json_old` entry points from `dharastorage` and .NET bindings.
-- **CI script refactor** — GitHub Actions and local parity use standalone `tooling/scripts/` helpers; deprecated `verify ci`, `verify docs`, `release publish`, and `native merge` commands removed from `dhara_tool`.
-- **Version bump** — workspace, crates, NuGet package, embedded `filedefs.dat` (`packageVersion` 0.8.0, revision 1), and shared config synchronized to `0.8.0`.
+### Deprecated
+- Removed dynamic command milestone from action panel title to reduce flicker and confusion.
 
 ### Removed
+- Removed iced-based GUI crate and assets.
+- Removed background elapsed time reporter and redundant UI elements in TUI action panel.
+- Removed unused fields from TUI FocusState and cleaned up theme constants.
+- Removed redundant UI elements and spinner from TUI progress rendering.
+- Removed unused background color definition from theme constants.
 
-- **Legacy JSON ABI** — all deprecated JSON serialization paths and related tests.
-
-## [0.7.1] — 2026-06-29
-
-Compared to [v0.7.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.7.0).
-
-### Fixed
-
-- **Crates.io release verification** — embed `filedefs.dat` from `src/core/dhara_storage_dal/resources/` so `cargo release` package verification succeeds outside the monorepo layout.
-- **CI formatting** — rustfmt wrap fix in `dhara_tool` audit test imports.
-
-### Changed
-
-- **Default defs output** — `defs pack`, `build-trid-xml`, `sync-embedded`, and related commands now default to `src/core/dhara_storage_dal/resources/filedefs.dat`.
-- **Default operator logs** — audit logs write to `tooling/logs/` instead of `tooling/output/logs/`; logs no longer follow `--output-dir`.
-- **Version bump** — workspace, crates, NuGet package, and shared config synchronized to `0.7.1`.
-
-## [0.7.0] — 2026-06-28
-
-Compared to [v0.6.0](https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0) (2026-06-22).
-
-### Added
-
-- **DSFD definition packages** — `filedefs.dat` now uses the Dhara Storage File Definition (DSFD) container format (version 2): fixed header, FlatBuffers payload, and XML metadata footer. See [docs/filedefs-dat.md](docs/filedefs-dat.md).
-- **FlatBuffers codec in `dhara_storage_dal`** — encode/decode pipeline, bundled definition loading, and container validation for DSFD packages.
-- **DSFD metadata schema** — XSD schema (`schema/dsfd-metadata.xsd`) and XML footer parsing for package revision, tags, and definition counts.
-- **Operator logging for `dhara_tool`** — structured audit logs with session/module lifecycle, phase timing, TrID transform stats, and subprocess milestones. Human reference: [docs/logging.md](docs/logging.md).
-- **Logging CLI flags** — `-m` / `--min` (WARN-only file detail) and `-t` / `--trace` (DEBUG file detail including per-definition reduce trace).
-- **Worker thread control** — `-w` / `--workers` caps Rayon parallelism for TrID parse/reduce (default 4); `TOOL_MAX_WORKERS` env support.
-- **Flexible global options** — verbose and other global flags may appear before or after subcommands.
-- **NuGet and release flows in `dhara_tool`** — packaging and publish capabilities previously in `dhara_storage_ops` are now part of the operator CLI.
-- **Workspace state management** — package revisioning and embedded-def sync workflows in `dhara_tool`.
-- **VS Code tasks** — build/verify task definitions in `.vscode/tasks.json`.
-- **Git LFS tracking** — `.dat` artifacts tracked via Git LFS.
-
-### Changed
-
-- **Version bump** — workspace, crates, NuGet package, and shared config synchronized to `0.7.0`.
-- **Directory layout** — runtime crates moved from `src/static/` to `src/core/`; C ABI crate moved from `src/dynamic/` to `src/dharastorage/`.
-- **`filedefs.dat` location** — canonical runtime artifact is now `tooling/output/filedefs.dat` (embedded into `dhara_storage_dal` at compile time).
-- **`dhara_tool` architecture** — consolidated command registry, filedefs/TrID modules, NuGet/release helpers, and capability routing; output staged under `tooling/output/` and `tooling/artifacts/`.
-- **Definition package identifier** — on-disk magic and FlatBuffers layout migrated from legacy `FDEF` to `DSFD` format version 2.
-- **Release workflow** — GitHub Actions release job updated for the new crate paths and tooling layout.
-- **Documentation** — README, AGENTS.md, and crate READMEs updated for new paths, DSFD format, and logging conventions.
-
-### Removed
-
-- **`dhara_storage_ops` crate** — operator capabilities merged into `dhara_tool`; workspace and docs no longer reference the separate ops package.
-- **Legacy FDEF container format** — version 1 packages with duplicate `DSFD`/`FDEF` markers are not supported.
-- **`authors` fields** — removed from workspace `Cargo.toml` files to streamline package metadata.
-
-### Migration notes
-
-- **Custom `filedefs.dat` files** must be rebuilt with `dhara_tool` using the DSFD format. Packages produced for 0.6.x (`FDEF`) will not load in 0.7.0.
-- **Import paths** — update any hard-coded references from `src/static/dhara_storage` or `src/dynamic/dharastorage` to `src/core/dhara_storage` and `src/dharastorage`.
-- **Tooling commands** — replace `dhara_storage_ops`-based workflows with `cargo run -p dhara_tool -- …` equivalents (`verify ci`, `verify package`, `release run`, `defs sync-embedded`, etc.).
+### Technical
+- Refactored cargo_toml sync logic with semantic version snapshot comparison.
+- Refactored TUI architecture for modularity and theme awareness.
+- Updated CI workflows to unify Linux runners for tests and verification.
+- Upgraded GitHub Actions versions and streamlined pipeline steps.
+- Cleaned up unused imports in dhara_tool_cli package commands.
+- Refined worker thread snapshot publishing to reduce UI flicker.
 
 ---
 
-## [0.6.0] — 2026-06-22
+## v0.9.0 - 2026-07-02
 
-Initial tagged release in this changelog series. See git history before `v0.6.0` for earlier changes.
+### Added
+- Added dhara_tool CI build workflow with cached tool usage per OS/architecture.
+- Added new dhara_tool subcommands for quality gates, native merge, and packaging replacing legacy shell scripts.
+- Added MSVC environment support for native staging and release commands on Windows.
+- Added dedicated test job for dhara_tool in CI running cargo test on Linux.
+- Added VS Code tasks and launch configurations for production-shaped dhara_tool binary.
+- Added `-r` / `--repository` flag for explicit repository root or config file specification.
+- Added GUI repository picker overlay for interactive repository selection.
+- Added Linux GUI dependencies setup composite GitHub Action for CI workflows.
 
-[0.9.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.1...v0.8.0
-[0.7.1]: https://github.com/D-Naveenz/dhara_storage/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/D-Naveenz/dhara_storage/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/D-Naveenz/dhara_storage/releases/tag/v0.6.0
+### Changed
+- Migrated primary CI jobs from Windows to Linux runners, retaining Windows runner for MSVC native DLL builds.
+- Moved operator logs, artifacts, and outputs under executable directory `{tool_root}` (e.g., `target/dist/`).
+- Activated configuration drift on startup, removing config sync command; added `--yes` flag for non-interactive drift application.
+- Replaced legacy shell scripts with dhara_tool subcommands and updated CI/CD flow accordingly.
+- Refactored GUI into primitives, promoted widgets, and screens with iced-based shell layout replacing monolithic panels.
+- Synchronized tool versioning to workspace package version with shared workspace inheritance.
+- Consolidated CI workflows and improved pipeline efficiency by running tests once and compiling per OS in separate jobs.
+- Refined NuGet csproj synchronization with semantic metadata comparison and improved error handling.
+- Updated documentation and config to reflect independent tool versioning and new CI/CD pipeline.
+
+### Fixed
+- Fixed Linux csproj path parsing to handle backslashes on non-Windows runners.
+- Fixed LFS checkout requirement for embedded `filedefs.dat` during cargo test.
+- Fixed stage-native cargo package name to use `dharastorage-ffi` for native assets.
+- Fixed MSVC relaunch quoting issues on Windows CI.
+- Fixed CI cache key to use source hash instead of version for dhara_tool.
+
+### Removed
+- Removed deprecated verify ci, verify docs, release publish, and native merge commands from dhara_tool CLI.
+- Removed unused process module and merge_native_stages function.
+
+### Technical
+- Introduced source hash-based caching for dhara_tool binaries in CI.
+- Updated GitHub Actions workflows for Linux-based smoke and AOT runtime tests.
+- Added composite GitHub Action for Linux GUI and pkg-config dependency installation.
+- Improved CI pipeline triggers and cache warming strategy.
+- Enhanced dhara_tool cargo release and build scripts for better cache management.
+- Updated VS Code launch configurations for dev and production-shaped builds.
+
+---
+
+## v0.8.0 - 2026-06-30
+
+### Added
+- Added cross-platform native asset staging and packaging support for Windows, Linux, and macOS in CI workflows.
+- Added OS shell icon RGBA pixel support and cross-platform shell icon abstractions via `file_icon_provider` crate.
+- Added detailed native packaging documentation covering multi-platform staging, merging, and packing.
+- Added unified GitHub Actions pipeline consolidating CI and release workflows.
+- Added structured logging for command execution with detailed start and end logs.
+- Added new logging policy document outlining log level semantics and Dhara operator log requirements.
+- Added MindVault integration for workspace memory with `mindvault.toml` storing workspace identity.
+- Added detailed README files for core crates and operator CLI with architecture and usage examples.
+- Added FlatBuffers encoding and decoding support

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://json.schemastore.org/github-action.json
 name: Setup Linux tool build dependencies
-description: System packages required to compile dhara_tool (iced/winit) and link dhara_storage (file_icon_provider/GTK) on Ubuntu runners
+description: System packages required to link dhara_storage (file_icon_provider/GTK) on Ubuntu runners
 
 runs:
   using: composite
@@ -15,5 +15,7 @@ runs:
           pkg-config \
           libglib2.0-dev \
           libgtk-3-dev \
+          libegl-mesa0 \
           libwayland-dev \
-          libxkbcommon-dev
+          libxkbcommon-dev \
+          xvfb

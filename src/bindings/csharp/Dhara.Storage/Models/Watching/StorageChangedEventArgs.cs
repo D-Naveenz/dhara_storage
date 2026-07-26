@@ -8,6 +8,10 @@ public sealed class StorageChangedEventArgs : EventArgs
     /// <summary>
     /// Initializes a new instance of the <see cref="StorageChangedEventArgs"/> class.
     /// </summary>
+    /// <param name="path">Current path associated with the change.</param>
+    /// <param name="previousPath">Previous path when the change is a relocation; otherwise <see langword="null"/>.</param>
+    /// <param name="changeType">High-level change classification.</param>
+    /// <param name="observedAt">Timestamp captured by the native watcher.</param>
     public StorageChangedEventArgs(string path, string? previousPath, StorageChangeType changeType, DateTimeOffset observedAt)
     {
         Path = path;

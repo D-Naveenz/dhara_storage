@@ -1,3 +1,8 @@
+//! Free functions for file and directory create/copy/move/delete with progress options.
+//!
+//! Prefer [`crate::storage`] handles for a higher-level API; this module is the
+//! sync-first implementation surface (plus optional Tokio wrappers).
+
 pub(crate) mod common;
 mod directory;
 pub(crate) mod file;

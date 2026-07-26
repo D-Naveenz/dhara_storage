@@ -2,7 +2,7 @@
 
 This document explains how Dhara Storage ships `dharastorage` native libraries inside the [Dhara.Storage][readme-nuget] NuGet package across five 64-bit runtime identifiers (RIDs). It covers per-host staging rules, CI artifact merge, MSBuild packing, and common failure modes discovered during the 0.8.0 pipeline rollout.
 
-For job names and workflow triggers, see [CI/CD pipelines][ci-cd]. For operator commands, see [dhara_tool README][readme-tool].
+For job names and workflow triggers, see [CI/CD pipelines][ci-cd]. For operator commands, see [drot README][readme-tool].
 
 ## End-to-end flow
 
@@ -17,15 +17,15 @@ flowchart LR
 
   subgraph merge ["publish-readiness (linux)"]
     DL[download native-stage-* artifacts]
-    MG[dhara_tool native merge]
-    VP[dhara_tool verify package]
+    MG[drot native merge]
+    VP[drot verify package]
   end
 
   W & L & LA & M --> DL --> MG --> VP
   VP --> NUPKG[Dhara.Storage.nupkg]
 ```
 
-Each platform job runs `dhara_tool package stage-native` (with `--msvc-env` on Windows), uploads a `native-stage-{os}` artifact from `target/dist/artifacts/native-stage`, and exits. The `publish-readiness` job downloads all four artifacts, runs `native merge` into the same default stage directory, then `verify package` (no `--native-stage` when the merged tree matches the dist binary default).
+Each platform job stages native assets (tool with `--msvc-env` on Windows; direct `cargo build` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke + AOT on `linux-x64`).
 
 ## Expected layout
 
@@ -40,7 +40,7 @@ runtimes/
   osx-arm64/native/libdharastorage.dylib
 ```
 
-`dhara_tool` validates this layout before `dotnet pack` ([`validate_staged_native_assets`][nuget-rs]) and again after pack by inspecting the `.nupkg` entry list ([`inspect_package_contents`][nuget-rs]).
+`drot` validates this layout before `dotnet pack` ([`validate_staged_native_assets`][nuget-rs]) and again after pack by inspecting the `.nupkg` entry list ([`inspect_package_contents`][nuget-rs]).
 
 ## Which RIDs build on which host
 
@@ -62,17 +62,17 @@ runtimes/
 
 ## Merging native artifacts
 
-`publish-readiness` merges RID directories with `dhara_tool native merge` (paths are repo-relative):
+`publish-readiness` merges RID directories with `drot native merge` (paths are repo-relative):
 
 ```bash
-dhara_tool native merge \
+drot native merge \
   --output target/dist/artifacts/native-stage \
   --input target/dist/artifacts/native-inputs/native-stage-windows \
   --input target/dist/artifacts/native-inputs/native-stage-linux \
   --input target/dist/artifacts/native-inputs/native-stage-linux-arm64 \
   --input target/dist/artifacts/native-inputs/native-stage-macos
 
-dhara_tool verify package
+drot verify package
 ```
 
 Repeat `--input` once per downloaded artifact directory (each must contain a `runtimes/` folder). When the dist binary lives in `target/dist/`, `verify package` picks up `{tool_root}/artifacts/native-stage` by default — no `--native-stage` needed after merge.
@@ -83,13 +83,13 @@ When `StagedNativeRoot` is set, [Dhara.Storage.csproj][csproj] skips local `carg
 
 ### Pass an absolute repository-root path
 
-`dhara_tool` resolves relative `--native-stage` paths against the **repo root** before calling `dotnet pack` ([`absolute_native_stage_root`][nuget-rs]). `native merge` `--output` / `--input` paths use the same repo-root rule. MSBuild globs in the csproj are evaluated relative to the **project file**, not the working directory; pass an absolute `StagedNativeRoot` in local `dotnet pack` smoke tests.
+`drot` resolves relative `--native-stage` paths against the **repo root** before calling `dotnet pack` ([`absolute_native_stage_root`][nuget-rs]). `native merge` `--output` / `--input` paths use the same repo-root rule. MSBuild globs in the csproj are evaluated relative to the **project file**, not the working directory; pass an absolute `StagedNativeRoot` in local `dotnet pack` smoke tests.
 
 ### Use `_PackageFiles`, not static `ItemGroup`
 
 Staged natives must be added in a `Pack` target as `_PackageFiles` with an explicit `PackagePath` derived from `MakeRelative` under `runtimes/`. A static `ItemGroup` with `%(RecursiveDir)` often fails to include merged CI assets even when files exist on disk.
 
-### Local smoke test
+### Local pack check
 
 ```powershell
 $stage = (Resolve-Path target/dist/artifacts/native-stage).Path
@@ -113,12 +113,12 @@ Directory watch integration tests should **poll for the created file path** afte
 | Symptom | Likely cause | Check |
 |---------|--------------|-------|
 | `staged native asset missing before pack` | Merge produced empty `native-stage` | Verify `native merge` inputs include `runtimes/` |
-| Tool cache miss on Linux | `dhara_tool` built without GUI deps | Ensure `setup-linux-tool-deps` runs before any Linux `cargo build -p dhara_tool` in CI |
+| Tool cache miss on Linux | `drot` built without GUI deps | Ensure `setup-linux-tool-deps` runs before any Linux `cargo build --manifest-path tooling/drot/Cargo.toml -p drot` in CI |
 | NuGet CD missing artifacts | `NuGet package (linux)` did not run on merged PR tip | Use merge commits; confirm `release-native-stage` / `release-nuget-package` artifacts exist for `HEAD^2` |
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |
-| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_dal -p dhara_storage -p dharastorage-ffi -p dhara_tool` |
+| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p drot` |
 
 ## Related docs
 
@@ -128,10 +128,10 @@ Directory watch integration tests should **poll for the created file path** afte
 
 [readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
 [ci-cd]: ci-cd-pipelines.md
-[readme-tool]: ../tooling/dhara_tool/README.md
+[readme-tool]: ../tooling/drot/README.md
 [tooling-scripts]: ../tooling/scripts/
-[nuget-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/nuget.rs
-[native-rids-rs]: ../tooling/dhara_tool/crates/dhara_tool_ops/src/native_rids.rs
+[nuget-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/nuget.rs
+[native-rids-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
 [csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj

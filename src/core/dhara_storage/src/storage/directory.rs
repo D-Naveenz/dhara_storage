@@ -1,3 +1,5 @@
+//! [`DirectoryStorage`] — path-based directory handle for enumeration, transfers, and watching.
+
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 

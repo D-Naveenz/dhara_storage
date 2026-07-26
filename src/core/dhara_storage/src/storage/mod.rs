@@ -1,3 +1,8 @@
+//! Path-based [`FileStorage`] and [`DirectoryStorage`] handles.
+//!
+//! Handles are lightweight wrappers over normalized paths; expensive work stays
+//! opt-in through info and analysis APIs.
+
 mod directory;
 mod file;
 

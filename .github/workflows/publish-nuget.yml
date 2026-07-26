@@ -35,7 +35,7 @@ jobs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         if: github.event_name == 'push'
         id: filter
         with:
@@ -101,7 +101,7 @@ jobs:
       - name: Download PR CI native stage
         id: native-artifact
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: pipeline.yml
           commit: ${{ steps.artifact-commit.outputs.sha }}
@@ -112,7 +112,7 @@ jobs:
       - name: Download NuGet package artifact
         id: nupkg-artifact
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@v21
         with:
           workflow: pipeline.yml
           commit: ${{ steps.artifact-commit.outputs.sha }}
@@ -164,7 +164,7 @@ jobs:
 
       - name: Upload NuGet artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Dhara.Storage-package
           path: |

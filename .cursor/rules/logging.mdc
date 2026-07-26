@@ -20,63 +20,59 @@ DEBUG           — engineer diagnostics; usually off in production
 TRACE           — line-by-line / per-item detail; highest volume
 ```
 
-| Pick this level when… | Example                                                  |
-| --------------------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| ERROR                 | Module/command aborts; user-visible failure              | `defs.build-trid-xml failed — archive tool missing`   |
-| WARN                  | Completed with caveats                                   | skipped step, verification mismatch                   |
-| INFO                  | One sentence a reader needs without DEBUG                | session open/close, phase **finish**, aggregate stats |
-| DEBUG                 | Supports troubleshooting; safe to omit from default runs | phase **start**, paths, flags, per-item trace         |
-| TRACE                 | Only if `--trace` / explicit verbose mode                | per-definition reduce outcomes                        |
+| Pick this level when… | Example |
+| --------------------- | ------- |
+| ERROR | Module/command aborts; user-visible failure | subprocess or handler hard failure |
+| WARN | Completed with caveats | command run failed after duration; verification mismatch |
+| INFO | One sentence a reader needs without DEBUG | session bookends; **command run** open/close with duration |
+| DEBUG | Supports troubleshooting; safe to omit from default runs | phase transitions, `TrID transform —`, paths, flags |
+| TRACE | Direct console verbose detail in CLI mode | full stderr mirror in direct mode (not file-specific) |
 
-Do **not** emit DEBUG/TRACE content at INFO. Do **not** use INFO for progress counters when a phase-finish line or `--trace` detail is the right tier.
+Do **not** emit DEBUG/TRACE content at INFO. Do **not** use INFO for progress counters when console throttling or `--trace` detail is the right tier.
 
-## Rust / tracing (`dhara_tool`)
+## Rust / tracing (`drot`)
 
-Use `tracing` macros with explicit targets. Audit/operator events: `target: "dhara_tool::audit"`.
+Use `tracing` macros with explicit targets. Audit/operator events: `target: "drot::audit"`.
 
-`log` crate severity (lower number = more severe): Error=1, Warn=2, Info=3, Debug=4, Trace=5.  
-`tracing-subscriber` filters the same way: setting max level INFO shows INFO+WARN+ERROR, not DEBUG.
+`log` crate severity (lower number = more severe): Error=1, Warn=2, Info=3, Debug=4, Trace=5.
 
-Console vs file thresholds (numeric `log` scale: Info=3, Warn=2, Debug=4):
+### Sink thresholds by run mode
 
-| Flag             | Console  | File      |
-| ---------------- | -------- | --------- |
-| default          | 3 (INFO) | 3 (INFO)  |
-| `--min` / `-m`   | 3 (INFO) | 2 (WARN)  |
-| `--trace` / `-t` | 3 (INFO) | 4 (DEBUG) |
-
-Console stays INFO until the new TUI policy lands.
+| Run mode | Console | File (default) | File `--min` | File `--trace` |
+| -------- | ------- | -------------- | ------------ | -------------- |
+| **direct** | 5 (TRACE) | 3 (INFO) | 2 (WARN) | 4 (DEBUG) |
+| **interactive** | OFF (WARN/ERROR → TUI panel) | 3 (INFO) | 2 (WARN) | 4 (DEBUG) |
 
 ## Dhara operator logs — requirements
 
 Logs are for **humans and agents**, not aggregators. Write plain sentences, one fact per line.
 
-### Tiering (TrID and long modules)
+### Three audit layers
 
-| Category    | INFO                                                 | DEBUG                                        |
-| ----------- | ---------------------------------------------------- | -------------------------------------------- |
-| Performance | `phase {name} finished in {duration} — {summary}`    | `phase {name} started`                       |
-| Reports     | `TrID transform — …` once; module finish summary     | per-definition reduce trace (`--trace` only) |
-| Environment | session `mode`, `workers`; module `started — {args}` | flags, log path, resolved paths              |
+| Layer | INFO | DEBUG |
+| ----- | ---- | ----- |
+| **Session bookends** | `drot started`; `drot exiting` | flags, log path, resolved paths |
+| **Command run** (`CommandRun`) | `building …`; `built … in {duration}` | command args when needed |
+| **Pipeline phase** | — | `phase {name} started/finished`; `TrID transform —` |
 
 ### Must do
 
+- Wrap every command execute in `CommandRun::begin` / `complete` — always emit close INFO with duration.
+- Session INFO: `drot {version} started — mode=…, workers=…` — **no log path on INFO**.
+- Daily log: one `{date}_drot.log` append file + file-only `session end` record after `exiting`.
+- Interactive: TUI `activity_label` + `elapsed_secs` after 4s; no INFO on console.
+- Reduce stage: **no** `(N/total) reduce in progress` lines at any level.
+- `--trace` reduce lines: `({current}/{total}) {file_type} — accepted|rejected: …`; stats once via `TrID transform —` at DEBUG.
 - Single audit dispatch path per progress event (no duplicate callbacks).
-- Session INFO: `dhara_tool {version} started — mode=…, workers=…` — **no log path on INFO**.
-- Long modules: begin INFO → phase finish INFO lines → aggregate stats once → finish INFO with duration.
-- Fast modules: config at DEBUG; one INFO finish line.
-- Reduce stage: **no** `(N/total) reduce in progress` milestones at any level.
-- `--trace` reduce lines: `({current}/{total}) {file_type} — accepted|rejected: …` with structured suffixes; stats once via `TrID transform —`.
-- Parse stage: never log every input file at INFO; phase finish with count/duration only.
-- Console progress (direct + TTY): throttled `parse:` / `reduce:` counters on stderr only.
 
 ### Must not
 
+- Per-session numbered log files (`_N.log`).
+- Phase finish or `TrID transform —` at INFO in default file runs.
 - Duplicate the same stage line from runner and caller.
-- Dump cumulative counters on every trace line.
 - Put self-referential noise on INFO (log file path, “logging initialized”).
 - Log field soup / JSON blobs where one sentence suffices.
 
 ### When diagnosing
 
-Read `{tool_root}/logs/{date}_dhara_tool*.log` (e.g. `target/dist/logs/` for the dist binary) → `started` → `{module} started/finished` → `phase ` / `TrID transform` → `exiting`.
+Read `{tool_root}/logs/{date}_drot.log` → `started` → `building…` / `built … in` → `exiting` → `session end` record. Use `phase ` / `TrID transform` at DEBUG for TrID depth.

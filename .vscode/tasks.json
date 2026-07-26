@@ -2,7 +2,7 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "dhara-tool: ensure dist",
+      "label": "drot: ensure dist",
       "type": "shell",
       "windows": {
         "command": "powershell",
@@ -11,14 +11,14 @@
           "-ExecutionPolicy",
           "Bypass",
           "-File",
-          "${workspaceFolder}/tooling/scripts/ensure-dhara-tool-dist.ps1"
+          "${workspaceFolder}/tooling/scripts/ensure-drot-dist.ps1"
         ]
       },
       "linux": {
-        "command": "${workspaceFolder}/tooling/scripts/ensure-dhara-tool-dist.sh"
+        "command": "${workspaceFolder}/tooling/scripts/ensure-drot-dist.sh"
       },
       "osx": {
-        "command": "${workspaceFolder}/tooling/scripts/ensure-dhara-tool-dist.sh"
+        "command": "${workspaceFolder}/tooling/scripts/ensure-drot-dist.sh"
       },
       "options": {
         "cwd": "${workspaceFolder}"
@@ -26,9 +26,9 @@
       "problemMatcher": []
     },
     {
-      "label": "dhara-tool: watch dev",
+      "label": "drot: watch dev",
       "type": "shell",
-      "command": "cargo watch -p dhara_tool -x \"run -p dhara_tool --\"",
+      "command": "cargo watch --manifest-path tooling/drot/Cargo.toml -p drot -x \"run -p drot --\"",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -55,29 +55,28 @@
       }
     },
     {
-      "label": "dhara-tool: test",
-      "type": "cargo",
-      "command": "test",
-      "args": ["-p", "dhara_tool"],
+      "label": "drot: test",
+      "type": "shell",
+      "command": "cargo test --manifest-path tooling/drot/Cargo.toml -p drot -p drot_cli -p drot_ops -p drot_kernel",
       "options": {
         "cwd": "${workspaceFolder}"
       },
       "problemMatcher": ["$rustc"]
     },
     {
-      "label": "dhara-tool: quality run (dist)",
-      "dependsOn": ["dhara-tool: ensure dist"],
+      "label": "drot: quality run (dist)",
+      "dependsOn": ["drot: ensure dist"],
       "type": "shell",
       "windows": {
-        "command": "${workspaceFolder}/target/dist/dhara_tool.exe",
+        "command": "${workspaceFolder}/target/dist/drot.exe",
         "args": ["quality", "run"]
       },
       "linux": {
-        "command": "${workspaceFolder}/target/dist/dhara_tool",
+        "command": "${workspaceFolder}/target/dist/drot",
         "args": ["quality", "run"]
       },
       "osx": {
-        "command": "${workspaceFolder}/target/dist/dhara_tool",
+        "command": "${workspaceFolder}/target/dist/drot",
         "args": ["quality", "run"]
       },
       "options": {

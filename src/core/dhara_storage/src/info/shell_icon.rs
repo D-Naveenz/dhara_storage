@@ -1,3 +1,5 @@
+//! Cross-platform shell icon pixel loading for paths.
+
 use std::path::Path;
 
 /// Shell icon pixels loaded lazily when requested.

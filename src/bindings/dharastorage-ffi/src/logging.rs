@@ -1,3 +1,5 @@
+//! Native logger bridge from `tracing` to host callbacks.
+
 use std::collections::BTreeMap;
 use std::ffi::c_void;
 use std::sync::{Mutex, OnceLock};

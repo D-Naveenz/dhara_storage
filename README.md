@@ -1,161 +1,70 @@
+<div align="center">
+
+<img src="src/bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png" alt="Dhara Storage" width="120" />
+
 # Dhara Storage
 
-[![dhara_storage on crates.io](https://img.shields.io/crates/v/dhara_storage?label=dhara_storage)](https://crates.io/crates/dhara_storage)
-[![dhara_storage_dal on crates.io](https://img.shields.io/crates/v/dhara_storage_dal?label=dhara_storage_dal)](https://crates.io/crates/dhara_storage_dal)
+[![dhara_storage](https://img.shields.io/crates/v/dhara_storage?label=dhara_storage)](https://crates.io/crates/dhara_storage)
+[![dhara_storage_core](https://img.shields.io/crates/v/dhara_storage_core?label=dhara_storage_core)](https://crates.io/crates/dhara_storage_core)
+[![Dhara.Storage](https://img.shields.io/nuget/v/Dhara.Storage?label=Dhara.Storage)](https://www.nuget.org/packages/Dhara.Storage)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE.txt)
 
-Dhara Storage is a Rust-first storage and file-analysis workspace with a Windows-first delivery story.
-It ships a native runtime, a C ABI layer, a .NET NuGet package, and operator tooling from one repo.
-Current release line: **0.9.0** (workspace crates and NuGet; `dhara_tool` is independently versioned at **0.8.9**).
+**Cross-platform local storage for applications** — file and directory handles, watching, metadata, and **content-based file intelligence** (not a guess from the extension).
 
-## ✨ Key Features
+</div>
 
-- **Definition-driven analysis** — content-based file typing via bundled `filedefs.dat`
-- **Path-based storage API** — files, directories, copy/move/delete, optional progress
-- **Debounced watching** — stable directory change notifications
-- **Layered delivery** — Rust core → C ABI → `net10.0` managed wrapper
-- **Multi-RID NuGet** — `win-x64`, `win-arm64`, `linux-x64`, `linux-arm64`, `osx-arm64`
-- **Operator CLI** — config activation, native staging, package verify, and release flows
+Ordinary file APIs stop at paths and bytes. Many “content type” fields stop at the file name. Dhara combines a storage-handle model with signature-based analysis in one runtime, so apps and libraries can classify and manage files without a separate MIME stack—and without being locked to one OS app model.
 
-## 📦 Tech Stack & Architecture
+The core is written in Rust for memory safety, thread safety, and fearless concurrency under heavy I/O and analysis workloads.
 
-| Layer | Technology |
-|-------|------------|
-| Core runtime | Rust (edition 2024), `tracing` |
-| Definitions DAL | FlatBuffers, embedded `filedefs.dat` |
-| Native interop | `cdylib` C ABI (`dharastorage`) |
-| Managed bindings | .NET 10 (`Dhara.Storage`) |
-| Operator surface | `dhara_tool` (Clap + iced GUI) |
-| CI / release | GitHub Actions, `dhara.config.toml` |
+## Why use it
 
-```
-dhara_storage/
-├── src/
-│   ├── core/
-│   │   ├── dhara_storage/       # Rust runtime (crates.io)
-│   │   └── dhara_storage_dal/   # FlatBuffers DAL (crates.io)
-│   ├── bindings/
-│   │   ├── dharastorage-ffi/    # C ABI (`dharastorage` cdylib)
-│   │   └── csharp/              # Dhara.Storage NuGet source
-├── tooling/
-│   ├── dhara_tool/              # Operator CLI (nested workspace)
-│   ├── scripts/                 # ensure-dhara-tool-dist, verify-local (dist quality run)
-│   └── output/                  # staged packages (gitignored)
-├── docs/                        # technical reference
-├── dhara.config.toml            # shared version + publish metadata
-└── .env.local                   # local secrets (from .env.example)
-```
+- Know the real type from file bytes (bundled definitions), not just the extension
+- File and directory handles with transfers that support progress and cancellation
+- Built-in directory watching and shell-aware metadata where the OS provides it
+- Works from libraries and desktop apps on Windows, Linux, and macOS
+- Native core when concurrency and system-level correctness matter
 
-| Package | README | Publish surface |
-|---------|--------|-----------------|
-| `dhara_storage` | [crate readme][readme-dhara-storage] | crates.io |
-| `dhara_storage_dal` | [crate readme][readme-dal] | crates.io |
-| `dharastorage` | [crate readme][readme-dharastorage] | native asset in NuGet |
-| `Dhara.Storage` | [package readme][readme-nuget] | NuGet.org |
-| `dhara_tool` | [tool readme][readme-tool] | workspace-only |
+## Choose your package
 
-## 🚀 Getting Started & Installation
+Pick the surface that matches how you build. Each link is the install-and-usage guide for that package.
 
-**Prerequisites**
+| If you are… | Use | Guide |
+|-------------|-----|-------|
+| Building in **Rust** | `dhara_storage` | [crates.io / README][readme-dhara-storage] |
+| Building on the **framework** (defs encode/decode today) | `dhara_storage_core` | [crates.io / README][readme-core] |
+| Integrating via **C ABI** | `dharastorage` | [FFI README][readme-dharastorage] |
+| Building in **.NET** | `Dhara.Storage` | [NuGet / README][readme-nuget] |
+| Operating releases / defs / packaging | `drot` | [DROT README][readme-tool] |
 
-- Rust **stable** toolchain (`cargo`, `rustfmt`, `clippy`)
-- .NET SDK **10.0.x** (for bindings tests and local .NET dev)
-- PowerShell or bash (for [verify-local][verify-local])
-- Windows: MSVC build tools when compiling `win-x64` / `win-arm64` natives locally
+## Showcase
 
-**Setup**
+<div align="center">
 
-1. Clone the repository.
-2. Copy [.env.example][env-example] to `.env.local` and fill publish keys only when releasing.
-3. Run the local verify script from the repo root:
+Published packages track the current workspace line on [crates.io][crates-dhara] and [NuGet][nuget-dhara].
 
-```powershell
-./tooling/scripts/verify-local.ps1
-```
+*Screenshots and benchmarks — coming soon.*
 
-## 🔧 Configuration & Environment Variables
+</div>
 
-Shared release metadata lives in [dhara.config.toml][dhara-config] (versions, NuGet IDs, native RIDs).
+## Contributing
 
-| Variable | Example | Purpose |
-|----------|---------|---------|
-| `CARGO_REGISTRY_TOKEN` | *(secret)* | crates.io publish (`release run`) |
-| `NUGET_API_KEY` | *(secret)* | NuGet.org publish |
-| `NUGET_SOURCE` | `https://api.nuget.org/v3/index.json` | NuGet feed URL |
-| `TOOL_MAX_WORKERS` | `4` | Caps Rayon workers in `dhara_tool` defs builds |
+Open a pull request against `main`. Keep **project** READMEs accurate when public behavior or publish surfaces change.
 
-Local secrets belong in `.env.local`, not in git. Run `cargo run -p dhara_tool -- config env init` to scaffold from the example file.
+Deep technical reference: [docs index][docs-index].  
+Contributor / agent context: [AGENTS.md][agents].
 
-## 🛠️ Usage Examples
+## License
 
-**Rust** — add [dhara_storage][readme-dhara-storage] to `Cargo.toml`:
+Licensed under [Apache-2.0][license].
 
-```toml
-[dependencies]
-dhara_storage = "0.9.0"
-```
-
-```rust
-use dhara_storage::{FileStorage, analyze_path};
-
-let report = analyze_path("sample.pdf")?;
-let bytes = FileStorage::from_existing("sample.pdf")?.read()?;
-# Ok::<(), dhara_storage::StorageError>(())
-```
-
-**.NET** — install [Dhara.Storage][readme-nuget]:
-
-```powershell
-dotnet add package Dhara.Storage --version 0.9.0
-```
-
-**Operator** — verify package shape and dry-run release:
-
-```powershell
-cargo run -p dhara_tool -- verify package
-cargo run -p dhara_tool -- release run --dry-run
-```
-
-**Troubleshooting**
-
-- Missing native RID at runtime → ensure the NuGet package includes your `runtimes/{rid}/native` asset; see [CI/CD reference][ci-cd].
-- Local `dotnet pack` blocked → use `dhara_tool` staging; single-runtime packs are intentionally guarded.
-- Wrong worker count in defs builds → set `-w` / `--workers` or `TOOL_MAX_WORKERS`; see [logging reference][logging].
-
-## ✅ Testing & Quality Assurance
-
-```powershell
-# Full local parity with CI (fmt, clippy, doc, Rust + .NET tests)
-./tooling/scripts/verify-local.ps1
-
-# Per-crate Rust tests
-cargo test -p dhara_storage --all-features
-cargo test -p dhara_storage_dal
-cargo test -p dharastorage-ffi
-
-# NuGet package verification (after native staging)
-cargo run -p dhara_tool -- verify package
-```
-
-Skip `cargo doc` with `./tooling/scripts/verify-local.ps1 -SkipDocs` when iterating quickly.
-
-## 🤝 Contributing & License
-
-Open a pull request against `main`. Keep workspace and package READMEs accurate when behavior or publish surfaces change.
-
-Licensed under [Apache-2.0][license]. See per-crate `Cargo.toml` and the NuGet package for attribution.
-
-**Technical reference** (ABI, DSFD format, CI maps, logging): [docs index][docs-index].
-
-[readme-dhara-storage]: src/core/dhara_storage/README.md
-[readme-dal]: src/core/dhara_storage_dal/README.md
-[readme-dharastorage]: src/bindings/dharastorage-ffi/README.md
-[readme-nuget]: src/bindings/csharp/Dhara.Storage/README.md
-[readme-tool]: tooling/dhara_tool/README.md
-[verify-local]: tooling/scripts/verify-local.ps1
-[env-example]: .env.example
-[dhara-config]: dhara.config.toml
-[ci-cd]: docs/ci-cd-pipelines.md
-[logging]: docs/logging.md
-[license]: LICENSE.txt
+[readme-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage/README.md
+[readme-core]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage_core/README.md
+[readme-dharastorage]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/bindings/dharastorage-ffi/README.md
+[readme-nuget]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/bindings/csharp/Dhara.Storage/README.md
+[readme-tool]: https://github.com/D-Naveenz/dhara_storage/blob/main/tooling/drot/README.md
+[crates-dhara]: https://crates.io/crates/dhara_storage
+[nuget-dhara]: https://www.nuget.org/packages/Dhara.Storage
 [docs-index]: docs/README.md
+[agents]: AGENTS.md
+[license]: LICENSE.txt

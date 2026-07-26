@@ -1,0 +1,42 @@
+---
+description: Dhara Storage project-surface docs customizations; follow project-docs for README/AGENTS/docs
+globs: README.md,**/README.md,AGENTS.md,docs/**/*.md
+alwaysApply: false
+---
+
+# Project docs (dhara_storage)
+
+When creating or editing README / AGENTS / `docs/` in this repo, **read and follow the `project-docs` skill first**, then apply the customizations below.
+
+Source **documentation comments**, file headers, and why-comments → global skill **`inline-code-docs`** (not this rule).
+
+## Product intent
+
+Pitch, exclusions, and design lineage: **[AGENTS.md → Product intent](../../AGENTS.md)**. Do not invent a new product story. Do not put Windows.Storage name-drops or war stories in READMEs.
+
+## Publish surfaces
+
+| README | Audience / surface |
+|--------|-------------------|
+| [`README.md`](../../README.md) | GitHub — product overview, package routing |
+| [`src/core/dhara_storage/README.md`](../../src/core/dhara_storage/README.md) | crates.io — Rust runtime |
+| [`src/core/dhara_storage_core/README.md`](../../src/core/dhara_storage_core/README.md) | crates.io — framework |
+| [`src/bindings/dharastorage-ffi/README.md`](../../src/bindings/dharastorage-ffi/README.md) | Native C ABI (NuGet asset) |
+| [`src/bindings/csharp/Dhara.Storage/README.md`](../../src/bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
+| [`tooling/drot/README.md`](../../tooling/drot/README.md) | DROT submodule — operators |
+
+No folder-container READMEs. Submodule project READMEs follow the same convention.
+
+## Audience map
+
+| Package | Speak to |
+|---------|----------|
+| `dhara_storage`, `dhara_storage_core` | Rust |
+| `Dhara.Storage` | .NET (native = speed/packaging fact, not a Rust tutorial) |
+| `dharastorage-ffi` | FFI integrators; steer .NET users to NuGet |
+| `drot` | Operators |
+
+## Exceptions
+
+- `tooling/drot/src/drot_dhara_storage/package/README.md` — internal operator notes; keep short; not the publish layout.
+- Do not rewrite `docs/**` as product marketing unless asked.

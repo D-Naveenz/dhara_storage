@@ -2,8 +2,8 @@
 
 This document describes the on-disk **Dhara Storage File Definition (DSFD)** package
 used for content-based file-type identification. The canonical runtime artifact is
-`src/core/dhara_storage_dal/resources/filedefs.dat`. It is built by `dhara_tool`, embedded into
-`dhara_storage_dal` at compile time, and consumed by `dhara_storage` at runtime.
+`src/core/dhara_storage/resources/filedefs.dat`. It is built by `drot`, embedded into
+`dhara_storage` at compile time, and decoded with `dhara_storage_core`.
 
 ## Overview
 
@@ -51,13 +51,13 @@ file magic.
 Version 1 (duplicate `DSFD` markers inside the payload and at EOF) is not supported.
 
 Constants and encode/decode logic live in
-[`src/core/dhara_storage_dal/src/container.rs`](../src/core/dhara_storage_dal/src/container.rs)
-and [`model.rs`](../src/core/dhara_storage_dal/src/model.rs).
+[`src/core/dhara_storage_core/src/definitions/format/container.rs`](../src/core/dhara_storage_core/src/definitions/format/container.rs)
+and [`model`](../src/core/dhara_storage_core/src/definitions/model/mod.rs).
 
 ## FlatBuffers payload
 
 Schema:
-[`src/core/dhara_storage_dal/schema/filedefs.fbs`](../src/core/dhara_storage_dal/schema/filedefs.fbs)
+[`src/core/dhara_storage_core/schema/filedefs.fbs`](../src/core/dhara_storage_core/schema/filedefs.fbs)
 
 Root table: `DefinitionPackage`
 
@@ -82,7 +82,7 @@ Each `DefinitionRecord` contains:
 
 | Field | XML element | Meaning |
 |-------|-------------|---------|
-| `package_version` | `packageVersion` | `dhara_storage_dal` semver (DSFD packaging authority) |
+| `package_version` | `packageVersion` | `dhara_storage_core` semver (DSFD packaging authority) |
 | `definitions_release` | `definitionsRelease` | ISO `YYYY-MM-DD` date of the upstream dataset |
 
 The payload section does not use a FlatBuffers `file_identifier`. Section boundaries
@@ -91,7 +91,7 @@ are defined entirely by `payload_length` in the file header.
 Regenerate Rust accessors after editing the schema:
 
 ```powershell
-flatc --rust -o src/core/dhara_storage_dal/src/generated src/core/dhara_storage_dal/schema/filedefs.fbs
+flatc --rust -o src/core/dhara_storage_core/src/definitions/generated src/core/dhara_storage_core/schema/filedefs.fbs
 ```
 
 ## XML metadata footer
@@ -100,16 +100,16 @@ The footer is a single-line XML document prefixed by a standard XML declaration.
 Example shape:
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_dal/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.8.0</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
+<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_core/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.8.0</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
 ```
 
 ### Schema (XSD)
 
 Machine-readable schema:
-[`src/core/dhara_storage_dal/schema/dsfd-metadata.xsd`](../src/core/dhara_storage_dal/schema/dsfd-metadata.xsd)
+[`src/core/dhara_storage_core/schema/dsfd-metadata.xsd`](../src/core/dhara_storage_core/schema/dsfd-metadata.xsd)
 
 The `xmlns` attribute on the root `dsfd` element must match `DSFD_METADATA_XMLNS` in
-[`model.rs`](../src/core/dhara_storage_dal/src/model.rs). That constant is a raw
+[`model`](../src/core/dhara_storage_core/src/definitions/model/mod.rs). That constant is a raw
 GitHub URL to the XSD on the default branch. Local tools validate against the
 checked-in XSD file; the URL is for external consumers once the file is published.
 
@@ -129,13 +129,13 @@ payload:
 ## `packageRevision` semantics
 
 `packageRevision` is a **per-packaging-version build counter**, not a global lifetime
-counter. `dhara_tool` assigns it when building from TrID sources.
+counter. `drot` assigns it when building from TrID sources.
 
-| Existing `filedefs.dat` | `packageVersion` vs current DAL | Next revision |
+| Existing `filedefs.dat` | `packageVersion` vs current core | Next revision |
 |-------------------------|----------------------------------|---------------|
 | Missing or invalid | — | `1` |
-| Present | matches current DAL version | `existing + 1` |
-| Present | differs from current DAL version | `1` |
+| Present | matches current core version | `existing + 1` |
+| Present | differs from current core version | `1` |
 
 `packageVersion` is provenance metadata only. A differing label alone does not mean the
 embedded payload is stale — `defs sync-embedded` compares definition content and
@@ -144,36 +144,38 @@ embedded payload is stale — `defs sync-embedded` compares definition content a
 Example: three rebuilds at DAL `0.6.0` produce revisions `1`, `2`, `3`. After a DAL
 version bump to `0.8.0`, the next build starts again at `1`.
 
-At startup, `dhara_tool` reads the canonical output path, caches revision and version
+At startup, `drot` reads the canonical output path, caches revision and version
 for logging and the GUI workspace snapshot, and updates the cache after each successful write.
-See [`tooling/dhara_tool/crates/dhara_tool_kernel/src/workspace.rs`](../tooling/dhara_tool/crates/dhara_tool_kernel/src/workspace.rs).
+See [`tooling/drot/src/drot_kernel/src/workspace.rs`](../tooling/drot/src/drot_kernel/src/workspace.rs).
 
 ## `tags` field
 
 `tags` is a builder-defined `u32` bitfield. The TrID XML pipeline currently writes
-`48` (`VALIDATED_TAGS` in `dhara_tool`). Treat unspecified bits as reserved for
+`48` (`VALIDATED_TAGS` in `drot`). Treat unspecified bits as reserved for
 future builder features.
 
 ## Build pipeline and artifact locations
 
 | Path | Role |
 |------|------|
-| `tooling/dhara_tool/package/triddefs_xml.7z` | Local TrID XML source archive (gitignored when large) |
-| `tooling/dhara_tool/package/triddefs_xml.source.toml` | Sidecar: upstream `definitions_release` date |
-| `src/core/dhara_storage_dal/resources/filedefs.dat` | Embedded runtime package (published with crate) |
-| `src/core/dhara_storage_dal` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
+| `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
+| `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
+| `{tool_root}/package/` | Runtime default for TrID input (copied beside binary at build) |
+| `src/core/dhara_storage/resources/filedefs.dat` | Embedded runtime package (published with crate) |
+| `dhara_storage` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
+| `tooling/drot/src/drot_dhara_storage/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
 Typical operator commands:
 
 ```powershell
-# Build from the default TrID archive into src/core/dhara_storage_dal/resources/filedefs.dat
-cargo run -p dhara_tool -- defs build-trid-xml -v
+# Build from the default TrID archive into src/core/dhara_storage/resources/filedefs.dat
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs build-trid-xml -v
 
 # Inspect the current package
-cargo run -p dhara_tool -- defs inspect
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs inspect
 
 # Re-copy / rebuild the embedded runtime artifact when needed
-cargo run -p dhara_tool -- defs sync-embedded
+cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs sync-embedded
 ```
 
 The sidecar TOML uses the source stem (`triddefs_xml.source.toml` beside
@@ -184,17 +186,19 @@ normalizes to ISO `YYYY-MM-DD` in the output metadata.
 
 | Crate / module | Responsibility |
 |----------------|----------------|
-| `dhara_storage_dal` | Owns DSFD layout, FlatBuffers schema, XML metadata, encode/decode |
-| `dhara_storage` | Runtime analysis; loads bundled package through DAL |
-| `dhara_tool` | Builds, inspects, syncs, and assigns `packageRevision` |
+| `dhara_storage_core` | Owns DSFD layout, FlatBuffers schema, XML metadata, encode/decode (no embed) |
+| `dhara_storage` | Runtime analysis; embeds and indexes `filedefs.dat` |
+| `drot` | Builds, inspects, syncs, and assigns `packageRevision` |
 | `dharastorage` | C ABI for managed hosts; does not parse DSFD layout directly |
 
-Public DAL entry points:
+Public core entry points:
 
 - `encode_definition_package` / `decode_definition_package` — full file round-trip
 - `root_definition_package` — borrowed view over payload inside a file buffer
-- `bundled_definition_package` — compile-time embedded runtime package
 
+Runtime embed entry point (`dhara_storage`):
+
+- `bundled_definition_package` — compile-time embedded `filedefs.dat`
 ## Design notes
 
 **Why XML at the end?** Metadata such as tool version and dataset release date is
@@ -212,14 +216,14 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 ## Related docs
 
-- [Logging conventions][logging] — audit log format for `dhara_tool` builds
-- [dhara_storage_dal README][readme-dal] — crate-local quick reference
-- [dhara_tool package/ notes][package-readme] — builder input assets
+- [Logging conventions][logging] — audit log format for `drot` builds
+- [dhara_storage_core README][readme-core] — crate-local quick reference
+- [drot package/ notes][package-readme] — shipped TrID build inputs
 - [CI/CD pipelines][ci-cd] — defs build in release flow
 - [Docs index][docs-index]
 
 [logging]: logging.md
-[readme-dal]: ../src/core/dhara_storage_dal/README.md
-[package-readme]: ../tooling/dhara_tool/package/README.md
+[readme-core]: ../src/core/dhara_storage_core/README.md
+[package-readme]: ../tooling/drot/src/drot_dhara_storage/package/README.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md

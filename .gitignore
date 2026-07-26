@@ -455,10 +455,5 @@ $RECYCLE.BIN/
 
 # Workspace specific
 /temp
-**/[Pp]ackage/*
-!**/[Pp]ackage/*.md
 .env.local
 .dotnet/
-target/dist/logs/
-target/dist/output/
-target/dist/artifacts/

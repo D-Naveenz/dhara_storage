@@ -8,6 +8,10 @@ public sealed class DharaStorageException : Exception
     /// <summary>
     /// Initializes a new instance of the <see cref="DharaStorageException"/> class.
     /// </summary>
+    /// <param name="message">Human-readable failure message from the native boundary.</param>
+    /// <param name="code">Native error code string.</param>
+    /// <param name="path">Path associated with the failure, when available.</param>
+    /// <param name="operation">Native operation name, when available.</param>
     public DharaStorageException(string message, string code, string? path = null, string? operation = null)
         : base(message)
     {

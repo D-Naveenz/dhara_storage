@@ -1,3 +1,5 @@
+//! Immediate query exports (analysis, listings, metadata) for the C ABI.
+
 use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 

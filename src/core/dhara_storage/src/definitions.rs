@@ -1,6 +1,8 @@
+//! Runtime loading and decoding of the bundled file-definition database.
+
 use std::collections::BTreeSet;
 
-use dhara_storage_dal as dal;
+use dhara_storage_core as core_pkg;
 use once_cell::sync::Lazy;
 use tracing::{debug, info};
 
@@ -8,16 +10,25 @@ use crate::error::StorageError;
 
 /// Four-byte FlatBuffers file identifier used by normalized file-definition packages.
 pub const DEFINITION_PACKAGE_ID: [u8; 4] = {
-    const IDENT: &str = dal::DEFINITION_PACKAGE_IDENTIFIER;
+    const IDENT: &str = core_pkg::DEFINITION_PACKAGE_IDENTIFIER;
     const BYTES: &[u8] = IDENT.as_bytes();
     [BYTES[0], BYTES[1], BYTES[2], BYTES[3]]
 };
 const CATCH_ALL_INDEX: usize = 256;
 
-pub use dal::{
+pub use core_pkg::{
     DefinitionPackage, DefinitionPackageError as DefinitionPackageDecodeError, DefinitionRecord,
     SignatureDefinition, SignaturePattern,
 };
+
+const BUNDLED_FILEDEFS_BYTES: &[u8] = include_bytes!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/resources/filedefs.dat"
+));
+
+static BUNDLED_PACKAGE: Lazy<Result<DefinitionPackage, String>> = Lazy::new(|| {
+    core_pkg::decode_definition_package(BUNDLED_FILEDEFS_BYTES).map_err(|err| err.to_string())
+});
 
 static DATABASE: Lazy<Result<DefinitionDatabase, String>> = Lazy::new(|| {
     bundled_definition_package()
@@ -86,16 +97,18 @@ impl DefinitionDatabase {
     }
 }
 
-/// Returns the embedded file-definition package bundled with the DAL crate.
+/// Returns the embedded file-definition package bundled with the runtime crate.
 ///
 /// # Errors
 ///
 /// Returns an error when the embedded `filedefs.dat` asset cannot be decoded.
 pub fn bundled_definition_package() -> Result<&'static DefinitionPackage, StorageError> {
     debug!(target: "dhara_storage::definitions", "loading bundled definition package");
-    dal::bundled_definition_package().map_err(|err| StorageError::DefinitionsLoad {
-        message: err.to_string(),
-    })
+    BUNDLED_PACKAGE
+        .as_ref()
+        .map_err(|message| StorageError::DefinitionsLoad {
+            message: message.clone(),
+        })
 }
 
 /// Decodes an in-memory `filedefs.dat` blob.
@@ -109,7 +122,7 @@ pub fn decode_definition_package(bytes: &[u8]) -> Result<DefinitionPackage, Stor
         byte_len = bytes.len(),
         "decoding DSFD definition package"
     );
-    dal::decode_definition_package(bytes).map_err(|err| StorageError::DefinitionsLoad {
+    core_pkg::decode_definition_package(bytes).map_err(|err| StorageError::DefinitionsLoad {
         message: err.to_string(),
     })
 }
@@ -124,7 +137,7 @@ pub(crate) fn database() -> Result<&'static DefinitionDatabase, StorageError> {
 
 #[cfg(test)]
 mod tests {
-    use dhara_storage_dal::encode_definition_package;
+    use dhara_storage_core::encode_definition_package;
 
     use super::{bundled_definition_package, database, decode_definition_package};
 

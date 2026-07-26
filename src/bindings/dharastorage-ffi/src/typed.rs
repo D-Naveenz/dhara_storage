@@ -1,3 +1,5 @@
+//! Typed `#[repr(C)]` result structs and free helpers for hot-path FFI.
+
 use std::ptr;
 
 use dhara_storage::{

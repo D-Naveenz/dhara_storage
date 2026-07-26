@@ -1,0 +1,21 @@
+[package]
+name = "dhara_storage_core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Framework crate for Dhara Storage — abstraction layer used by the business runtime."
+readme = "README.md"
+documentation = "https://docs.rs/dhara_storage_core"
+keywords = ["storage", "framework", "flatbuffers", "definitions", "dhara"]
+categories = ["encoding", "filesystem"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+flatbuffers = "25.12.19"
+quick-xml = { version = "0.41.0", features = ["serialize"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "2.0"

@@ -29,14 +29,14 @@ jobs:
       should_run: ${{ steps.check.outputs.should_run }}
     steps:
       - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@v3
+      - uses: dorny/paths-filter@v4
         if: github.event_name == 'push'
         id: filter
         with:
           filters: |
             cargo_scope:
               - 'src/core/dhara_storage/**'
-              - 'src/core/dhara_storage_dal/**'
+              - 'src/core/dhara_storage_core/**'
               - 'dhara.config.toml'
               - 'Cargo.toml'
               - 'Cargo.lock'
@@ -65,9 +65,7 @@ jobs:
           persist-credentials: true
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2

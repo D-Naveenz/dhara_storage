@@ -1,3 +1,5 @@
+//! Low-level ABI ownership helpers and handle bookkeeping.
+
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::PathBuf;
