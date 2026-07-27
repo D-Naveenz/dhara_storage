@@ -8,9 +8,9 @@ This is a pilot—not a production migration. Results inform a later go / hybrid
 
 | Path | Role |
 |------|------|
-| [`src/bindings/pilot/proto/dhara_pilot.proto`](../src/bindings/pilot/proto/dhara_pilot.proto) | gRPC contract (`dhara.pilot.v1`) |
-| [`src/bindings/pilot/dhara-storage-daemon-pilot/`](../src/bindings/pilot/dhara-storage-daemon-pilot/) | Windows named-pipe tonic server |
-| [`src/bindings/pilot/Dhara.Storage.BenchPilot/`](../src/bindings/pilot/Dhara.Storage.BenchPilot/) | BenchmarkDotNet harness |
+| [`interop/proto/dhara_pilot.proto`](../interop/proto/dhara_pilot.proto) | gRPC contract (`dhara.pilot.v1`) |
+| [`interop/dhara-storage-daemon-pilot/`](../interop/dhara-storage-daemon-pilot/) | Windows named-pipe tonic server |
+| [`benchmark/Dhara.Storage.BenchPilot/`](../benchmark/Dhara.Storage.BenchPilot/) | BenchmarkDotNet harness |
 
 Outputs: `target/bench-pilot/bdn/` (gitignored).
 
@@ -24,16 +24,16 @@ Outputs: `target/bench-pilot/bdn/` (gitignored).
 ## How to run
 
 ```powershell
-dotnet build src/bindings/pilot/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release
+dotnet build benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release
 
 # Full B1/B2 suite (BenchmarkDotNet)
-dotnet run --project src/bindings/pilot/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build
+dotnet run --project benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build
 
 # Short smoke suite
-dotnet run --project src/bindings/pilot/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build -- --smoke
+dotnet run --project benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build -- --smoke
 
 # Filter methods (BenchmarkDotNet args)
-dotnet run --project src/bindings/pilot/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build -- --filter *Copy*
+dotnet run --project benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build -- --filter *Copy*
 ```
 
 Packages match the Visual Studio BenchmarkSuite template: `BenchmarkDotNet` 0.15.8 + DiagnosticsHub diagnosers (`MemoryDiagnoser`, `CPUUsageDiagnoser`).

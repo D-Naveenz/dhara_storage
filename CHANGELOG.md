@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Changed
+- Relocated monorepo packages out of `src/`: `core/`, `interop/` (FFI + pilot daemon), `bindings/csharp/`, and `benchmark/` (manual BenchPilot). Tooling stays under `tooling/`.
+
 ---
 
 ## v0.9.6 - 2026-07-26
@@ -21,7 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Replaced in-tree `dhara_tool` with the DROT submodule; storage CI/CD and local verify scripts call `target/dist/drot`.
-- Moved bundled `filedefs.dat` into `src/core/dhara_storage/resources/` (runtime `include_bytes!`); DROT sync targets that path.
+- Moved bundled `filedefs.dat` into `core/dhara_storage/resources/` (runtime `include_bytes!`); DROT sync targets that path.
 - Nestled DSFD types under `dhara_storage_core::definitions` while keeping crate-root re-exports stable for callers.
 - Clarified product split: core = framework/abstractions; `dhara_storage` = storage runtime (handles, analysis, watch, metadata).
 - Moved primary .NET tests and NuGet verify onto Linux runners; Windows retained for MSVC native staging.

@@ -90,7 +90,7 @@
       "command": "dotnet",
       "args": [
         "build",
-        "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj",
+        "${workspaceFolder}/bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj",
         "/property:GenerateFullPaths=true",
         "/consoleloggerparameters:NoSummary;ForceNoAlign"
       ],
@@ -107,7 +107,7 @@
         "watch",
         "test",
         "--project",
-        "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
+        "${workspaceFolder}/bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
       ],
       "options": {
         "cwd": "${workspaceFolder}"

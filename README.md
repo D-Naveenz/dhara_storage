@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="src/bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png" alt="Dhara Storage" width="120" />
+<img src="bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png" alt="Dhara Storage" width="120" />
 
 # Dhara Storage
 
@@ -58,10 +58,10 @@ Contributor / agent context: [AGENTS.md][agents].
 
 Licensed under [Apache-2.0][license].
 
-[readme-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage/README.md
-[readme-core]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage_core/README.md
-[readme-dharastorage]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/bindings/dharastorage-ffi/README.md
-[readme-nuget]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/bindings/csharp/Dhara.Storage/README.md
+[readme-dhara-storage]: https://github.com/D-Naveenz/dhara_storage/blob/main/core/dhara_storage/README.md
+[readme-core]: https://github.com/D-Naveenz/dhara_storage/blob/main/core/dhara_storage_core/README.md
+[readme-dharastorage]: https://github.com/D-Naveenz/dhara_storage/blob/main/interop/dharastorage-ffi/README.md
+[readme-nuget]: https://github.com/D-Naveenz/dhara_storage/blob/main/bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: https://github.com/D-Naveenz/dhara_storage/blob/main/tooling/drot/README.md
 [crates-dhara]: https://crates.io/crates/dhara_storage
 [nuget-dhara]: https://www.nuget.org/packages/Dhara.Storage

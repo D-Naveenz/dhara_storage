@@ -50,7 +50,7 @@ Binary layout details: [filedefs.dat / DSFD][filedefs-dat].
 
 Apache-2.0.
 
-[runtime]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage/README.md
+[runtime]: https://github.com/D-Naveenz/dhara_storage/blob/main/core/dhara_storage/README.md
 [root]: https://github.com/D-Naveenz/dhara_storage
 [filedefs-dat]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/filedefs-dat.md
 [docs-rs]: https://docs.rs/dhara_storage_core

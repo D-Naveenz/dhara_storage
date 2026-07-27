@@ -249,7 +249,7 @@ function Test-RepoLfsHealth {
         }
 
         $missingPointer = $false
-        $samplePath = "src/bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png"
+        $samplePath = "bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png"
         if (Test-Path -LiteralPath $samplePath) {
             $head = Get-Content -LiteralPath $samplePath -TotalCount 1 -ErrorAction SilentlyContinue
             if ($head -match '^version https://git-lfs.github.com/spec/v1') {

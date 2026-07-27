@@ -107,6 +107,6 @@ Install a `tracing` subscriber in your app if you want structured logs.
 
 Apache-2.0.
 
-[core]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage_core/README.md
+[core]: https://github.com/D-Naveenz/dhara_storage/blob/main/core/dhara_storage_core/README.md
 [root]: https://github.com/D-Naveenz/dhara_storage
 [docs-rs]: https://docs.rs/dhara_storage

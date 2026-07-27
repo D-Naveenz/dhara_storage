@@ -74,7 +74,7 @@
       "type": "coreclr",
       "request": "launch",
       "preLaunchTask": "dotnet: build tests",
-      "program": "${workspaceFolder}/src/bindings/Dhara.Storage.Tests/bin/Debug/net10.0/Dhara.Storage.Tests.dll",
+      "program": "${workspaceFolder}/bindings/csharp/Dhara.Storage.Tests/bin/Debug/net10.0/Dhara.Storage.Tests.dll",
       "args": [],
       "cwd": "${workspaceFolder}",
       "console": "internalConsole",

@@ -6,13 +6,17 @@ This document maps how the monorepo is organized after the tool-focused modulari
 
 ```mermaid
 flowchart TB
-  subgraph core [src/core]
+  subgraph core [core]
     coreCrate[dhara_storage_core]
     runtime[dhara_storage]
   end
 
-  subgraph bindings [src/bindings]
+  subgraph interop [interop]
     ffi[dharastorage-ffi cdylib dharastorage]
+    daemon[dhara-storage-daemon-pilot]
+  end
+
+  subgraph bindings [bindings]
     csharp[csharp Dhara.Storage]
   end
 
@@ -25,6 +29,7 @@ flowchart TB
 
   coreCrate --> runtime
   runtime --> ffi
+  runtime --> daemon
   ffi --> csharp
   plugin --> kernel
   bin --> kernel
@@ -36,10 +41,12 @@ flowchart TB
 
 | Path | Role |
 |------|------|
-| `src/core/dhara_storage_core` | Framework / abstraction layer (`definitions` = DSFD today; no embedded defs) |
-| `src/core/dhara_storage` | Business runtime; embeds `filedefs.dat` |
-| `src/bindings/dharastorage-ffi` | C ABI crate (`dharastorage-ffi` package, `dharastorage` lib name) |
-| `src/bindings/csharp/` | `Dhara.Storage` NuGet source, tests, consumer smoke |
+| `core/dhara_storage_core` | Framework / abstraction layer (`definitions` = DSFD today; no embedded defs) |
+| `core/dhara_storage` | Business runtime; embeds `filedefs.dat` |
+| `interop/dharastorage-ffi` | C ABI crate (`dharastorage-ffi` package, `dharastorage` lib name) |
+| `interop/dhara-storage-daemon-pilot` | Pilot gRPC daemon (Windows named pipes) |
+| `bindings/csharp/` | `Dhara.Storage` NuGet source, tests, consumer smoke |
+| `benchmark/` | Manual BenchmarkDotNet harness (not CI/CD) |
 | `tooling/drot/src/*` | Nested workspace: kernel → plugin → hosts (tui / binary) |
 | `dhara.config.toml` | Workspace semver, tool semver, NuGet/CI metadata |
 
@@ -139,7 +146,7 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 |---------|-----------|
 | **Compile-time codec (interim)** | `drot_dhara_storage` pins published `dhara_storage_dal` from crates.io so orchestration CI builds without a local core tree |
 | **Compile-time core (after publish)** | Switch plugin dep to `dhara_storage_core = "0.9.6"`; optional DROT workspace `[patch.crates-io]` to the local path |
-| **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `src/core/dhara_storage/resources/filedefs.dat` — data path, not a path dependency |
+| **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `core/dhara_storage/resources/filedefs.dat` — data path, not a path dependency |
 | **Package version read** | Builder stamps `packageVersion` from linked codec crate `PACKAGE_VERSION` (dal interim; core after cutover) |
 
 | Artifact | Version authority | Typical bump |

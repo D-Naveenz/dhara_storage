@@ -64,7 +64,7 @@ Full contract: [typed C-compatible ABI][typed-abi].
 
 Apache-2.0.
 
-[nuget]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/bindings/csharp/Dhara.Storage/README.md
-[runtime]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/core/dhara_storage/README.md
+[nuget]: https://github.com/D-Naveenz/dhara_storage/blob/main/bindings/csharp/Dhara.Storage/README.md
+[runtime]: https://github.com/D-Naveenz/dhara_storage/blob/main/core/dhara_storage/README.md
 [root]: https://github.com/D-Naveenz/dhara_storage
 [typed-abi]: https://github.com/D-Naveenz/dhara_storage/blob/main/docs/typed-c-compatible-abi.md

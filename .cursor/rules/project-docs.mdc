@@ -19,10 +19,10 @@ Pitch, exclusions, and design lineage: **[AGENTS.md → Product intent](../../AG
 | README | Audience / surface |
 |--------|-------------------|
 | [`README.md`](../../README.md) | GitHub — product overview, package routing |
-| [`src/core/dhara_storage/README.md`](../../src/core/dhara_storage/README.md) | crates.io — Rust runtime |
-| [`src/core/dhara_storage_core/README.md`](../../src/core/dhara_storage_core/README.md) | crates.io — framework |
-| [`src/bindings/dharastorage-ffi/README.md`](../../src/bindings/dharastorage-ffi/README.md) | Native C ABI (NuGet asset) |
-| [`src/bindings/csharp/Dhara.Storage/README.md`](../../src/bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
+| [`core/dhara_storage/README.md`](../../core/dhara_storage/README.md) | crates.io — Rust runtime |
+| [`core/dhara_storage_core/README.md`](../../core/dhara_storage_core/README.md) | crates.io — framework |
+| [`interop/dharastorage-ffi/README.md`](../../interop/dharastorage-ffi/README.md) | Native C ABI (NuGet asset) |
+| [`bindings/csharp/Dhara.Storage/README.md`](../../bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
 | [`tooling/drot/README.md`](../../tooling/drot/README.md) | DROT submodule — operators |
 
 No folder-container READMEs. Submodule project READMEs follow the same convention.

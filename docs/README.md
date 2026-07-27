@@ -42,10 +42,10 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 - [pipeline workflow][pipeline-yml] — canonical CI/CD definition
 
 [root-readme]: ../README.md
-[readme-dhara-storage]: ../src/core/dhara_storage/README.md
-[readme-core]: ../src/core/dhara_storage_core/README.md
-[readme-dharastorage]: ../src/bindings/dharastorage-ffi/README.md
-[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
+[readme-dhara-storage]: ../core/dhara_storage/README.md
+[readme-core]: ../core/dhara_storage_core/README.md
+[readme-dharastorage]: ../interop/dharastorage-ffi/README.md
+[readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
 [readme-tool]: ../tooling/drot/README.md
 [logging]: logging.md
 [tui-progress]: tui-progress.md

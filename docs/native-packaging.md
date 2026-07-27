@@ -93,7 +93,7 @@ Staged natives must be added in a `Pack` target as `_PackageFiles` with an expli
 
 ```powershell
 $stage = (Resolve-Path target/dist/artifacts/native-stage).Path
-dotnet pack src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj `
+dotnet pack bindings/csharp/Dhara.Storage/Dhara.Storage.csproj `
   -c Release -p:StagedNativeRoot=$stage `
   --output target/dist/output/test-nuget
 ```
@@ -126,7 +126,7 @@ Directory watch integration tests should **poll for the created file path** afte
 - [Logging conventions][logging] — `package.stage-native` and `verify.package` audit lines
 - [dhara.config.toml][dhara-config] — `ci.native_runtimes` and rust target mappings
 
-[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
+[readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
 [ci-cd]: ci-cd-pipelines.md
 [readme-tool]: ../tooling/drot/README.md
 [tooling-scripts]: ../tooling/scripts/
@@ -134,7 +134,7 @@ Directory watch integration tests should **poll for the created file path** afte
 [native-rids-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
-[csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
-[watch-rs]: ../src/core/dhara_storage/src/watch.rs
+[csproj]: ../bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
+[watch-rs]: ../core/dhara_storage/src/watch.rs
 [logging]: logging.md
 [dhara-config]: ../dhara.config.toml
