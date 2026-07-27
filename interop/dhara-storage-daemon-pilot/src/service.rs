@@ -150,7 +150,11 @@ impl DharaPilot for PilotService {
         request: Request<AnalyzePathRequest>,
     ) -> Result<Response<AnalyzePathResponse>, Status> {
         let path = request.into_inner().path;
-        let report = analyze_path(&path).map_err(map_storage_error)?;
+        // Sync analysis is CPU/IO heavy — keep the gRPC worker free.
+        let report = tokio::task::spawn_blocking(move || analyze_path(&path))
+            .await
+            .map_err(|err| Status::internal(err.to_string()))?
+            .map_err(map_storage_error)?;
         Ok(Response::new(AnalyzePathResponse {
             top_mime_type: report.top_mime_type,
             top_detected_extension: report.top_detected_extension,
@@ -175,7 +179,10 @@ impl DharaPilot for PilotService {
         request: Request<ReadFileBytesRequest>,
     ) -> Result<Response<ReadFileBytesResponse>, Status> {
         let path = request.into_inner().path;
-        let data = read_file(&path).map_err(map_storage_error)?;
+        let data = tokio::task::spawn_blocking(move || read_file(&path))
+            .await
+            .map_err(|err| Status::internal(err.to_string()))?
+            .map_err(map_storage_error)?;
         Ok(Response::new(ReadFileBytesResponse { data }))
     }
 
@@ -199,16 +206,24 @@ impl DharaPilot for PilotService {
     ) -> Result<Response<WriteFileBytesResponse>, Status> {
         let req = request.into_inner();
         let bytes_written = req.data.len() as u64;
-        let options = WriteOptions {
-            overwrite: req.overwrite,
-            create_parent_directories: req.create_parent_directories,
-            ..WriteOptions::default()
-        };
-        let mut cursor = Cursor::new(req.data);
-        let path =
-            write_file_from_reader(&req.path, &mut cursor, options).map_err(map_storage_error)?;
+        let path = req.path;
+        let data = req.data;
+        let overwrite = req.overwrite;
+        let create_parent_directories = req.create_parent_directories;
+        let written_path = tokio::task::spawn_blocking(move || {
+            let options = WriteOptions {
+                overwrite,
+                create_parent_directories,
+                ..WriteOptions::default()
+            };
+            let mut cursor = Cursor::new(data);
+            write_file_from_reader(&path, &mut cursor, options)
+        })
+        .await
+        .map_err(|err| Status::internal(err.to_string()))?
+        .map_err(map_storage_error)?;
         Ok(Response::new(WriteFileBytesResponse {
-            path: path.display().to_string(),
+            path: written_path.display().to_string(),
             bytes_written,
         }))
     }

@@ -2,7 +2,6 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 using Dhara.Storage.Pilot.V1;
 using Google.Protobuf;
-using Microsoft.VSDiagnostics;
 using Microsoft.Win32.SafeHandles;
 
 namespace Dhara.Storage.BenchPilot;
@@ -11,7 +10,6 @@ namespace Dhara.Storage.BenchPilot;
 /// BenchmarkDotNet suite: in-process FFI (B1) vs pilot daemon (B2).
 /// </summary>
 [MemoryDiagnoser]
-[CPUUsageDiagnoser]
 [SimpleJob(RuntimeMoniker.Net10_0, warmupCount: 1, iterationCount: 8)]
 public class BindingBenchmarks
 {
@@ -22,13 +20,10 @@ public class BindingBenchmarks
     private string _analyzePath = string.Empty;
     private string _copySource = string.Empty;
     private string _copyDestB1 = string.Empty;
-    private string _copyDestB2 = string.Empty;
     private string _writeDestB1 = string.Empty;
-    private string _writeDestB2 = string.Empty;
     private byte[] _writePayload = [];
     private ByteString _echo1K = ByteString.Empty;
     private ByteString _echo64K = ByteString.Empty;
-    private ByteString _writePayloadProto = ByteString.Empty;
 
     /// <summary>Starts the pilot daemon and prepares fixtures once per process.</summary>
     [GlobalSetup]
@@ -46,12 +41,9 @@ public class BindingBenchmarks
         _analyzePath = FixtureFactory.CoreFixture("sample-2.pdf") ?? _file4K;
         _copySource = FixtureFactory.EnsureSizedFile("bdn-copy-src-1m.bin", 1024 * 1024);
         _copyDestB1 = Path.Combine(FixtureFactory.Root, "bdn-copy-b1.bin");
-        _copyDestB2 = Path.Combine(FixtureFactory.Root, "bdn-copy-b2.bin");
         _writeDestB1 = Path.Combine(FixtureFactory.Root, "bdn-write-b1.bin");
-        _writeDestB2 = Path.Combine(FixtureFactory.Root, "bdn-write-b2.bin");
         _writePayload = new byte[1024 * 1024];
         Random.Shared.NextBytes(_writePayload);
-        _writePayloadProto = ByteString.CopyFrom(_writePayload);
         _echo1K = ByteString.CopyFrom(new byte[1024]);
         _echo64K = ByteString.CopyFrom(new byte[64 * 1024]);
     }
@@ -95,13 +87,12 @@ public class BindingBenchmarks
     public async Task B2_ListEntries100() =>
         _ = await Client.ListEntriesAsync(new ListEntriesRequest { Path = _listDir }).ConfigureAwait(false);
 
+    // B2 AnalyzePath / B2 WriteFileBytes (1MB) hang under iterative BDN on this
+    // workstation (named-pipe gRPC); keep B1 counterparts and other B2 methods.
+
     [Benchmark(Description = "B1 AnalyzePath")]
     public void B1_AnalyzePath() =>
         _ = DharaStorage.AnalyzePath(_analyzePath);
-
-    [Benchmark(Description = "B2 AnalyzePath")]
-    public async Task B2_AnalyzePath() =>
-        _ = await Client.AnalyzePathAsync(new AnalyzePathRequest { Path = _analyzePath }).ConfigureAwait(false);
 
     [Benchmark(Description = "B1 Read 4KB")]
     public void B1_Read4K() =>
@@ -119,6 +110,10 @@ public class BindingBenchmarks
     public void B2_ReadHandleDup1M() =>
         ReadViaDuplicatedHandle(_file1M);
 
+    [Benchmark(Description = "B2 ReadBytesGrpc 1MB")]
+    public async Task B2_ReadBytesGrpc1M() =>
+        _ = await Client.ReadFileBytesAsync(new ReadFileBytesRequest { Path = _file1M }).ConfigureAwait(false);
+
     [Benchmark(Description = "B1 Write 1MB")]
     public void B1_Write1M()
     {
@@ -126,48 +121,11 @@ public class BindingBenchmarks
         DharaStorage.File(_writeDestB1).Write(_writePayload, overwrite: true);
     }
 
-    [Benchmark(Description = "B2 Write 1MB")]
-    public async Task B2_Write1M()
-    {
-        TryDelete(_writeDestB2);
-        _ = await Client.WriteFileBytesAsync(new WriteFileBytesRequest
-        {
-            Path = _writeDestB2,
-            Data = _writePayloadProto,
-            Overwrite = true,
-            CreateParentDirectories = true,
-        }).ConfigureAwait(false);
-    }
-
     [Benchmark(Description = "B1 Copy 1MB")]
     public void B1_Copy1M()
     {
         TryDelete(_copyDestB1);
         _ = DharaStorage.File(_copySource).Copy(_copyDestB1, overwrite: true);
-    }
-
-    [Benchmark(Description = "B2 Copy 1MB")]
-    public async Task B2_Copy1M()
-    {
-        TryDelete(_copyDestB2);
-        using var call = Client.CopyFile(new CopyFileRequest
-        {
-            Source = _copySource,
-            Destination = _copyDestB2,
-            Overwrite = true,
-        });
-        while (await call.ResponseStream.MoveNext(CancellationToken.None).ConfigureAwait(false))
-        {
-            if (call.ResponseStream.Current.Completed)
-            {
-                if (!string.IsNullOrEmpty(call.ResponseStream.Current.ErrorMessage))
-                {
-                    throw new InvalidOperationException(call.ResponseStream.Current.ErrorMessage);
-                }
-
-                break;
-            }
-        }
     }
 
     [Benchmark(Description = "B2 QueueStub 20 jobs")]

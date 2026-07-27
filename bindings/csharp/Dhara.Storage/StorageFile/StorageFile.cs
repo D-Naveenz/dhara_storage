@@ -208,11 +208,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        if (progress is null)
-        {
-            return new StorageFile(NativeQueryInvoker.CopyFile(FullPath, destination));
-        }
-
+        // Always use the operation ABI so `overwrite` is applied (sync query helpers omit it).
         var handle = NativeOperationHandle.Create(() =>
         {
             var status = NativeOperations.dhara_operation_start_copy_file(FullPath, destination, NativeHelpers.ToNativeBool(overwrite), out var nativeHandle, out var errorPtr, out var errorLen);
@@ -231,21 +227,13 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-
-        string newPath;
-        if (progress is null)
+        // Always use the operation ABI so `overwrite` is applied (sync query helpers omit it).
+        var handle = NativeOperationHandle.Create(() =>
         {
-            newPath = NativeQueryInvoker.MoveFile(FullPath, destination);
-        }
-        else
-        {
-            var handle = NativeOperationHandle.Create(() =>
-            {
-                var status = NativeOperations.dhara_operation_start_move_file(FullPath, destination, NativeHelpers.ToNativeBool(overwrite), out var nativeHandle, out var errorPtr, out var errorLen);
-                return (status, nativeHandle, errorPtr, errorLen);
-            });
-            newPath = await NativeOperationRunner.RunAsync(handle, static operation => operation.TakeStringResult(), progress, cancellationToken).ConfigureAwait(false);
-        }
+            var status = NativeOperations.dhara_operation_start_move_file(FullPath, destination, NativeHelpers.ToNativeBool(overwrite), out var nativeHandle, out var errorPtr, out var errorLen);
+            return (status, nativeHandle, errorPtr, errorLen);
+        });
+        var newPath = await NativeOperationRunner.RunAsync(handle, static operation => operation.TakeStringResult(), progress, cancellationToken).ConfigureAwait(false);
 
         UpdatePath(newPath);
     }

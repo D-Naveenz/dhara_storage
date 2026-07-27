@@ -52,7 +52,6 @@ internal static class FixtureFactory
     {
         var path = Path.Combine(
             DaemonHost.FindRepoRoot(),
-            "src",
             "core",
             "dhara_storage",
             "tests",

@@ -86,7 +86,9 @@ internal sealed class DaemonHost : IAsyncDisposable
     {
         var handler = new SocketsHttpHandler
         {
-            EnableMultipleHttp2Connections = true,
+            // One pipe connection; HTTP/2 multiplexes RPCs. Extra connects race the
+            // daemon accept loop and can hang BDN under iterative Analyze/load.
+            EnableMultipleHttp2Connections = false,
             ConnectCallback = async (_, cancellationToken) =>
             {
                 var pipe = new NamedPipeClientStream(
