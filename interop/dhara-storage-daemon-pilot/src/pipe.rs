@@ -53,31 +53,44 @@ impl AsyncWrite for PipeConnection {
 }
 
 /// Accept named-pipe clients and serve the provided tonic router until the last client disconnects.
+///
+/// Always keeps a spare listening instance before handing off a connected pipe so a concurrent
+/// client does not race an empty accept queue (Tokio Windows named-pipe listen pattern).
 pub async fn serve_named_pipe(pipe_name: &str, router: Router) -> Result<(), Box<dyn std::error::Error>> {
     let pipe_name = pipe_name.to_string();
     let incoming = stream! {
-        let mut first = true;
-        loop {
-            let server = match ServerOptions::new()
-                .first_pipe_instance(first)
-                .create(&pipe_name)
-            {
-                Ok(server) => server,
-                Err(err) => {
-                    yield Err(err);
-                    break;
-                }
-            };
-            first = false;
+        // First instance must exist before any client connects.
+        let mut server = match ServerOptions::new()
+            .first_pipe_instance(true)
+            .create(&pipe_name)
+        {
+            Ok(server) => server,
+            Err(err) => {
+                yield Err(err);
+                return;
+            }
+        };
 
+        loop {
             debug!(pipe = %pipe_name, "waiting for named-pipe client");
             if let Err(err) = server.connect().await {
                 yield Err(err);
                 break;
             }
 
+            // Create the next listener before yielding so another client never sees NotFound /
+            // an empty accept queue while HTTP/2 or BDN opens another connection.
+            let next = match ServerOptions::new().create(&pipe_name) {
+                Ok(next) => next,
+                Err(err) => {
+                    yield Err(err);
+                    break;
+                }
+            };
+
             info!(pipe = %pipe_name, "named-pipe client connected");
-            yield Ok(PipeConnection { inner: server });
+            let connected = std::mem::replace(&mut server, next);
+            yield Ok(PipeConnection { inner: connected });
         }
     };
 

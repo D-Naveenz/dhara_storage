@@ -36,7 +36,7 @@ dotnet run --project benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot
 dotnet run --project benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj -c Release --no-build -- --filter *Read*
 ```
 
-Harness uses `BenchmarkDotNet` 0.15.8 with `MemoryDiagnoser`. Supporting code: `DaemonHost`, `FixtureFactory`, `BindingBenchmarks`.
+Harness uses `BenchmarkDotNet` 0.15.8 with `MemoryDiagnoser`. `CPUUsageDiagnoser` (DiagnosticsHub package) is present but commented out when ETW sessions are exhausted on the workstation. Supporting code: `DaemonHost`, `FixtureFactory`, `BindingBenchmarks`.
 
 ## Decision thresholds (vs B1)
 
@@ -56,38 +56,39 @@ Harness uses `BenchmarkDotNet` 0.15.8 with `MemoryDiagnoser`. Supporting code: `
 
 | Method | Mean | Allocated | Notes |
 |--------|------|-----------|-------|
-| B2 Ping | 94 µs | ~6.6 KB | Control-plane floor |
-| B2 Echo 1KB | 94 µs | ~8.4 KB | |
-| B2 Echo 64KB | 292 µs | ~76 KB | |
-| B1 GetFileInfo | 1.32 ms | ~0.6 KB | |
-| B2 GetFileInfo | 159 µs | ~6.9 KB | B2 faster here (FFI path carries more overhead on this host) |
-| B1 ListEntries/100 | 10.1 ms | ~34 KB | |
-| B2 ListEntries/100 | 10.7 ms | ~43 KB | ≈ +5% vs B1 (within ≤ +15%) |
-| B1 AnalyzePath (PDF) | 5.1 ms | ~0.5 KB | |
-| B1 Read 4KB | 125 µs | ~4 KB | |
-| B2 ReadHandleDup 4KB | 269 µs | ~72 KB | Dup overhead dominates tiny reads |
-| B1 Read 1MB | 650 µs | ~1.0 MB | Full buffer over FFI |
-| B2 ReadHandleDup 1MB | 321 µs | ~72 KB | **Beats B1**; host reads via duplicated handle |
-| B2 ReadBytesGrpc 1MB | 2.84 ms | ~1.1 MB | Contrast: bytes-over-gRPC ~9× slower than handle-dup |
-| B1 Write 1MB | 3.36 ms | ~0.4 KB | |
-| B1 Copy 1MB | 78.5 ms | ~1.3 KB | |
-| B2 QueueStub 20 jobs | 4.93 ms | ~142 KB | Synthetic enqueue + event stream |
+| B2 Ping | 181 µs | ~7 KB | Control-plane floor |
+| B2 Echo 1KB | 222 µs | ~9 KB | |
+| B2 Echo 64KB | 518 µs | ~76 KB | |
+| B1 GetFileInfo | 1.94 ms | ~0.6 KB | |
+| B2 GetFileInfo | 250 µs | ~7 KB | B2 faster here (FFI path carries more overhead on this host) |
+| B1 ListEntries/100 | 13.3 ms | ~33 KB | |
+| B2 ListEntries/100 | 20.3 ms | ~48 KB | ≈ +53% vs B1 (above ≤ +15% chatty threshold on this run) |
+| B1 AnalyzePath (PDF) | 6.4 ms | ~0.5 KB | |
+| B2 AnalyzePath (PDF) | 9.4 ms | ~10 KB | ≈ +45% vs B1 |
+| B1 Read 4KB | 161 µs | ~4 KB | |
+| B2 ReadHandleDup 4KB | 617 µs | ~71 KB | Dup overhead dominates tiny reads |
+| B1 Read 1MB | 814 µs | ~1.0 MB | Full buffer over FFI |
+| B2 ReadHandleDup 1MB | 778 µs | ~71 KB | Competitive with B1; host reads via duplicated handle |
+| B2 ReadBytesGrpc 1MB | 6.7 ms | ~2.1 MB | Contrast: bytes-over-gRPC much slower than handle-dup |
+| B1 Write 1MB | 5.9 ms | ~0.4 KB | |
+| B2 Write 1MB | 11.1 ms | ~154 KB | ≈ +89% vs B1 |
+| B1 Copy 1MB | 78.4 ms | ~1.3 KB | |
+| B2 Copy 1MB | 5.9 ms | ~84 KB | **Beats B1** (~8×) on this host |
+| B2 QueueStub 20 jobs | 5.3 ms | ~149 KB | Synthetic enqueue + event stream |
 
-**Reading:** handle duplication is the right data-plane for large B2 reads. Chatty list is competitive. Tiny B2 reads pay IPC/dup tax.
+**Reading:** handle duplication remains the right data-plane for large B2 reads. B2 copy streaming wins clearly vs B1 on this machine. Chatty list and analyze still pay IPC tax.
 
-**Pilot lean:** **hybrid** — keep FFI (or tighten it) for small ops; use a daemon + handle transfer for large reads / isolation. Not a pure go-daemon cutover yet.
+**Pilot lean:** **hybrid** — keep FFI (or tighten it) for small ops; use a daemon + handle transfer for large reads / isolation; copy-over-RPC is promising. Not a pure go-daemon cutover yet.
 
-### Suite gaps / known hangers
+### Stability notes
 
-These B2 methods hang under iterative BenchmarkDotNet on this workstation (named-pipe gRPC + streaming/large unary payloads). They remain implemented on the daemon but are **not** in the default BDN suite:
+Named-pipe hang fixes in this pilot:
 
-- B2 AnalyzePath
-- B2 WriteFileBytes (1MB)
-- B2 CopyFile (progress stream)
+1. Daemon accept loop creates the **next** listening pipe instance **before** yielding a connected one (Tokio Windows named-pipe pattern).
+2. `DaemonHost` must **not** redirect unread daemon stdout/stderr — a full stderr pipe blocked the daemon under `info`-level Analyze logging.
+3. Client: single HTTP/2 pipe connection (`EnableMultipleHttp2Connections = false`), multi-MB message size limits, absolute gRPC deadlines (not GC-discarded `CancellationTokenSource` tokens).
 
-`DaemonHost` uses a single HTTP/2 pipe connection (`EnableMultipleHttp2Connections = false`). Heavy daemon handlers run under `spawn_blocking`. Further pipe/stream hardening is future work.
-
-Cold start (spawn + first Ping) is dominated by process create + named-pipe connect; use Ping (~94 µs steady-state) as the warm control-plane floor rather than a separate cold-start job.
+Heavy daemon handlers still use `spawn_blocking`. Cold start (spawn + first Ping) is dominated by process create + named-pipe connect; use Ping as the warm control-plane floor.
 
 ## Smoke snapshot (`--smoke`, Release)
 
@@ -107,4 +108,3 @@ Prefer the showcase table above for decisions.
 - Python: same daemon + `grpcio`
 - Replace queue stubs with real `ProcessingQueue`
 - Directory-watch event latency (awkward in BDN; add only if needed)
-- Stabilize B2 analyze / large write / copy streams under BDN

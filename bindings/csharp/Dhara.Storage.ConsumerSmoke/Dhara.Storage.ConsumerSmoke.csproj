@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers>
     <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
-    <DharaStoragePackageVersion Condition="'$(DharaStoragePackageVersion)' == ''">0.4.0</DharaStoragePackageVersion>
+    <DharaStoragePackageVersion Condition="'$(DharaStoragePackageVersion)' == ''">0.9.6</DharaStoragePackageVersion>
   </PropertyGroup>
 
   <ItemGroup>

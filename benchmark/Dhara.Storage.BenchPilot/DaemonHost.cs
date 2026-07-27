@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net.Http;
+using System.Security.Principal;
 using Dhara.Storage.Pilot.V1;
 using Grpc.Net.Client;
 
@@ -12,6 +13,9 @@ namespace Dhara.Storage.BenchPilot;
 internal sealed class DaemonHost : IAsyncDisposable
 {
     public const string DefaultPipeName = @"dhara-storage-pilot";
+
+    /// <summary>Upper bound for unary payloads in the pilot suite (covers 1MB reads/writes).</summary>
+    private const int MaxMessageBytes = 16 * 1024 * 1024;
 
     private readonly Process _process;
     private readonly GrpcChannel _channel;
@@ -42,8 +46,10 @@ internal sealed class DaemonHost : IAsyncDisposable
             Arguments = $"\"{fullPipePath}\"",
             UseShellExecute = false,
             CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
+            // Do not redirect stdio: an unread stderr pipe fills and blocks the daemon
+            // (AnalyzePath logs enough to hang after a handful of RPCs).
+            RedirectStandardOutput = false,
+            RedirectStandardError = false,
         };
 
         var process = Process.Start(startInfo)
@@ -86,16 +92,17 @@ internal sealed class DaemonHost : IAsyncDisposable
     {
         var handler = new SocketsHttpHandler
         {
-            // One pipe connection; HTTP/2 multiplexes RPCs. Extra connects race the
-            // daemon accept loop and can hang BDN under iterative Analyze/load.
+            // One pipe connection; HTTP/2 multiplexes RPCs. Extra connects need spare
+            // daemon listeners and historically hung BDN under iterative load.
             EnableMultipleHttp2Connections = false,
             ConnectCallback = async (_, cancellationToken) =>
             {
                 var pipe = new NamedPipeClientStream(
-                    ".",
-                    pipeName,
-                    PipeDirection.InOut,
-                    PipeOptions.WriteThrough | PipeOptions.Asynchronous);
+                    serverName: ".",
+                    pipeName: pipeName,
+                    direction: PipeDirection.InOut,
+                    options: PipeOptions.WriteThrough | PipeOptions.Asynchronous,
+                    impersonationLevel: TokenImpersonationLevel.Anonymous);
 
                 try
                 {
@@ -116,6 +123,8 @@ internal sealed class DaemonHost : IAsyncDisposable
             {
                 HttpHandler = handler,
                 DisposeHttpClient = true,
+                MaxReceiveMessageSize = MaxMessageBytes,
+                MaxSendMessageSize = MaxMessageBytes,
             });
     }
 
