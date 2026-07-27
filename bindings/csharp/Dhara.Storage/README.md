@@ -76,4 +76,4 @@ Optional shell icons return raw RGBA pixels when `includeIcon: true`. `ShellDeta
 Apache-2.0.
 
 [root]: https://github.com/D-Naveenz/dhara_storage
-[ffi]: https://github.com/D-Naveenz/dhara_storage/blob/main/src/bindings/dharastorage-ffi/README.md
+[ffi]: https://github.com/D-Naveenz/dhara_storage/blob/main/interop/dharastorage-ffi/README.md
