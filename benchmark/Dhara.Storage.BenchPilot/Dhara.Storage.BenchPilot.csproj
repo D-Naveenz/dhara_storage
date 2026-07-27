@@ -7,7 +7,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsPackable>false</IsPackable>
     <RootNamespace>Dhara.Storage.BenchPilot</RootNamespace>
-    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\..'))\</RepoRoot>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))\</RepoRoot>
     <NativeConfiguration Condition="'$(Configuration)' == 'Release'">release</NativeConfiguration>
     <NativeConfiguration Condition="'$(NativeConfiguration)' == ''">debug</NativeConfiguration>
     <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
@@ -29,11 +29,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\csharp\Dhara.Storage\Dhara.Storage.csproj" />
+    <ProjectReference Include="..\..\bindings\csharp\Dhara.Storage\Dhara.Storage.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <Protobuf Include="..\proto\dhara_pilot.proto" GrpcServices="Client" ProtoRoot="..\proto" />
+    <Protobuf Include="..\..\interop\proto\dhara_pilot.proto" GrpcServices="Client" ProtoRoot="..\..\interop\proto" />
   </ItemGroup>
 
   <Target Name="BuildPilotNative" BeforeTargets="BeforeBuild">
