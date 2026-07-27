@@ -15,6 +15,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Typed C-compatible ABI][typed-abi] | FFI authors | `#[repr(C)]` rules, ownership, Rust ↔ C# marshalling |
 | [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `drot` touchpoints |
 | [Workspace architecture][architecture] | Agents, contributors | Tool crate DAG, bindings layout, publish split, DAL coupling |
+| [Binding-transport pilot benchmarks][binding-pilot] | Implementers | FFI vs daemon Windows pilot, BenchmarkDotNet harness, decision thresholds |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
 ## Package READMEs (publish surfaces)
@@ -52,6 +53,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [typed-abi]: typed-c-compatible-abi.md
 [ci-cd]: ci-cd-pipelines.md
 [architecture]: architecture.md
+[binding-pilot]: binding-pilot-benchmarks.md
 [native-packaging]: native-packaging.md
 [agents]: ../AGENTS.md
 [dhara-config]: ../dhara.config.toml

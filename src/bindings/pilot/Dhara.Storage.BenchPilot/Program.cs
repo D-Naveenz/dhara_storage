@@ -1,10 +1,15 @@
-using Dhara.Storage.Pilot.V1;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Exporters.Json;
+using BenchmarkDotNet.Running;
 
 namespace Dhara.Storage.BenchPilot;
 
+/// <summary>
+/// Entry point: BenchmarkDotNet only (plus daemon/fixture helpers).
+/// </summary>
 internal static class Program
 {
-    public static async Task<int> Main(string[] args)
+    public static int Main(string[] args)
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -12,23 +17,33 @@ internal static class Program
             return 2;
         }
 
-        var quick = !args.Any(static a => a is "--full");
-        var smoke = args.Any(static a => a is "--smoke");
-        Console.WriteLine(smoke
-            ? "Running smoke binding-pilot checks."
-            : quick
-                ? "Running quick binding-pilot matrix (pass --full for complete sizes)."
-                : "Running full binding-pilot matrix.");
+        var smoke = args.Any(static a => a is "--smoke" or "--smoke-bdn");
+        var bdnArgs = args
+            .Where(static a => a is not ("--smoke" or "--smoke-bdn"))
+            .ToArray();
 
-        await using var host = await DaemonHost.StartAsync().ConfigureAwait(false);
-        Console.WriteLine($"Daemon ready on pipe '{host.PipeName}' (pid {host.DaemonProcessId}).");
+        var artifacts = Path.Combine(DaemonHost.FindRepoRoot(), "target", "bench-pilot", "bdn");
+        Directory.CreateDirectory(artifacts);
 
-        var report = smoke
-            ? await ScenarioRunner.RunSmokeAsync(host).ConfigureAwait(false)
-            : await ScenarioRunner.RunAsync(host, quick).ConfigureAwait(false);
-        ReportWriter.Write(report);
-        Console.WriteLine();
-        Console.WriteLine(report.Recommendation);
+        var config = ManualConfig
+            .Create(DefaultConfig.Instance)
+            .WithArtifactsPath(artifacts)
+            .AddExporter(JsonExporter.Full)
+            .WithOptions(ConfigOptions.DisableOptimizationsValidator);
+
+        if (smoke)
+        {
+            Console.WriteLine("Running BindingSmokeBenchmarks via BenchmarkDotNet.");
+            _ = BenchmarkRunner.Run<BindingSmokeBenchmarks>(config, bdnArgs);
+        }
+        else
+        {
+            Console.WriteLine("Running BindingBenchmarks via BenchmarkDotNet.");
+            Console.WriteLine("Tip: --smoke for a short suite; --filter *Copy* to select methods.");
+            _ = BenchmarkRunner.Run<BindingBenchmarks>(config, bdnArgs);
+        }
+
+        Console.WriteLine($"Artifacts: {artifacts}");
         return 0;
     }
 }
