@@ -5,62 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased - 2026-07-09
+## Unreleased
+
+---
+
+## v0.9.6 - 2026-07-26
 
 ### Added
-- Added ratatui-based TUI replacing iced GUI with a three-panel layout and interactive task tree adapter module supporting keyboard and mouse input.
-- Added multi-step operation progress bar and status tracking in TUI with detailed extract progress reporting (e.g., "Extracting archive (k/N)").
-- Added CommandRun RAII guard for consistent audit logging of command lifecycle events with elapsed time.
-- Added InteractiveDiagnosticLayer to route WARN/ERROR logs to TUI panel in interactive mode.
-- Added mouse event handling and marquee text support for task tree UI.
-- Added modal dialogs for repository setup and activation prompts with full keyboard and mouse support.
-- Added daily log file appending with session end records for improved log aggregation.
-- Added CLI launch logic to detect interactive terminals and launch TUI instead of GUI.
-- Added Linux GUI and pkg-config dependency installation step in CI workflows.
-- Added semantic version snapshot comparison in cargo_toml sync to avoid unnecessary rewrites.
+- Added `dhara_storage_core` as the framework crate for DSFD schema, model, and FlatBuffers encode/decode (no embedded `filedefs.dat`).
+- Added `tooling/drot` submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) as the operator CLI/TUI, with CI downloading pinned DROT artifacts via `DROT_ARTIFACTS_TOKEN`.
+- Added human-facing documentation contract: root vs project READMEs, `AGENTS.md` routing, and `docs/` for implementer reference.
+- Added Linux `xvfb` support in CI so shell-icon coverage can run on headless runners.
+- Added ratatui-based operator TUI (three-panel layout, interactive task tree, mouse/keyboard, modals) before the DROT extraction—progress milestones, audit logging, and daily session log append.
+- Added Linux GUI / pkg-config dependency installation for GTK-based shell icons in CI.
 
 ### Changed
-- Replaced iced-based GUI with ratatui-based TUI for dhara_tool operator interface.
-- Simplified action panel title to constant "Actions" and standardized progress step labels without dynamic counts or "— done" suffix.
-- Improved TrID .7z archive extraction using sevenz-rust with fallback to tar extraction.
-- Refined TUI UI styling: bold warning style for tree view selection, removed cursor indicators, reduced vertical spacing, and simplified command bar and title bar styling.
-- Refactored TUI app state to include focus management, tab views, and modular input handling using ratatui_interact.
-- Refactored quality, package, verify, and release workflows to use planned multi-step progress lifecycle with nested plan detection.
-- Changed daily log files to append all sessions instead of overwriting.
-- Updated CLI to launch TUI on interactive terminals and fallback to terminal launch.
-- Refined cargo_toml sync logic to preserve content when versions match.
-- Updated CI workflows to run tests and verification on Linux runners instead of Windows.
-- Removed background elapsed time reporter; elapsed time computed on worker thread snapshots.
-- Updated documentation and progress logic to reflect new progress reporting and archive extraction fallback.
+- Replaced in-tree `dhara_tool` with the DROT submodule; storage CI/CD and local verify scripts call `target/dist/drot`.
+- Moved bundled `filedefs.dat` into `src/core/dhara_storage/resources/` (runtime `include_bytes!`); DROT sync targets that path.
+- Nestled DSFD types under `dhara_storage_core::definitions` while keeping crate-root re-exports stable for callers.
+- Clarified product split: core = framework/abstractions; `dhara_storage` = storage runtime (handles, analysis, watch, metadata).
+- Moved primary .NET tests and NuGet verify onto Linux runners; Windows retained for MSVC native staging.
+- Improved TrID `.7z` extraction (sevenz-rust with tar fallback) and entry-level extract progress reporting in the operator tooling lineage.
 
 ### Fixed
-- Fixed progress flicker by limiting worker-thread snapshots and removing background reporter.
-- Fixed status flicker by isolating OperationPlan per thread and using command milestone for panel title.
-- Fixed cargo_toml sync to ignore formatting differences and avoid unnecessary file rewrites.
-- Fixed MSVC relaunch quoting on Windows CI by using temporary batch files and stripping quotes.
-- Fixed Linux clippy unused-import warnings by gating Windows-only imports.
-- Fixed merge-native PowerShell input array handling in publish readiness job.
-- Fixed macOS watcher path normalization to handle /var vs /private/var symlinks.
-- Fixed TrID archive extraction progress reporting with entry-level ticks.
-- Fixed CI workflows to install Linux GUI dependencies before building on cache miss.
-
-### Deprecated
-- Removed dynamic command milestone from action panel title to reduce flicker and confusion.
+- Fixed headless Linux .NET shell-icon failures by running tests under Xvfb and skipping when the OS returns no icon (documented GTK limitation).
+- Fixed macOS watcher path normalization for `/var` vs `/private/var`.
+- Fixed MSVC relaunch quoting on Windows CI and Linux clippy unused-import gates for Windows-only code.
+- Fixed merge-native PowerShell input handling in publish readiness.
 
 ### Removed
-- Removed iced-based GUI crate and assets.
-- Removed background elapsed time reporter and redundant UI elements in TUI action panel.
-- Removed unused fields from TUI FocusState and cleaned up theme constants.
-- Removed redundant UI elements and spinner from TUI progress rendering.
-- Removed unused background color definition from theme constants.
+- Removed `dhara_storage_dal` (superseded by `dhara_storage_core`).
+- Removed in-tree `dhara_tool` / iced GUI crates; operator UI lives in the DROT submodule.
+- Removed obsolete MindVault / local tool layout assumptions from agent and project docs.
 
 ### Technical
-- Refactored cargo_toml sync logic with semantic version snapshot comparison.
-- Refactored TUI architecture for modularity and theme awareness.
-- Updated CI workflows to unify Linux runners for tests and verification.
-- Upgraded GitHub Actions versions and streamlined pipeline steps.
-- Cleaned up unused imports in dhara_tool_cli package commands.
-- Refined worker thread snapshot publishing to reduce UI flicker.
+- Bumped workspace / NuGet product line to **0.9.6**.
+- Restructured DROT as kernel + `drot_dhara_storage` plugin + host crates (submodule); interim codec still uses published `dhara_storage_dal` from crates.io until core is the published codec dependency.
+- Streamlined GitHub Actions pipeline (download-drot composite, Linux-first verify, action upgrades).
+- Aligned inline rustdoc/XML docs and project-surface READMEs with the core vs runtime story.
 
 ---
 

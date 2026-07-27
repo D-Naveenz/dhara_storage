@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dhara.Storage.BenchPilot</RootNamespace>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..\..'))\</RepoRoot>
+    <NativeConfiguration Condition="'$(Configuration)' == 'Release'">release</NativeConfiguration>
+    <NativeConfiguration Condition="'$(NativeConfiguration)' == ''">debug</NativeConfiguration>
+    <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
+    <DaemonExeName>dhara-storage-daemon-pilot.exe</DaemonExeName>
+    <DaemonExePath>$(CargoTargetDir)\$(NativeConfiguration)\$(DaemonExeName)</DaemonExePath>
+    <NativeLibFileName>dharastorage.dll</NativeLibFileName>
+    <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="3.32.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.71.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.72.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\csharp\Dhara.Storage\Dhara.Storage.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Protobuf Include="..\proto\dhara_pilot.proto" GrpcServices="Client" ProtoRoot="..\proto" />
+  </ItemGroup>
+
+  <Target Name="BuildPilotNative" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <_DaemonCargoArgs Condition="'$(Configuration)' == 'Release'">--release</_DaemonCargoArgs>
+    </PropertyGroup>
+    <Exec Command="cargo build -p dharastorage-ffi $(_DaemonCargoArgs)" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+    <Exec Command="cargo build -p dhara-storage-daemon-pilot $(_DaemonCargoArgs)" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+  </Target>
+
+  <Target Name="CopyPilotNativeAssets" AfterTargets="Build">
+    <Copy SourceFiles="$(NativeLibPath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(DaemonExePath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

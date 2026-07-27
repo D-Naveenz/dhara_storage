@@ -3,6 +3,7 @@ members = [
     "src/core/dhara_storage_core",
     "src/core/dhara_storage",
     "src/bindings/dharastorage-ffi",
+    "src/bindings/pilot/dhara-storage-daemon-pilot",
 ]
 resolver = "3"
 
