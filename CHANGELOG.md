@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Relocated monorepo packages out of `src/`: `core/`, `interop/` (FFI + pilot daemon), `bindings/csharp/`, and `benchmark/` (manual BenchPilot). Tooling stays under `tooling/`.
 
+### Fixed
+- Honored `overwrite` on `StorageFile.CopyAsync` / `MoveAsync` when progress is null (always use the operation ABI).
+
+### Technical
+- Recorded BindingDotNet pilot showcase results in `docs/binding-pilot-benchmarks.md`; lean hybrid for large reads via handle duplication.
+- Pilot daemon: `spawn_blocking` for heavy analyze/read/write; BenchPilot uses a single named-pipe HTTP/2 connection.
+
 ---
 
 ## v0.9.6 - 2026-07-26
