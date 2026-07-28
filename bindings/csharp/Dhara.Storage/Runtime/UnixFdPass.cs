@@ -7,7 +7,7 @@ namespace Dhara.Storage.Runtime;
 /// <summary>
 /// Receives file descriptors passed with <c>SCM_RIGHTS</c> over the daemon FD-pass socket.
 /// </summary>
-internal static class UnixFdPass
+internal static partial class UnixFdPass
 {
     /// <summary>Connects to the daemon FD-pass endpoint.</summary>
     internal static Socket Connect(string endpointPath)
@@ -50,7 +50,7 @@ internal static class UnixFdPass
             if (received < 0)
             {
                 throw new InvalidOperationException(
-                    $"recvmsg failed with errno {Marshal.GetLastWin32Error()}");
+                    $"recvmsg failed with errno {Marshal.GetLastPInvokeError()}");
             }
 
             var cmsg = CmsgFirstHdr(ref message);
@@ -121,8 +121,8 @@ internal static class UnixFdPass
     private const int SolSocket = 1;
     private const int ScmRights = 1;
 
-    [DllImport("libc", SetLastError = true)]
-    private static extern nint recvmsg(int socket, ref Msghdr message, int flags);
+    [LibraryImport("libc", SetLastError = true)]
+    private static partial nint recvmsg(int socket, ref Msghdr message, int flags);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct IoVec

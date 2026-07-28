@@ -6,6 +6,7 @@
 #![deny(missing_docs)]
 
 mod log_broadcast;
+mod parent_watch;
 mod proto;
 mod service;
 mod transport;
@@ -21,6 +22,7 @@ use crate::log_broadcast::init_tracing;
 use crate::service::DaemonState;
 
 fn main() {
+    parent_watch::install_parent_death_signal();
     let log_tx = init_tracing();
 
     let endpoint = env::args().nth(1).unwrap_or_else(default_endpoint);
@@ -34,6 +36,7 @@ fn main() {
 
     runtime.block_on(async move {
         let state = Arc::new(DaemonState::new(endpoint.clone(), log_tx));
+        parent_watch::spawn_lifecycle_tasks(state.clone());
 
         let result = run_transport(&endpoint, state).await;
         if let Err(err) = result {

@@ -3,7 +3,7 @@
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::sync::Mutex;
@@ -44,6 +44,7 @@ pub struct DaemonState {
     #[cfg(unix)]
     fd_pass_endpoint: std::sync::RwLock<String>,
     parent_pid: AtomicU32,
+    parent_watch_started: AtomicBool,
     jobs: std::sync::Mutex<Vec<String>>,
     log_tx: broadcast::Sender<LogRecord>,
     #[cfg(unix)]
@@ -58,6 +59,7 @@ impl DaemonState {
             #[cfg(unix)]
             fd_pass_endpoint: std::sync::RwLock::new(String::new()),
             parent_pid: AtomicU32::new(0),
+            parent_watch_started: AtomicBool::new(false),
             jobs: std::sync::Mutex::new(Vec::new()),
             log_tx,
             #[cfg(unix)]
@@ -102,9 +104,13 @@ impl DaemonState {
         }
     }
 
-    fn parent_pid(&self) -> Option<u32> {
+    pub(crate) fn parent_pid(&self) -> Option<u32> {
         let pid = self.parent_pid.load(Ordering::SeqCst);
         if pid == 0 { None } else { Some(pid) }
+    }
+
+    pub(crate) fn parent_watch_started(&self) -> &AtomicBool {
+        &self.parent_watch_started
     }
 }
 
@@ -149,6 +155,7 @@ impl DharaSd for DharaSdService {
             .parent_pid
             .store(req.parent_pid, Ordering::SeqCst);
         debug!(parent_pid = req.parent_pid, "handshake accepted");
+        crate::parent_watch::spawn_parent_watchdog(self.state.clone(), req.parent_pid);
 
         Ok(Response::new(HandshakeResponse {
             protocol_version: 1,

@@ -42,6 +42,7 @@ internal sealed class DaemonProcess : IDisposable
 
         var process = Process.Start(startInfo)
             ?? throw new InvalidOperationException($"Failed to start dhara-sd at '{exe}'.");
+        DaemonProcessJob.TryAssign(process);
         return new DaemonProcess(process);
     }
 
@@ -53,7 +54,10 @@ internal sealed class DaemonProcess : IDisposable
             if (!_process.HasExited)
             {
                 _process.Kill(entireProcessTree: true);
-                _process.WaitForExit(3000);
+                if (!_process.WaitForExit(3000))
+                {
+                    _process.Kill(entireProcessTree: true);
+                }
             }
         }
         catch
@@ -254,6 +258,7 @@ public sealed class DharaRuntime : IAsyncDisposable
 {
     private static readonly object Gate = new();
     private static DharaRuntime? _current;
+    private static int _processExitHookRegistered;
 
     private readonly DaemonProcess _process;
     private readonly GrpcChannel _channel;
@@ -361,6 +366,7 @@ public sealed class DharaRuntime : IAsyncDisposable
             lock (Gate)
             {
                 _current ??= runtime;
+                RegisterProcessExitHookIfNeeded();
                 return _current;
             }
         }
@@ -387,6 +393,41 @@ public sealed class DharaRuntime : IAsyncDisposable
         var socket = runtime.FdPassSocket
             ?? throw new InvalidOperationException("The daemon FD-pass socket is not connected.");
         return UnixFdPass.Receive(socket);
+    }
+
+    /// <summary>Best-effort synchronous shutdown for process exit (limited runtime budget).</summary>
+    internal static void StopForProcessExit()
+    {
+        DharaRuntime? runtime;
+        lock (Gate)
+        {
+            runtime = _current;
+            _current = null;
+        }
+
+        if (runtime is null)
+        {
+            return;
+        }
+
+        try
+        {
+            runtime._process.Dispose();
+        }
+        catch
+        {
+            // Process exit path — best effort only.
+        }
+    }
+
+    private static void RegisterProcessExitHookIfNeeded()
+    {
+        if (Interlocked.Exchange(ref _processExitHookRegistered, 1) != 0)
+        {
+            return;
+        }
+
+        AppDomain.CurrentDomain.ProcessExit += static (_, _) => StopForProcessExit();
     }
 
     /// <inheritdoc />
