@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Pipes;
 using System.Net.Http;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Dhara.Storage.Sd.V1;
 using Grpc.Net.Client;
@@ -73,16 +74,9 @@ internal sealed class DaemonProcess : IDisposable
         }
 
         var fileName = OperatingSystem.IsWindows() ? "dhara-sd.exe" : "dhara-sd";
-        var local = Path.Combine(AppContext.BaseDirectory, fileName);
-        if (File.Exists(local))
-        {
-            return local;
-        }
 
-        var repoRoot = FindRepoRoot();
-        foreach (var config in new[] { "release", "debug" })
+        foreach (var candidate in EnumerateDaemonCandidates(fileName))
         {
-            var candidate = Path.Combine(repoRoot, "target", config, fileName);
             if (File.Exists(candidate))
             {
                 return candidate;
@@ -91,20 +85,81 @@ internal sealed class DaemonProcess : IDisposable
 
         throw new FileNotFoundException(
             $"{fileName} not found. Build with `cargo build -p dhara-sd` or pack the NuGet sidecar.",
-            local);
+            Path.Combine(AppContext.BaseDirectory, fileName));
     }
 
-    internal static string FindRepoRoot()
+    private static IEnumerable<string> EnumerateDaemonCandidates(string fileName)
+    {
+        yield return Path.Combine(AppContext.BaseDirectory, fileName);
+
+        var rid = GetRuntimeIdentifier();
+        if (!string.IsNullOrWhiteSpace(rid))
+        {
+            yield return Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", fileName);
+        }
+
+        if (TryFindRepoRoot(out var repoRoot))
+        {
+            foreach (var config in new[] { "release", "debug" })
+            {
+                yield return Path.Combine(repoRoot, "target", config, fileName);
+            }
+        }
+    }
+
+    private static string? GetRuntimeIdentifier()
+    {
+        var rid = AppContext.GetData("RUNTIME_IDENTIFIER") as string;
+        if (!string.IsNullOrWhiteSpace(rid))
+        {
+            return rid;
+        }
+
+        if (OperatingSystem.IsWindows())
+        {
+            return Environment.Is64BitProcess
+                ? (Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") is "ARM64" ? "win-arm64" : "win-x64")
+                : null;
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            return Environment.Is64BitProcess
+                ? (RuntimeInformation.ProcessArchitecture == Architecture.Arm64 ? "linux-arm64" : "linux-x64")
+                : null;
+        }
+
+        if (OperatingSystem.IsMacOS() && Environment.Is64BitProcess)
+        {
+            return "osx-arm64";
+        }
+
+        return null;
+    }
+
+    internal static bool TryFindRepoRoot(out string repoRoot)
     {
         var dir = new DirectoryInfo(AppContext.BaseDirectory);
         while (dir is not null)
         {
             if (File.Exists(Path.Combine(dir.FullName, "dhara.config.toml")))
             {
-                return dir.FullName;
+                repoRoot = dir.FullName;
+                return true;
             }
 
             dir = dir.Parent;
+        }
+
+        repoRoot = string.Empty;
+        return false;
+    }
+
+    internal static string FindRepoRoot()
+    {
+        if (TryFindRepoRoot(out var repoRoot))
+        {
+            return repoRoot;
         }
 
         throw new InvalidOperationException("Could not locate repository root (dhara.config.toml).");

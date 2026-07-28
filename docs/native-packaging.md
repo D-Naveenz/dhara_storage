@@ -25,7 +25,7 @@ flowchart LR
   VP --> NUPKG[Dhara.Storage.nupkg]
 ```
 
-Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke + AOT on `linux-x64`).
+Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke via `AddDharaStorage` + AOT publish on `linux-x64`).
 
 **Note:** `dhara-sd` is cross-platform — Windows uses named pipes + `DuplicateHandle`; Linux/macOS use UDS + `SCM_RIGHTS` (see [daemon-transport.md][daemon-transport]).
 

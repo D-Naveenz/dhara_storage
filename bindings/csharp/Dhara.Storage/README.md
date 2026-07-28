@@ -14,6 +14,7 @@ The package bundles a small native `dhara-sd` sidecar for supported runtimes and
 - Sync and async read, write, copy, move, rename, delete
 - Directory watching with typed change events
 - One NuGet with a bundled sidecar for supported RIDs
+- Native AOT–compatible: publish your app with `<PublishAot>true</PublishAot>`; the `dhara-sd` sidecar is deployed alongside your executable via NuGet native assets
 
 ## Prerequisites
 

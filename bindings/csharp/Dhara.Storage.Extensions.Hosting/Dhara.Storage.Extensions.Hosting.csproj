@@ -17,6 +17,7 @@
     <PackageProjectUrl>https://github.com/D-Naveenz/dhara_storage</PackageProjectUrl>
     <Authors>Naveen Dharmathunga</Authors>
     <PackageTags>storage;hosting;grpc;dependency-injection;rust</PackageTags>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <PropertyGroup>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>

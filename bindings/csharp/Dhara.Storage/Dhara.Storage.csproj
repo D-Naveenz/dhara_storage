@@ -31,6 +31,7 @@
     <Authors>Naveen Dharmathunga</Authors>
     <PackageTags>storage;grpc;rust;analysis;file-handling;directory-management;watching</PackageTags>
     <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
+    <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <!-- Package metadata -->
   <PropertyGroup>
@@ -39,6 +40,7 @@
   </PropertyGroup>
   <ItemGroup>
     <None PackagePath="build\" Include="build\Dhara.Storage.targets" Pack="True" />
+    <None PackagePath="build\" Include="build\ILLink.Descriptors.xml" Pack="True" />
   </ItemGroup>
   <!-- Dependencies -->
   <ItemGroup>
@@ -82,9 +84,14 @@
   <Target Condition="'$(StagedNativeRoot)' == ''" BeforeTargets="Pack" Name="ValidatePackDaemonAssets">
     <Error Text="Packing Dhara.Storage requires staged dhara-sd binaries for all supported 64-bit runtimes. Use the repo packaging flow." />
   </Target>
-  <Target Name="CopyDaemonToOutput" AfterTargets="Build" Condition="'$(StagedNativeRoot)' == '' and Exists('$(DaemonExePath)')">
-    <Copy DestinationFolder="$(OutDir)" SourceFiles="$(DaemonExePath)" SkipUnchangedFiles="true" />
-  </Target>
+  <!-- Local dev: flow dhara-sd to referencing app build/publish output. Packed NuGet uses runtimes/ assets. -->
+  <ItemGroup Condition="'$(StagedNativeRoot)' == '' and Exists('$(DaemonExePath)')">
+    <Content Include="$(DaemonExePath)">
+      <Link>$(DaemonExeFileName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
   <ItemGroup>
     <None Pack="true" PackagePath="\" Include="README.md" />
   </ItemGroup>

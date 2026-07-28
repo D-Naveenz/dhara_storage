@@ -3,7 +3,7 @@
 [![NuGet](https://img.shields.io/nuget/v/Dhara.Storage.Extensions.Hosting)](https://www.nuget.org/packages/Dhara.Storage.Extensions.Hosting)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/D-Naveenz/dhara_storage/blob/main/LICENSE.txt)
 
-.NET Generic Host integration for [Dhara.Storage](https://www.nuget.org/packages/Dhara.Storage). Registers a hosted service that starts the `dhara-sd` sidecar with your application and stops it on shutdown, so you do not need to manage the daemon lifetime yourself.
+.NET Generic Host integration for [Dhara.Storage](https://www.nuget.org/packages/Dhara.Storage). Registers a hosted service that starts the `dhara-sd` sidecar with your application and stops it on shutdown, so you do not need to manage the daemon lifetime yourself. Works with Native AOT hosts (`PublishAot`).
 
 ## Install
 

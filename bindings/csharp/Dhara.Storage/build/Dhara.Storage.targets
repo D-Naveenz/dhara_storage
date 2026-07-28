@@ -12,4 +12,29 @@
     <Error Condition="'$(Prefer32Bit)' == 'true' and '$(PlatformTarget)' != 'x64' and '$(PlatformTarget)' != 'ARM64'"
            Text="Dhara.Storage requires a 64-bit process. Disable Prefer 32-bit or target x64/arm64." />
   </Target>
+
+  <!-- Preserve gRPC/protobuf types when consumers publish with trimming or Native AOT. -->
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="$(MSBuildThisFileDirectory)ILLink.Descriptors.xml" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <_DharaSdFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">dhara-sd.exe</_DharaSdFileName>
+    <_DharaSdFileName Condition="'$(_DharaSdFileName)' == ''">dhara-sd</_DharaSdFileName>
+  </PropertyGroup>
+
+  <!-- Copy the RID-matched dhara-sd sidecar next to the published executable. -->
+  <Target Name="DharaStorageCopySidecarOnPublish"
+          AfterTargets="ComputeFilesToPublish"
+          Condition="'$(RuntimeIdentifier)' != ''">
+    <PropertyGroup>
+      <_DharaSdRuntimePath>$(MSBuildThisFileDirectory)..\runtimes\$(RuntimeIdentifier)\native\$(_DharaSdFileName)</_DharaSdRuntimePath>
+    </PropertyGroup>
+    <ItemGroup Condition="Exists('$(_DharaSdRuntimePath)')">
+      <ResolvedFileToPublish Include="$(_DharaSdRuntimePath)">
+        <RelativePath>$(_DharaSdFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>
