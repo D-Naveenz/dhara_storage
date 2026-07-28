@@ -19,7 +19,7 @@ public sealed class ShellIconTests
         {
             Assert.True(info.Icon.Width > 0);
             Assert.True(info.Icon.Height > 0);
-            Assert.NotEmpty(info.Icon.RgbaPixels);
+            Assert.True(info.Icon.RgbaPixels.Length > 0);
         }
 
         if (info.ShellDetails is not null)

@@ -1,6 +1,6 @@
 <Solution>
   <Folder Name="/Benchmarks/">
-    <Project Path="benchmark/Dhara.Storage.BenchPilot/Dhara.Storage.BenchPilot.csproj" />
+    <Project Path="benchmark/Dhara.Storage.Benchmarks/Dhara.Storage.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/Bindings/">
     <Project Path="bindings/csharp/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj" />

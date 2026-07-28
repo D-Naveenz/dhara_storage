@@ -102,8 +102,8 @@ internal static class UnixFdPass
     private static nint CmsgNxtHdr(ref Msghdr message, nint cmsg)
     {
         var header = Marshal.PtrToStructure<Cmsghdr>(cmsg);
-        var next = cmsg + CmsgAlign(header.CmsgLen);
-        var end = message.MsgControl + (int)message.MsgControllen;
+        var next = cmsg + (nint)header.CmsgLen;
+        var end = message.MsgControl + (nint)message.MsgControllen;
         if (next + Marshal.SizeOf<Cmsghdr>() > end)
         {
             return nint.Zero;
@@ -112,8 +112,11 @@ internal static class UnixFdPass
         return next;
     }
 
-    private static nuint CmsgAlign(nuint length) =>
-        (length + (nuint)sizeof(nuint) - 1) & ~((nuint)sizeof(nuint) - 1);
+    private static nuint CmsgAlign(nuint length)
+    {
+        var wordSize = (nuint)IntPtr.Size;
+        return (length + wordSize - 1) & ~(wordSize - 1);
+    }
 
     private const int SolSocket = 1;
     private const int ScmRights = 1;

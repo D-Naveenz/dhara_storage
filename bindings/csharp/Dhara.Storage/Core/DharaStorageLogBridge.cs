@@ -6,7 +6,7 @@ namespace Dhara.Storage.Core;
 /// <summary>
 /// Central logger factory used by the managed Dhara Storage wrapper types.
 /// </summary>
-/// <remarks>When <see cref="DharaRuntime"/> is started, daemon-side <c>tracing</c> records from
+/// <remarks>When the daemon runtime is started, daemon-side <c>tracing</c> records from
 /// <c>dhara_storage</c> and <c>dhara-sd</c> are forwarded through the <c>StreamLogs</c> gRPC
 /// stream using each record's Rust <c>target</c> as the logger category.</remarks>
 internal static class DharaStorageLogBridge

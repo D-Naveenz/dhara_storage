@@ -41,7 +41,7 @@ internal static class DaemonModelFactory
             FormatSize(response.Size),
             extension,
             analysis,
-            ToShellIcon(response.HasIcon ? response.Icon : null),
+            ToShellIcon(response.Icon),
             ToShellDetails(
                 response.HasShellDisplayName ? response.ShellDisplayName : null,
                 response.HasShellTypeName ? response.ShellTypeName : null));
@@ -68,7 +68,7 @@ internal static class DaemonModelFactory
             accessed,
             response.Name,
             summary,
-            ToShellIcon(response.HasIcon ? response.Icon : null),
+            ToShellIcon(response.Icon),
             ToShellDetails(
                 response.HasShellDisplayName ? response.ShellDisplayName : null,
                 response.HasShellTypeName ? response.ShellTypeName : null));
@@ -156,7 +156,7 @@ internal static class DaemonModelFactory
 
     private static ShellIcon? ToShellIcon(ShellIconPayload? payload)
     {
-        if (payload is null)
+        if (payload is null || (payload.Width == 0 && payload.Height == 0 && payload.RgbaPixels.Length == 0))
         {
             return null;
         }
