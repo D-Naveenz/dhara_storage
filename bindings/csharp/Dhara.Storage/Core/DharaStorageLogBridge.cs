@@ -6,9 +6,9 @@ namespace Dhara.Storage.Core;
 /// <summary>
 /// Central logger factory used by the managed Dhara Storage wrapper types.
 /// </summary>
-/// <remarks>The daemon (<c>dhara-sd</c>) logs to its own process output rather than across the
-/// gRPC boundary, so this bridge only forwards managed wrapper log records; it does not bridge
-/// native/daemon log records the way the retired in-process FFI logger did.</remarks>
+/// <remarks>When <see cref="DharaRuntime"/> is started, daemon-side <c>tracing</c> records from
+/// <c>dhara_storage</c> and <c>dhara-sd</c> are forwarded through the <c>StreamLogs</c> gRPC
+/// stream using each record's Rust <c>target</c> as the logger category.</remarks>
 internal static class DharaStorageLogBridge
 {
     private static readonly object Gate = new();

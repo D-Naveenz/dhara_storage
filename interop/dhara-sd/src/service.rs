@@ -4,48 +4,101 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+#[cfg(unix)]
+use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
-    ContentKind, DirectoryDeleteOptions, DirectoryInfo, DirectoryStorage, FileInfo, SearchScope,
-    SharedProgressReporter, StorageChangeType, StorageEntry, StorageProgress, StorageWatchConfig,
-    TransferOptions, WriteOptions, analyze_path, copy_directory_with_options,
-    copy_file_with_options, create_directory, create_directory_all, delete_directory_with_options,
-    delete_file, move_directory_with_options, move_file_with_options, read_file, rename_directory,
-    rename_file, write_file_from_reader,
+    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryInfo, DirectoryStorage,
+    FileInfo, SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
+    StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions, analyze_path,
+    copy_directory_with_options, copy_file_with_options, create_directory, create_directory_all,
+    delete_directory_with_options, delete_file, move_directory_with_options, move_file_with_options,
+    read_file, rename_directory, rename_file, write_file_from_reader,
 };
-use futures::Stream;
+use futures::{Stream, StreamExt};
+use tokio::sync::broadcast;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
 use tonic::{Request, Response, Status};
 use tracing::{debug, warn};
 use uuid::Uuid;
 
-use crate::handle_dup;
-use crate::pipe::DEFAULT_PIPE_NAME;
+#[cfg(unix)]
+use std::os::unix::io::AsRawFd;
+#[cfg(unix)]
+use std::os::unix::net::UnixStream;
 
-pub mod proto {
-    tonic::include_proto!("dhara.sd.v1");
-}
+use crate::log_broadcast::level_rank;
+use crate::proto::dhara_sd_server::{DharaSd, DharaSdServer};
+use crate::proto::*;
+#[cfg(windows)]
+use crate::transport::windows::handle_dup;
+#[cfg(unix)]
+use crate::transport::unix::fd_pass;
 
-use proto::dhara_sd_server::{DharaSd, DharaSdServer};
-use proto::*;
-
-/// Shared daemon state for handshake PID and synthetic queue stubs.
+/// Shared daemon state for handshake PID, logging, and synthetic queue stubs.
 pub struct DaemonState {
-    pipe_name: String,
+    control_endpoint: std::sync::RwLock<String>,
+    #[cfg(unix)]
+    fd_pass_endpoint: std::sync::RwLock<String>,
     parent_pid: AtomicU32,
-    jobs: Mutex<Vec<String>>,
+    jobs: std::sync::Mutex<Vec<String>>,
+    log_tx: broadcast::Sender<LogRecord>,
+    #[cfg(unix)]
+    pub(crate) fd_pass_conn: Mutex<Option<UnixStream>>,
 }
 
 impl DaemonState {
-    /// Create state for the given pipe path.
-    pub fn new(pipe_name: String) -> Self {
+    /// Create state for the given control endpoint path.
+    pub fn new(control_endpoint: String, log_tx: broadcast::Sender<LogRecord>) -> Self {
         Self {
-            pipe_name,
+            control_endpoint: std::sync::RwLock::new(control_endpoint),
+            #[cfg(unix)]
+            fd_pass_endpoint: std::sync::RwLock::new(String::new()),
             parent_pid: AtomicU32::new(0),
-            jobs: Mutex::new(Vec::new()),
+            jobs: std::sync::Mutex::new(Vec::new()),
+            log_tx,
+            #[cfg(unix)]
+            fd_pass_conn: Mutex::new(None),
+        }
+    }
+
+    /// Update the gRPC control endpoint advertised in `Handshake`.
+    #[cfg(unix)]
+    pub fn set_control_endpoint(&self, endpoint: String) {
+        if let Ok(mut guard) = self.control_endpoint.write() {
+            *guard = endpoint;
+        }
+    }
+
+    /// Update the FD-pass endpoint advertised in `Handshake`.
+    #[cfg(unix)]
+    pub fn set_fd_pass_endpoint(&self, endpoint: String) {
+        if let Ok(mut guard) = self.fd_pass_endpoint.write() {
+            *guard = endpoint;
+        }
+    }
+
+    fn control_endpoint(&self) -> String {
+        self.control_endpoint
+            .read()
+            .map(|value| value.clone())
+            .unwrap_or_default()
+    }
+
+    fn fd_pass_endpoint(&self) -> String {
+        #[cfg(windows)]
+        {
+            String::new()
+        }
+        #[cfg(unix)]
+        {
+            self.fd_pass_endpoint
+                .read()
+                .map(|value| value.clone())
+                .unwrap_or_default()
         }
     }
 
@@ -99,7 +152,8 @@ impl DharaSd for DharaSdService {
 
         Ok(Response::new(HandshakeResponse {
             protocol_version: 1,
-            pipe_name: self.state.pipe_name.clone(),
+            pipe_name: self.state.control_endpoint(),
+            fd_pass_endpoint: self.state.fd_pass_endpoint(),
         }))
     }
 
@@ -107,39 +161,106 @@ impl DharaSd for DharaSdService {
         &self,
         request: Request<GetFileInfoRequest>,
     ) -> Result<Response<GetFileInfoResponse>, Status> {
-        let path = request.into_inner().path;
-        let info = FileInfo::from_path(&path).map_err(map_storage_error)?;
-        Ok(Response::new(GetFileInfoResponse {
-            path: info.path().display().to_string(),
-            name: info.name().to_string(),
-            size: info.size(),
-            extension: info.filename_extension().map(str::to_string),
-            is_read_only: info.metadata().is_read_only(),
-        }))
+        let req = request.into_inner();
+        let path = req.path;
+        let include_shell = req.include_shell_details;
+        let include_icon = req.include_icon;
+        let icon_size = if req.icon_size == 0 {
+            DEFAULT_SHELL_ICON_SIZE
+        } else {
+            req.icon_size
+        };
+
+        let response = tokio::task::spawn_blocking(move || {
+            let info = FileInfo::from_path(&path)?;
+            let (shell_display_name, shell_type_name) = if include_shell {
+                info.shell_details()
+                    .map(|details| (details.display_name.clone(), details.type_name.clone()))
+                    .unwrap_or((None, None))
+            } else {
+                (None, None)
+            };
+            let icon = if include_icon {
+                info.load_icon_at(icon_size).map(shell_icon_to_proto)
+            } else {
+                None
+            };
+            Ok::<_, dhara_storage::StorageError>(GetFileInfoResponse {
+                path: info.path().display().to_string(),
+                name: info.name().to_string(),
+                size: info.size(),
+                extension: info.filename_extension().map(str::to_string),
+                is_read_only: info.metadata().is_read_only(),
+                shell_display_name,
+                shell_type_name,
+                icon,
+            })
+        })
+        .await
+        .map_err(|err| Status::internal(err.to_string()))?
+        .map_err(map_storage_error)?;
+
+        Ok(Response::new(response))
     }
 
     async fn get_directory_info(
         &self,
         request: Request<GetDirectoryInfoRequest>,
     ) -> Result<Response<GetDirectoryInfoResponse>, Status> {
-        let path = request.into_inner().path;
-        let exists = std::path::Path::new(&path).is_dir();
-        if !exists {
-            return Ok(Response::new(GetDirectoryInfoResponse {
-                path: path.clone(),
-                name: std::path::Path::new(&path)
-                    .file_name()
-                    .map(|v| v.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                exists: false,
-            }));
-        }
-        let info = DirectoryInfo::from_path(&path).map_err(map_storage_error)?;
-        Ok(Response::new(GetDirectoryInfoResponse {
-            path: info.path().display().to_string(),
-            name: info.name().to_string(),
-            exists: true,
-        }))
+        let req = request.into_inner();
+        let path = req.path;
+        let include_shell = req.include_shell_details;
+        let include_icon = req.include_icon;
+        let icon_size = if req.icon_size == 0 {
+            DEFAULT_SHELL_ICON_SIZE
+        } else {
+            req.icon_size
+        };
+
+        let response = tokio::task::spawn_blocking(move || {
+            let exists = std::path::Path::new(&path).is_dir();
+            if !exists {
+                return Ok(GetDirectoryInfoResponse {
+                    path: path.clone(),
+                    name: std::path::Path::new(&path)
+                        .file_name()
+                        .map(|value| value.to_string_lossy().into_owned())
+                        .unwrap_or_default(),
+                    exists: false,
+                    shell_display_name: None,
+                    shell_type_name: None,
+                    icon: None,
+                });
+            }
+
+            let info = DirectoryInfo::from_path(&path)?;
+            let (shell_display_name, shell_type_name) = if include_shell {
+                info.shell_details()
+                    .map(|details| (details.display_name.clone(), details.type_name.clone()))
+                    .unwrap_or((None, None))
+            } else {
+                (None, None)
+            };
+            let icon = if include_icon {
+                info.load_icon_at(icon_size).map(shell_icon_to_proto)
+            } else {
+                None
+            };
+
+            Ok(GetDirectoryInfoResponse {
+                path: info.path().display().to_string(),
+                name: info.name().to_string(),
+                exists: true,
+                shell_display_name,
+                shell_type_name,
+                icon,
+            })
+        })
+        .await
+        .map_err(|err| Status::internal(err.to_string()))?
+        .map_err(map_storage_error)?;
+
+        Ok(Response::new(response))
     }
 
     async fn list_entries(
@@ -208,32 +329,97 @@ impl DharaSd for DharaSdService {
         &self,
         request: Request<OpenReadHandleRequest>,
     ) -> Result<Response<OpenReadHandleResponse>, Status> {
-        let parent_pid = self.state.parent_pid().ok_or_else(|| {
-            Status::failed_precondition("handshake required before OpenReadHandle")
-        })?;
+        self.state
+            .parent_pid()
+            .ok_or_else(|| Status::failed_precondition("handshake required before OpenReadHandle"))?;
+
         let path = PathBuf::from(request.into_inner().path);
-        let (handle, size) = handle_dup::open_read_and_duplicate(&path, parent_pid)
-            .map_err(|err| Status::internal(err))?;
-        Ok(Response::new(OpenReadHandleResponse { handle, size }))
+
+        #[cfg(windows)]
+        {
+            let parent_pid = self.state.parent_pid().expect("checked above");
+            let (handle, size) = handle_dup::open_read_and_duplicate(&path, parent_pid)
+                .map_err(Status::internal)?;
+            return Ok(Response::new(OpenReadHandleResponse { handle, size }));
+        }
+
+        #[cfg(unix)]
+        {
+            let state = self.state.clone();
+            let size = tokio::task::spawn_blocking(move || {
+                let file = std::fs::File::open(&path).map_err(map_storage_error)?;
+                let size = file.metadata().map_err(map_storage_error)?.len();
+                fd_pass::send_fd(&state, file.as_raw_fd())?;
+                Ok::<_, Status>(size)
+            })
+            .await
+            .map_err(|err| Status::internal(err.to_string()))??;
+
+            Ok(Response::new(OpenReadHandleResponse { handle: 0, size }))
+        }
     }
 
     async fn open_write_handle(
         &self,
         request: Request<OpenWriteHandleRequest>,
     ) -> Result<Response<OpenWriteHandleResponse>, Status> {
-        let parent_pid = self.state.parent_pid().ok_or_else(|| {
-            Status::failed_precondition("handshake required before OpenWriteHandle")
-        })?;
+        self.state
+            .parent_pid()
+            .ok_or_else(|| Status::failed_precondition("handshake required before OpenWriteHandle"))?;
+
         let req = request.into_inner();
         let path = PathBuf::from(req.path);
-        let handle = handle_dup::open_write_and_duplicate(
-            &path,
-            parent_pid,
-            req.overwrite,
-            req.create_parent_directories,
-        )
-        .map_err(|err| Status::internal(err))?;
-        Ok(Response::new(OpenWriteHandleResponse { handle }))
+
+        #[cfg(windows)]
+        {
+            let parent_pid = self.state.parent_pid().expect("checked above");
+            let handle = handle_dup::open_write_and_duplicate(
+                &path,
+                parent_pid,
+                req.overwrite,
+                req.create_parent_directories,
+            )
+            .map_err(Status::internal)?;
+            return Ok(Response::new(OpenWriteHandleResponse { handle }));
+        }
+
+        #[cfg(unix)]
+        {
+            let state = self.state.clone();
+            let overwrite = req.overwrite;
+            let create_parents = req.create_parent_directories;
+            tokio::task::spawn_blocking(move || {
+                if create_parents {
+                    if let Some(parent) = path.parent() {
+                        std::fs::create_dir_all(parent).map_err(map_storage_error)?;
+                    }
+                }
+
+                let file = if overwrite {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create(true)
+                        .truncate(true)
+                        .open(&path)
+                } else if path.exists() {
+                    std::fs::OpenOptions::new().write(true).open(&path)
+                } else {
+                    std::fs::OpenOptions::new()
+                        .write(true)
+                        .create_new(true)
+                        .open(&path)
+                }
+                .map_err(map_storage_error)?;
+
+                let fd = file.as_raw_fd();
+                fd_pass::send_fd(&state, fd)?;
+                Ok::<_, Status>(())
+            })
+            .await
+            .map_err(|err| Status::internal(err.to_string()))??;
+
+            Ok(Response::new(OpenWriteHandleResponse { handle: 0 }))
+        }
     }
 
     async fn create_directory(
@@ -472,10 +658,10 @@ impl DharaSd for DharaSdService {
     ) -> Result<Response<Self::StreamWorkEventsStream>, Status> {
         let req = request.into_inner();
         let mut job_ids = req.job_ids;
-        if job_ids.is_empty() {
-            if let Ok(jobs) = self.state.jobs.lock() {
-                job_ids = jobs.clone();
-            }
+        if job_ids.is_empty()
+            && let Ok(jobs) = self.state.jobs.lock()
+        {
+            job_ids = jobs.clone();
         }
 
         let synthetic = if req.synthetic_count == 0 {
@@ -506,6 +692,38 @@ impl DharaSd for DharaSdService {
         });
 
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
+    }
+
+    type StreamLogsStream = ResponseStream<LogRecord>;
+
+    async fn stream_logs(
+        &self,
+        request: Request<StreamLogsRequest>,
+    ) -> Result<Response<Self::StreamLogsStream>, Status> {
+        self.state
+            .parent_pid()
+            .ok_or_else(|| Status::failed_precondition("handshake required before StreamLogs"))?;
+
+        let min_level = request.into_inner().min_level;
+        let min_level = if min_level == 0 { 3 } else { min_level };
+        let rx = self.state.log_tx.subscribe();
+        let stream = BroadcastStream::new(rx).filter_map(move |result| {
+            futures::future::ready(match result {
+                Ok(record) if level_rank(&record.level) >= min_level => Some(Ok(record)),
+                Ok(_) => None,
+                Err(_) => None,
+            })
+        });
+
+        Ok(Response::new(Box::pin(stream)))
+    }
+}
+
+fn shell_icon_to_proto(icon: ShellIcon) -> ShellIconPayload {
+    ShellIconPayload {
+        width: icon.width,
+        height: icon.height,
+        rgba_pixels: icon.rgba,
     }
 }
 
@@ -585,10 +803,4 @@ fn system_time_millis(time: SystemTime) -> i64 {
     time.duration_since(UNIX_EPOCH)
         .map(|value| value.as_millis() as i64)
         .unwrap_or(0)
-}
-
-/// Expose the default pipe name for callers that only need the constant.
-#[allow(dead_code)]
-pub fn default_pipe_name() -> &'static str {
-    DEFAULT_PIPE_NAME
 }

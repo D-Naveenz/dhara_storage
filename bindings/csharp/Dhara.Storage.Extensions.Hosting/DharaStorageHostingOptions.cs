@@ -1,15 +1,21 @@
-namespace Dhara.Storage.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 
+namespace Dhara.Storage.Extensions.Hosting;
 /// <summary>
 /// Configures how <see cref="DharaStorageHostedService"/> starts the <c>dhara-sd</c> sidecar.
 /// </summary>
 public sealed class DharaStorageHostingOptions
 {
     /// <summary>
-    /// Gets or sets the named pipe suffix to request from the daemon; a unique name is
-    /// generated when left <see langword="null"/>.
+    /// Gets or sets the named pipe suffix (Windows) or endpoint directory (Unix) to pass to the
+    /// daemon; a unique value is generated when left <see langword="null"/>.
     /// </summary>
     public string? PipeName { get; set; }
+
+    /// <summary>
+    /// Gets or sets the minimum daemon log level forwarded through <c>StreamLogs</c>.
+    /// </summary>
+    public LogLevel MinLogLevel { get; set; } = LogLevel.Information;
 
     /// <summary>
     /// Gets or sets an explicit path to the <c>dhara-sd</c> executable, overriding automatic

@@ -2,7 +2,7 @@
 
 Foreign-language bindings use **`dhara-sd`** as a sidecar: gRPC for control, OS handle/FD transfer for read/write bytes.
 
-## Windows (shipped)
+## Windows
 
 | Concern | Mechanism |
 |---------|-----------|
@@ -14,15 +14,22 @@ Foreign-language bindings use **`dhara-sd`** as a sidecar: gRPC for control, OS 
 
 VERSIONINFO is embedded with [`winresource`](https://crates.io/crates/winresource). That does **not** satisfy Smart App Control; release signing (Authenticode / Trusted Signing) is a later milestone. Do not ask users to disable SAC.
 
-## Linux / macOS (planned)
+## Linux / macOS
 
 | Concern | Mechanism |
 |---------|-----------|
-| Control plane | Unix domain socket + HTTP/2 gRPC |
-| Data plane | Pass open FDs with `SCM_RIGHTS` |
-| CI | Stage `dhara-sd` per RID alongside (then instead of) the legacy cdylib |
+| Control plane | Unix domain socket (`grpc.sock`) + HTTP/2 gRPC |
+| Data plane | `SCM_RIGHTS` FD passing on a dedicated `fd.sock` after `Handshake` |
+| Endpoint layout | Host passes a directory; daemon creates `{dir}/grpc.sock` and `{dir}/fd.sock` |
+| CI | Stage `dhara-sd` per RID; managed tests run on Linux under `xvfb-run` |
 
-Non-Windows `dhara-sd` currently exits with a clear message until UDS lands.
+## Logging
+
+Daemon logging is owned by **`dhara-sd`**: one `tracing_subscriber` captures **`dhara_storage`** and **`dhara-sd`** events and fans them out on the parallel **`StreamLogs`** gRPC stream. The C# host maps each record's Rust `target` string to an `ILogger` category. Do not scrape stdout/stderr.
+
+## Shell metadata
+
+`GetFileInfo` / `GetDirectoryInfo` accept `include_shell_details`, `include_icon`, and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory).
 
 ## Product vs contrast RPCs
 

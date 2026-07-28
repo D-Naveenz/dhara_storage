@@ -1,0 +1,63 @@
+//! SCM_RIGHTS FD passing over a dedicated Unix domain socket.
+
+use std::io::IoSlice;
+use std::os::unix::io::{AsRawFd, RawFd};
+use std::os::unix::net::UnixListener;
+use std::path::Path;
+use std::sync::Arc;
+
+use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+use tonic::Status;
+
+use crate::service::DaemonState;
+
+/// Bind `path` and accept the host FD-pass connection in a background thread.
+pub fn spawn_acceptor(path: &Path, state: Arc<DaemonState>) -> Result<(), Box<dyn std::error::Error>> {
+    if path.exists() {
+        std::fs::remove_file(path)?;
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    let listener = UnixListener::bind(path)?;
+    let path_display = path.display().to_string();
+    std::thread::spawn(move || {
+        match listener.accept() {
+            Ok((stream, _)) => {
+                if let Ok(mut guard) = state.fd_pass_conn.lock() {
+                    *guard = Some(stream);
+                }
+                tracing::info!(endpoint = %path_display, "fd-pass client connected");
+            }
+            Err(err) => {
+                tracing::error!(endpoint = %path_display, error = %err, "fd-pass accept failed");
+            }
+        }
+    });
+    Ok(())
+}
+
+/// Send one open file descriptor to the connected host.
+pub fn send_fd(state: &DaemonState, fd: RawFd) -> Result<(), Status> {
+    let mut guard = state
+        .fd_pass_conn
+        .lock()
+        .map_err(|_| Status::internal("fd-pass connection lock poisoned"))?;
+    let stream = guard
+        .as_mut()
+        .ok_or_else(|| Status::failed_precondition("fd-pass socket not connected"))?;
+
+    let payload = [1u8];
+    let iov = &[IoSlice::new(&payload)];
+    let fds = [fd];
+    sendmsg(
+        stream.as_raw_fd(),
+        iov,
+        &[ControlMessage::ScmRights(&fds)],
+        MsgFlags::empty(),
+        None,
+    )
+    .map_err(|err| Status::internal(format!("sendmsg SCM_RIGHTS failed: {err}")))?;
+    Ok(())
+}

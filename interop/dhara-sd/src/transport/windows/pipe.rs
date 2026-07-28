@@ -56,7 +56,10 @@ impl AsyncWrite for PipeConnection {
 ///
 /// Always keeps a spare listening instance before handing off a connected pipe so a concurrent
 /// client does not race an empty accept queue (Tokio Windows named-pipe listen pattern).
-pub async fn serve_named_pipe(pipe_name: &str, router: Router) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn serve_named_pipe(
+    pipe_name: &str,
+    router: Router,
+) -> Result<(), Box<dyn std::error::Error>> {
     let pipe_name = pipe_name.to_string();
     let incoming = stream! {
         let mut server = match ServerOptions::new()

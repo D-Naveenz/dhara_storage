@@ -60,7 +60,7 @@ flowchart TB
 | `drot` dist build | `CARGO_TARGET_DIR=target cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist` on pack/verify/windows stage jobs |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
 | `package pack` | `drot package pack` on `NuGet package (linux)` with merged `--native-stage` |
-| `verify package` | `drot verify package` on `NuGet verify (windows)` — ConsumerSmoke + AOT on `win-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
+| `verify package` | `drot verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
 | Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
 | NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
 
@@ -98,21 +98,21 @@ Direct commands (no `drot`); [`setup-linux-tool-deps`](../.github/actions/setup-
 
 ### `platform (windows)`
 
-After `code quality (linux)` — **managed tests + native staging**:
+After `code quality (linux)` — **native staging only**:
 
-1. `dotnet test` on `Dhara.Storage.Tests` (daemon transport is Windows-first).
-2. Build `drot` from the submodule (`profile dist`).
-3. `drot package stage-native --msvc-env` (stages `dhara-sd.exe`).
-4. Upload `native-stage-windows`.
+1. Build `drot` from the submodule (`profile dist`).
+2. `drot package stage-native --msvc-env` (stages `dhara-sd.exe`).
+3. Upload `native-stage-windows`.
 
 ### `platform (linux)`
 
-After `code quality (linux)` — **Rust test gate + staging**:
+After `code quality (linux)` — **primary managed + Rust gate + staging**:
 
 1. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml).
-2. Direct Rust tests (`dhara_storage`, `dhara_storage_core`, `dharastorage-ffi`).
-3. Direct `cargo build -p dhara-sd` for `linux-x64` native staging.
-4. Upload `native-stage-linux`.
+2. Direct Rust tests (`dhara_storage`, `dhara_storage_core`, `dharastorage-ffi`) and `cargo build -p dhara-sd`.
+3. `dotnet test` on `Dhara.Storage.Tests` under `xvfb-run` (shell-icon coverage).
+4. Direct `cargo build -p dhara-sd` for `linux-x64` native staging.
+5. Upload `native-stage-linux`.
 
 ### `platform (linux arm64|macos)`
 
@@ -132,13 +132,13 @@ After all platform jobs:
 3. `drot package pack --native-stage target/dist/artifacts/native-stage`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
 
-### `NuGet verify (windows)`
+### `NuGet verify (linux)`
 
 After `NuGet package (linux)`:
 
 1. Build `drot` from the submodule.
 2. Download `release-native-stage` artifact.
-3. `drot verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `win-x64`).
+3. `drot verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `linux-x64`).
 
 ## CD: `publish-crates`
 

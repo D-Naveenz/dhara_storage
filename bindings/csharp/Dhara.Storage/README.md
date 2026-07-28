@@ -28,9 +28,9 @@ dotnet add package Dhara.Storage --version 0.9.6
 
 | OS | RIDs | Runtime status |
 |----|------|----------------|
-| Windows | `win-x64`, `win-arm64` | Named pipe + handle-dup (product path) |
-| Linux | `linux-x64`, `linux-arm64` | Sidecar staged; UDS transport TBD |
-| macOS | `osx-arm64` | Sidecar staged; UDS transport TBD |
+| Windows | `win-x64`, `win-arm64` | Named pipe + handle-dup |
+| Linux | `linux-x64`, `linux-arm64` | UDS + SCM_RIGHTS FD pass |
+| macOS | `osx-arm64` | UDS + SCM_RIGHTS FD pass |
 
 ## Usage
 

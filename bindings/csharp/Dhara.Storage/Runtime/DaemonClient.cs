@@ -13,9 +13,9 @@ namespace Dhara.Storage.Runtime;
 /// </summary>
 /// <remarks>Starts the daemon on first use via <see cref="DharaRuntime.EnsureStarted"/> and
 /// translates <see cref="RpcException"/> failures into <see cref="DharaStorageException"/> so
-/// callers observe the same exception type the previous FFI boundary produced. Emits managed
-/// log records for each call through <see cref="DharaStorageLogBridge"/>; the daemon process's
-/// own (Rust-side) logs are not bridged across the gRPC boundary.</remarks>
+/// callers observe the same exception type the previous FFI boundary produced. Operational logs
+/// from the daemon arrive on the parallel <c>StreamLogs</c> gRPC stream started by
+/// <see cref="DharaRuntime"/>.</remarks>
 internal static class DaemonClient
 {
     private const string LogCategory = "Dhara.Storage.DaemonClient";
@@ -33,7 +33,7 @@ internal static class DaemonClient
         try
         {
             var response = call(Client, new CallOptions());
-            DharaStorageLogBridge.LogManaged(LogLevel.Information, LogCategory, $"{label} completed successfully.");
+            DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"{label} completed successfully.");
             return response;
         }
         catch (RpcException ex)
@@ -51,12 +51,12 @@ internal static class DaemonClient
         string? operation = null)
     {
         var label = operation ?? "daemon RPC";
-        DharaStorageLogBridge.LogManaged(LogLevel.Debug, LogCategory, $"Invoking {label}.");
+        DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"Invoking {label}.");
         try
         {
             using var asyncCall = call(Client, new CallOptions(cancellationToken: cancellationToken));
             var response = await asyncCall.ResponseAsync.ConfigureAwait(false);
-            DharaStorageLogBridge.LogManaged(LogLevel.Information, LogCategory, $"{label} completed successfully.");
+            DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"{label} completed successfully.");
             return response;
         }
         catch (RpcException ex)
@@ -78,7 +78,7 @@ internal static class DaemonClient
         CancellationToken cancellationToken)
     {
         var label = operation ?? "daemon copy RPC";
-        DharaStorageLogBridge.LogManaged(LogLevel.Debug, LogCategory, $"Waiting for {label} to complete.");
+        DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"Waiting for {label} to complete.");
         try
         {
             using var streamingCall = call(Client, new CallOptions(cancellationToken: cancellationToken));
@@ -109,7 +109,7 @@ internal static class DaemonClient
                 throw new DharaStorageException("The copy operation completed without reporting a destination path.", "Internal", path, operation);
             }
 
-            DharaStorageLogBridge.LogManaged(LogLevel.Information, LogCategory, $"{label} completed successfully.");
+            DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"{label} completed successfully.");
             return destination;
         }
         catch (OperationCanceledException)

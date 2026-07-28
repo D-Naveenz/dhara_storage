@@ -27,7 +27,7 @@ flowchart LR
 
 Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke + AOT on `linux-x64`).
 
-**Note:** named-pipe + handle-dup transport is Windows-first. Non-Windows RIDs may stage a stub `dhara-sd` that exits until UDS + `SCM_RIGHTS` lands (see [daemon-transport.md][daemon-transport]).
+**Note:** `dhara-sd` is cross-platform — Windows uses named pipes + `DuplicateHandle`; Linux/macOS use UDS + `SCM_RIGHTS` (see [daemon-transport.md][daemon-transport]).
 
 ## Expected layout
 

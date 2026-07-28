@@ -66,8 +66,8 @@ public static class DharaStorage
     /// </summary>
     /// <param name="path">The file path to inspect.</param>
     /// <param name="includeAnalysis"><see langword="true"/> to include content-analysis results in the returned snapshot; otherwise, <see langword="false"/> to load metadata only.</param>
-    /// <param name="includeIcon">Reserved for a future shell-icon RPC; icons are not available over the current daemon transport and <see cref="FileInformation.Icon"/> is always <see langword="null"/>.</param>
-    /// <param name="iconSize">Reserved alongside <paramref name="includeIcon"/>; currently unused.</param>
+    /// <param name="includeIcon"><see langword="true"/> to request shell icon pixels from the daemon.</param>
+    /// <param name="iconSize">Requested shell icon size in pixels when <paramref name="includeIcon"/> is <see langword="true"/>.</param>
     /// <returns>A <see cref="FileInformation"/> snapshot for <paramref name="path"/>.</returns>
     /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot read file information.</exception>
@@ -77,10 +77,16 @@ public static class DharaStorage
         bool includeIcon = false,
         int iconSize = 32)
     {
-        _ = includeIcon;
-        _ = iconSize;
         var response = DaemonClient.Call(
-            (client, options) => client.GetFileInfo(new GetFileInfoRequest { Path = path }, options),
+            (client, options) => client.GetFileInfo(
+                new GetFileInfoRequest
+                {
+                    Path = path,
+                    IncludeShellDetails = includeIcon,
+                    IncludeIcon = includeIcon,
+                    IconSize = checked((uint)iconSize),
+                },
+                options),
             path,
             nameof(DharaSd.DharaSdClient.GetFileInfo));
         var analysis = includeAnalysis ? AnalyzePath(path) : null;
@@ -92,8 +98,8 @@ public static class DharaStorage
     /// </summary>
     /// <param name="path">The directory path to inspect.</param>
     /// <param name="includeSummary"><see langword="true"/> to include recursive size and entry counts in the returned snapshot; otherwise, <see langword="false"/> to load metadata only.</param>
-    /// <param name="includeIcon">Reserved for a future shell-icon RPC; icons are not available over the current daemon transport and <see cref="DirectoryInformation.Icon"/> is always <see langword="null"/>.</param>
-    /// <param name="iconSize">Reserved alongside <paramref name="includeIcon"/>; currently unused.</param>
+    /// <param name="includeIcon"><see langword="true"/> to request shell icon pixels from the daemon.</param>
+    /// <param name="iconSize">Requested shell icon size in pixels when <paramref name="includeIcon"/> is <see langword="true"/>.</param>
     /// <returns>A <see cref="DirectoryInformation"/> snapshot for <paramref name="path"/>.</returns>
     /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot read directory information.</exception>
@@ -103,10 +109,16 @@ public static class DharaStorage
         bool includeIcon = false,
         int iconSize = 32)
     {
-        _ = includeIcon;
-        _ = iconSize;
         var response = DaemonClient.Call(
-            (client, options) => client.GetDirectoryInfo(new GetDirectoryInfoRequest { Path = path }, options),
+            (client, options) => client.GetDirectoryInfo(
+                new GetDirectoryInfoRequest
+                {
+                    Path = path,
+                    IncludeShellDetails = includeIcon,
+                    IncludeIcon = includeIcon,
+                    IconSize = checked((uint)iconSize),
+                },
+                options),
             path,
             nameof(DharaSd.DharaSdClient.GetDirectoryInfo));
         var summary = includeSummary ? DaemonModelFactory.BuildDirectorySummary(path) : null;

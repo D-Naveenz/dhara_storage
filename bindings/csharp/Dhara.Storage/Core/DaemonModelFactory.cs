@@ -11,9 +11,7 @@ namespace Dhara.Storage.Core;
 /// </summary>
 /// <remarks>The daemon and this process always run on the same host, so metadata the current
 /// protocol does not carry yet (OS attributes, timestamps, link targets) is filled in from
-/// <see cref="FileSystemInfo"/> instead of round-tripping for it. Shell icons and shell display
-/// details are not available over the daemon transport and are always reported as
-/// <see langword="null"/>.</remarks>
+/// <see cref="FileSystemInfo"/> instead of round-tripping for it.</remarks>
 internal static class DaemonModelFactory
 {
     private static readonly string[] SizeUnits = ["B", "KB", "MB", "GB", "TB", "PB"];
@@ -43,8 +41,10 @@ internal static class DaemonModelFactory
             FormatSize(response.Size),
             extension,
             analysis,
-            Icon: null,
-            ShellDetails: null);
+            ToShellIcon(response.HasIcon ? response.Icon : null),
+            ToShellDetails(
+                response.HasShellDisplayName ? response.ShellDisplayName : null,
+                response.HasShellTypeName ? response.ShellTypeName : null));
     }
 
     /// <summary>Builds a <see cref="DirectoryInformation"/> snapshot from a <c>GetDirectoryInfo</c> response.</summary>
@@ -68,8 +68,10 @@ internal static class DaemonModelFactory
             accessed,
             response.Name,
             summary,
-            Icon: null,
-            ShellDetails: null);
+            ToShellIcon(response.HasIcon ? response.Icon : null),
+            ToShellDetails(
+                response.HasShellDisplayName ? response.ShellDisplayName : null,
+                response.HasShellTypeName ? response.ShellTypeName : null));
     }
 
     /// <summary>Computes a recursive size/count summary for <paramref name="path"/> from the local filesystem.</summary>
@@ -150,6 +152,29 @@ internal static class DaemonModelFactory
         }
 
         return unitIndex == 0 ? $"{bytes} {SizeUnits[0]}" : $"{size:0.##} {SizeUnits[unitIndex]}";
+    }
+
+    private static ShellIcon? ToShellIcon(ShellIconPayload? payload)
+    {
+        if (payload is null)
+        {
+            return null;
+        }
+
+        return new ShellIcon(
+            checked((int)payload.Width),
+            checked((int)payload.Height),
+            payload.RgbaPixels.Memory);
+    }
+
+    private static ShellDetails? ToShellDetails(string? displayName, string? typeName)
+    {
+        if (displayName is null && typeName is null)
+        {
+            return null;
+        }
+
+        return new ShellDetails(displayName, typeName);
     }
 
     private static StorageChangeType ToChangeType(uint value) => value switch

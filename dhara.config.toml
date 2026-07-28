@@ -31,9 +31,9 @@ native_runtimes = [
     "linux-arm64",
     "osx-arm64",
 ]
-# Daemon transport is Windows-first (named pipes + handle-dup); smoke until UDS lands.
-host_runtime_smoke = "win-x64"
-aot_runtime_smoke = "win-x64"
+# Daemon transport is cross-platform (named pipes on Windows, UDS on Linux/macOS).
+host_runtime_smoke = "linux-x64"
+aot_runtime_smoke = "linux-x64"
 
 [publish]
 environment = "nuget-production"

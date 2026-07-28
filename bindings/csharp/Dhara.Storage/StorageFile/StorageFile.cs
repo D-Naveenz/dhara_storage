@@ -79,7 +79,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             path,
             nameof(DharaSd.DharaSdClient.OpenReadHandle));
 
-        using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
+        using var safeHandle = OpenReadHandle(response);
         using var source = new FileStream(safeHandle, FileAccess.Read, StreamBufferSize);
         using var buffer = new MemoryStream(checked((int)response.Size));
         source.CopyTo(buffer, StreamBufferSize);
@@ -97,8 +97,8 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             path,
             nameof(DharaSd.DharaSdClient.OpenReadHandle)).ConfigureAwait(false);
 
-        using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
-        // DuplicateHandle targets are opened without FILE_FLAG_OVERLAPPED — must use sync FileStream.
+        using var safeHandle = OpenReadHandle(response);
+        // DuplicateHandle / SCM_RIGHTS targets are opened without FILE_FLAG_OVERLAPPED — sync FileStream.
         using var source = new FileStream(safeHandle, FileAccess.Read, StreamBufferSize, isAsync: false);
         using var result = new MemoryStream(checked((int)response.Size));
         await CopyWithProgressAsync(source, result, response.Size, progress, cancellationToken).ConfigureAwait(false);
@@ -160,8 +160,8 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             path,
             nameof(DharaSd.DharaSdClient.OpenWriteHandle)).ConfigureAwait(false);
 
-        using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
-        // DuplicateHandle targets are opened without FILE_FLAG_OVERLAPPED — must use sync FileStream.
+        using var safeHandle = OpenWriteHandle(response);
+        // DuplicateHandle / SCM_RIGHTS targets are opened without FILE_FLAG_OVERLAPPED — sync FileStream.
         using var destination = new FileStream(safeHandle, FileAccess.Write, StreamBufferSize, isAsync: false);
         var total = stream.CanSeek ? (ulong?)stream.Length : null;
         await CopyWithProgressAsync(stream, destination, total, progress, cancellationToken).ConfigureAwait(false);
@@ -260,6 +260,16 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             path) : null;
         return DaemonModelFactory.ToFileInformation(response, analysis);
     }
+
+    private static SafeFileHandle OpenReadHandle(OpenReadHandleResponse response) =>
+        OperatingSystem.IsWindows()
+            ? new SafeFileHandle((nint)response.Handle, ownsHandle: true)
+            : DharaRuntime.ReceiveDataPlaneHandle();
+
+    private static SafeFileHandle OpenWriteHandle(OpenWriteHandleResponse response) =>
+        OperatingSystem.IsWindows()
+            ? new SafeFileHandle((nint)response.Handle, ownsHandle: true)
+            : DharaRuntime.ReceiveDataPlaneHandle();
 
     private static async Task CopyWithProgressAsync(
         Stream source,

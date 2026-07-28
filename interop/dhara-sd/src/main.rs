@@ -1,53 +1,31 @@
 //! Dhara Storage daemon (`dhara-sd`) — gRPC control plane for foreign-language bindings.
 //!
-//! Data plane uses OS handle duplication (Windows) or FD passing (planned). Do not ship
-//! large payloads over gRPC as the product path.
+//! Data plane uses OS handle duplication (Windows) or FD passing (Unix). Do not ship large
+//! payloads over gRPC as the product path.
 
 #![deny(missing_docs)]
 
-#[cfg(windows)]
-mod handle_dup;
-#[cfg(windows)]
-mod pipe;
-#[cfg(windows)]
+mod log_broadcast;
+mod proto;
 mod service;
+mod transport;
 
-#[cfg(windows)]
+use std::env;
+use std::process;
+use std::sync::Arc;
+
+use tracing::error;
+use tracing::info;
+
+use crate::log_broadcast::init_tracing;
+use crate::service::DaemonState;
+
 fn main() {
-    windows_main();
-}
+    let log_tx = init_tracing();
 
-#[cfg(not(windows))]
-fn main() {
-    // Cross-platform UDS + SCM_RIGHTS is documented; Windows named pipes ship first.
-    eprintln!("dhara-sd: non-Windows transports are not implemented yet (see docs/daemon-transport.md).");
-    std::process::exit(2);
-}
+    let endpoint = env::args().nth(1).unwrap_or_else(default_endpoint);
 
-#[cfg(windows)]
-fn windows_main() {
-    use std::env;
-    use std::process;
-    use std::sync::Arc;
-
-    use tracing::{error, info};
-    use tracing_subscriber::EnvFilter;
-
-    use crate::pipe::{DEFAULT_PIPE_NAME, serve_named_pipe};
-    use crate::service::{DaemonState, create_service};
-
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
-        .with_target(false)
-        .init();
-
-    let pipe_name = env::args()
-        .nth(1)
-        .unwrap_or_else(|| DEFAULT_PIPE_NAME.to_string());
-
-    info!(pipe = %pipe_name, pid = process::id(), "starting dhara-sd");
+    info!(endpoint = %endpoint, pid = process::id(), "starting dhara-sd");
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -55,12 +33,38 @@ fn windows_main() {
         .expect("tokio runtime");
 
     runtime.block_on(async move {
-        let state = Arc::new(DaemonState::new(pipe_name.clone()));
-        let service = create_service(state);
+        let state = Arc::new(DaemonState::new(endpoint.clone(), log_tx));
 
-        if let Err(err) = serve_named_pipe(&pipe_name, service).await {
+        let result = run_transport(&endpoint, state).await;
+        if let Err(err) = result {
             error!(error = %err, "daemon terminated with error");
             process::exit(1);
         }
     });
+}
+
+async fn run_transport(
+    endpoint: &str,
+    state: Arc<DaemonState>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(windows)]
+    {
+        transport::windows::run(endpoint, state).await
+    }
+    #[cfg(unix)]
+    {
+        transport::unix::run(endpoint, state).await
+    }
+}
+
+#[cfg(windows)]
+fn default_endpoint() -> String {
+    transport::windows::pipe::DEFAULT_PIPE_NAME.to_string()
+}
+
+#[cfg(unix)]
+fn default_endpoint() -> String {
+    let dir = env::temp_dir().join(format!("dhara-sd-{}", process::id()));
+    let _ = std::fs::create_dir_all(&dir);
+    dir.display().to_string()
 }
