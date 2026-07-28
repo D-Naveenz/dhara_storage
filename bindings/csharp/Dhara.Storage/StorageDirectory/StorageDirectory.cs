@@ -22,6 +22,7 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     private DirectoryInformation? _cachedInformation;
     private DirectoryInformation? _cachedInformationWithSummary;
     private CancellationTokenSource? _watchCancellationSource;
+    private AsyncServerStreamingCall<WatchEvent>? _watchCall;
     private Task? _watchLoopTask;
 
     /// <summary>
@@ -178,8 +179,24 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
             return;
         }
 
+        var path = FullPath;
         _watchCancellationSource = new CancellationTokenSource();
-        _watchLoopTask = Task.Run(() => WatchLoopAsync(options, _watchCancellationSource.Token));
+        var cancellationToken = _watchCancellationSource.Token;
+
+        // Open the stream and wait for response headers so the daemon has attached
+        // notify before this method returns (matches prior in-process Create semantics).
+        var call = DaemonClient.Client.WatchDirectory(
+            new WatchDirectoryRequest
+            {
+                Path = path,
+                Recursive = options.Recursive,
+                DebounceWindowMs = (uint)Math.Clamp(options.DebounceWindow.TotalMilliseconds, 1, uint.MaxValue),
+            },
+            new CallOptions(cancellationToken: cancellationToken));
+        call.ResponseHeadersAsync.GetAwaiter().GetResult();
+
+        _watchCall = call;
+        _watchLoopTask = Task.Run(() => WatchLoopAsync(call, cancellationToken), cancellationToken);
     }
 
     /// <inheritdoc />
@@ -194,9 +211,13 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         catch (OperationCanceledException)
         {
         }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
+        {
+        }
         finally
         {
             _watchLoopTask = null;
+            _watchCall = null;
             _watchCancellationSource?.Dispose();
             _watchCancellationSource = null;
         }
@@ -252,20 +273,12 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         return this;
     }
 
-    private async Task WatchLoopAsync(StorageWatchOptions options, CancellationToken cancellationToken)
+    private async Task WatchLoopAsync(
+        AsyncServerStreamingCall<WatchEvent> call,
+        CancellationToken cancellationToken)
     {
-        var path = FullPath;
         try
         {
-            using var call = DaemonClient.Client.WatchDirectory(
-                new WatchDirectoryRequest
-                {
-                    Path = path,
-                    Recursive = options.Recursive,
-                    DebounceWindowMs = (uint)Math.Clamp(options.DebounceWindow.TotalMilliseconds, 1, uint.MaxValue),
-                },
-                new CallOptions(cancellationToken: cancellationToken));
-
             while (await call.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
                 InvalidateCaches();
@@ -277,6 +290,14 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         }
         catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled)
         {
+        }
+        finally
+        {
+            call.Dispose();
+            if (ReferenceEquals(_watchCall, call))
+            {
+                _watchCall = null;
+            }
         }
     }
 }

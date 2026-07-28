@@ -26,11 +26,11 @@ The package bundles a small native `dhara-sd` sidecar for supported runtimes and
 dotnet add package Dhara.Storage --version 0.9.6
 ```
 
-| OS | RIDs |
-|----|------|
-| Windows | `win-x64`, `win-arm64` |
-| Linux | `linux-x64`, `linux-arm64` |
-| macOS | `osx-arm64` |
+| OS | RIDs | Runtime status |
+|----|------|----------------|
+| Windows | `win-x64`, `win-arm64` | Named pipe + handle-dup (product path) |
+| Linux | `linux-x64`, `linux-arm64` | Sidecar staged; UDS transport TBD |
+| macOS | `osx-arm64` | Sidecar staged; UDS transport TBD |
 
 ## Usage
 

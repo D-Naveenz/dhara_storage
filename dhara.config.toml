@@ -5,10 +5,10 @@ workspace = "0.9.6"
 package_id = "Dhara.Storage"
 source = "https://api.nuget.org/v3/index.json"
 authors = ["Naveen Dharmathunga"]
-description = "High-level .NET bindings for the native Dhara Storage Rust runtime."
+description = "Daemon-based .NET bindings for the Dhara Storage Rust runtime over the dhara-sd sidecar."
 tags = [
     "storage",
-    "ffi",
+    "grpc",
     "rust",
     "analysis",
     "file-handling",
@@ -31,8 +31,9 @@ native_runtimes = [
     "linux-arm64",
     "osx-arm64",
 ]
-host_runtime_smoke = "linux-x64"
-aot_runtime_smoke = "linux-x64"
+# Daemon transport is Windows-first (named pipes + handle-dup); smoke until UDS lands.
+host_runtime_smoke = "win-x64"
+aot_runtime_smoke = "win-x64"
 
 [publish]
 environment = "nuget-production"

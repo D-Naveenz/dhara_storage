@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Promoted BenchPilot to `benchmark/Dhara.Storage.Benchmarks` (FFI vs `dhara-sd` rung 1).
 - DROT workspace crates live under `tooling/drot/crates/`; embed path is `core/dhara_storage/resources/filedefs.dat`.
 - Relocated monorepo packages out of `src/`: `core/`, `interop/`, `bindings/csharp/`, and `benchmark/`. Tooling stays under `tooling/`.
+- Native packaging / CI stages `dhara-sd` sidecars (not the FFI cdylib); managed tests and NuGet verify smoke run on Windows (`win-x64`).
 
 ### Fixed
 - Honored `overwrite` on `StorageFile.CopyAsync` / `MoveAsync` when progress is null (always use the operation ABI).
+- Directory watching waits for gRPC response headers before `StartWatching` returns so notify is attached before callers mutate the tree.
+- File streams over duplicated handles use synchronous `FileStream` (handles are opened without `FILE_FLAG_OVERLAPPED`).
 
 ### Technical
 - Documented daemon transport, Windows code-signing (winresource vs Authenticode), and binding benchmark ladder under `docs/`.

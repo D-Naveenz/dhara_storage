@@ -42,11 +42,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi --check
+          cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p dhara-sd --check
           cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
-          cargo clippy -p dhara_storage_core -p dharastorage-ffi --all-targets -- -D warnings
+          cargo clippy -p dhara_storage_core -p dharastorage-ffi -p dhara-sd --all-targets -- -D warnings
           cargo doc -p dhara_storage --no-deps --all-features
-          cargo doc --no-deps -p dhara_storage_core -p dharastorage-ffi
+          cargo doc --no-deps -p dhara_storage_core -p dharastorage-ffi -p dhara-sd
 
   platform-windows:
     name: platform (windows)
@@ -66,14 +66,31 @@ jobs:
           toolchain: stable
           targets: aarch64-pc-windows-msvc
 
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Download DROT CLI
-        uses: ./.github/actions/download-drot
-        with:
-          artifact_name: drot-windows-x64
-          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
+      - name: .NET tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          tests_project=$(grep -E '^\s*tests_project\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+          # Named-pipe daemon transport is Windows-first; keep managed tests on this job.
+          dotnet test "$tests_project" -c Release
+
+      - name: Build DROT from submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Build from the checked-out submodule so stage-native expects dhara-sd layout
+          # even before orchestration CI publishes a new artifact for this SHA.
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
+          test -f target/dist/drot.exe
 
       - name: Stage native assets
         shell: bash
@@ -104,11 +121,6 @@ jobs:
         with:
           toolchain: stable
 
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v5
-        with:
-          dotnet-version: 10.0.x
-
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
@@ -123,15 +135,6 @@ jobs:
           cargo test -p dhara_storage_core
           cargo test -p dharastorage-ffi
 
-      - name: .NET tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          tests_project=$(grep -E '^\s*tests_project\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-          # GTK shell icons need a display; runners are headless without Xvfb.
-          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
-            dotnet test "$tests_project"
-
       - name: Stage native assets
         shell: bash
         run: |
@@ -139,11 +142,11 @@ jobs:
           stage_root="target/dist/artifacts/native-stage"
           rid=linux-x64
           target=x86_64-unknown-linux-gnu
-          lib=libdharastorage.so
-          cargo build -p dharastorage-ffi --release --target "$target"
-          dest="$stage_root/runtimes/$rid/native/$lib"
+          bin=dhara-sd
+          cargo build -p dhara-sd --release --target "$target"
+          dest="$stage_root/runtimes/$rid/native/$bin"
           mkdir -p "$(dirname "$dest")"
-          cp "target/$target/release/$lib" "$dest"
+          cp "target/$target/release/$bin" "$dest"
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -181,11 +184,11 @@ jobs:
           stage_root="target/dist/artifacts/native-stage"
           rid=linux-arm64
           target=aarch64-unknown-linux-gnu
-          lib=libdharastorage.so
-          cargo build -p dharastorage-ffi --release --target "$target"
-          dest="$stage_root/runtimes/$rid/native/$lib"
+          bin=dhara-sd
+          cargo build -p dhara-sd --release --target "$target"
+          dest="$stage_root/runtimes/$rid/native/$bin"
           mkdir -p "$(dirname "$dest")"
-          cp "target/$target/release/$lib" "$dest"
+          cp "target/$target/release/$bin" "$dest"
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -220,11 +223,11 @@ jobs:
           stage_root="target/dist/artifacts/native-stage"
           rid=osx-arm64
           target=aarch64-apple-darwin
-          lib=libdharastorage.dylib
-          cargo build -p dharastorage-ffi --release --target "$target"
-          dest="$stage_root/runtimes/$rid/native/$lib"
+          bin=dhara-sd
+          cargo build -p dhara-sd --release --target "$target"
+          dest="$stage_root/runtimes/$rid/native/$bin"
           mkdir -p "$(dirname "$dest")"
-          cp "target/$target/release/$lib" "$dest"
+          cp "target/$target/release/$bin" "$dest"
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -257,11 +260,16 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Download DROT CLI
-        uses: ./.github/actions/download-drot
-        with:
-          artifact_name: drot-linux-x64
-          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
+      - name: Setup Linux GUI dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
+      - name: Build DROT from submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
+          chmod +x target/dist/drot
 
       - name: Download native stages
         uses: actions/download-artifact@v8
@@ -334,10 +342,10 @@ jobs:
           retention-days: 90
 
   nuget-verify:
-    name: NuGet verify (linux)
+    name: NuGet verify (windows)
     if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch'
     needs: nuget-package
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -355,21 +363,16 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Install NativeAOT build dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y clang zlib1g-dev
-
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Download DROT CLI
-        uses: ./.github/actions/download-drot
-        with:
-          artifact_name: drot-linux-x64
-          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
+      - name: Build DROT from submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
+          cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
+          test -f target/dist/drot.exe
 
       - name: Download merged native stage
         uses: actions/download-artifact@v8
@@ -381,5 +384,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target/dist/drot -r "$GITHUB_WORKSPACE" --yes verify package \
+          target/dist/drot.exe -r "$GITHUB_WORKSPACE" --yes verify package \
             --native-stage target/dist/artifacts/native-stage

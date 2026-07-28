@@ -98,7 +98,8 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             nameof(DharaSd.DharaSdClient.OpenReadHandle)).ConfigureAwait(false);
 
         using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
-        using var source = new FileStream(safeHandle, FileAccess.Read, StreamBufferSize, isAsync: true);
+        // DuplicateHandle targets are opened without FILE_FLAG_OVERLAPPED — must use sync FileStream.
+        using var source = new FileStream(safeHandle, FileAccess.Read, StreamBufferSize, isAsync: false);
         using var result = new MemoryStream(checked((int)response.Size));
         await CopyWithProgressAsync(source, result, response.Size, progress, cancellationToken).ConfigureAwait(false);
         return result.ToArray();
@@ -160,7 +161,8 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             nameof(DharaSd.DharaSdClient.OpenWriteHandle)).ConfigureAwait(false);
 
         using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
-        using var destination = new FileStream(safeHandle, FileAccess.Write, StreamBufferSize, isAsync: true);
+        // DuplicateHandle targets are opened without FILE_FLAG_OVERLAPPED — must use sync FileStream.
+        using var destination = new FileStream(safeHandle, FileAccess.Write, StreamBufferSize, isAsync: false);
         var total = stream.CanSeek ? (ulong?)stream.Length : null;
         await CopyWithProgressAsync(stream, destination, total, progress, cancellationToken).ConfigureAwait(false);
         await destination.FlushAsync(cancellationToken).ConfigureAwait(false);

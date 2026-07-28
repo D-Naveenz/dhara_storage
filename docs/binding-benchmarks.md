@@ -41,8 +41,6 @@ dotnet run --project benchmark/Dhara.Storage.Benchmarks/Dhara.Storage.Benchmarks
 dotnet run --project benchmark/Dhara.Storage.Benchmarks/Dhara.Storage.Benchmarks.csproj -c Release --no-build -- --filter *Read*
 ```
 
-If the project is still named `Dhara.Storage.BenchPilot` during transition, use that path until the rename lands.
-
 ## Decision thresholds (vs B1)
 
 | Scenario | Acceptable | Must match/beat B1 |
@@ -65,4 +63,4 @@ Transport design: [daemon-transport.md](daemon-transport.md). Signing: [windows-
 
 ## Showcase (last full Release run)
 
-See historical numbers in git history of `binding-pilot-benchmarks.md` if needed; re-run the suite after the harness rename and refresh this section.
+Re-run the suite after significant transport or packaging changes and refresh this section with current numbers.

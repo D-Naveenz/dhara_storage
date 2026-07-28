@@ -29,7 +29,7 @@ From the Dhara Storage workspace root:
 cargo build -p dharastorage-ffi --release
 ```
 
-This crate is staged into NuGet as a native asset—it is not a standalone crates.io product.
+This crate is an evidence / benchmark ABI (and a C interop option). The [Dhara.Storage][nuget] package ships the `dhara-sd` sidecar instead of this cdylib.
 
 ## Usage
 

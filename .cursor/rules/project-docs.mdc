@@ -21,7 +21,8 @@ Pitch, exclusions, and design lineage: **[AGENTS.md → Product intent](../../AG
 | [`README.md`](../../README.md) | GitHub — product overview, package routing |
 | [`core/dhara_storage/README.md`](../../core/dhara_storage/README.md) | crates.io — Rust runtime |
 | [`core/dhara_storage_core/README.md`](../../core/dhara_storage_core/README.md) | crates.io — framework |
-| [`interop/dharastorage-ffi/README.md`](../../interop/dharastorage-ffi/README.md) | Native C ABI (NuGet asset) |
+| [`interop/dharastorage-ffi/README.md`](../../interop/dharastorage-ffi/README.md) | Native C ABI (benchmarks / non-.NET hosts) |
+| [`interop/dhara-sd`](../../interop/dhara-sd) | Sidecar daemon packaged with NuGet |
 | [`bindings/csharp/Dhara.Storage/README.md`](../../bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
 | [`tooling/drot/README.md`](../../tooling/drot/README.md) | DROT submodule — operators |
 
