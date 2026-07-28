@@ -8,14 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Changed
-- Relocated monorepo packages out of `src/`: `core/`, `interop/` (FFI + pilot daemon), `bindings/csharp/`, and `benchmark/` (manual BenchPilot). Tooling stays under `tooling/`.
+- Replaced the binding pilot with product `dhara-sd`; `Dhara.Storage` NuGet uses the daemon (gRPC + handle transfer) instead of in-process FFI. Rust `dharastorage-ffi` remains for evidence benchmarks only.
+- Added `Dhara.Storage.Extensions.Hosting` for Generic Host lifetime of the sidecar.
+- Promoted BenchPilot to `benchmark/Dhara.Storage.Benchmarks` (FFI vs `dhara-sd` rung 1).
+- DROT workspace crates live under `tooling/drot/crates/`; embed path is `core/dhara_storage/resources/filedefs.dat`.
+- Relocated monorepo packages out of `src/`: `core/`, `interop/`, `bindings/csharp/`, and `benchmark/`. Tooling stays under `tooling/`.
 
 ### Fixed
 - Honored `overwrite` on `StorageFile.CopyAsync` / `MoveAsync` when progress is null (always use the operation ABI).
 
 ### Technical
-- Recorded BindingDotNet pilot showcase results in `docs/binding-pilot-benchmarks.md`; lean hybrid for large reads via handle duplication.
-- Pilot daemon: `spawn_blocking` for heavy analyze/read/write; BenchPilot uses a single named-pipe HTTP/2 connection.
+- Documented daemon transport, Windows code-signing (winresource vs Authenticode), and binding benchmark ladder under `docs/`.
+- `dhara-sd` embeds VERSIONINFO via `winresource`; named-pipe accept loop keeps a spare listener.
 
 ---
 

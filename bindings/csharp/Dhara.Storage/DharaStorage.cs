@@ -1,7 +1,9 @@
+using Dhara.Storage.Core;
 using Dhara.Storage.Models.Analysis;
 using Dhara.Storage.Models.Information;
+using Dhara.Storage.Runtime;
+using Dhara.Storage.Sd.V1;
 using Microsoft.Extensions.Logging;
-using Dhara.Storage.Core;
 
 namespace Dhara.Storage;
 
@@ -14,18 +16,19 @@ namespace Dhara.Storage;
 /// destinations. Content analysis uses the native definition database (not extension-only MIME).
 /// </para>
 /// <para>
-/// The package loads a native runtime for supported RIDs so I/O and analysis run at native speed.
+/// Calls are served by the bundled <c>dhara-sd</c> sidecar daemon over a local gRPC transport;
+/// the daemon is started on first use.
 /// </para>
 /// </remarks>
 public static class DharaStorage
 {
     /// <summary>
-    /// Registers an <see cref="ILoggerFactory"/> that receives both managed wrapper logs and native runtime logs.
+    /// Registers an <see cref="ILoggerFactory"/> that receives managed wrapper logs.
     /// </summary>
-    /// <remarks>Passing <see langword="null"/> removes the current logger factory and stops forwarding native log records.
-    /// Configure logging before starting long-running storage operations when you want initialization, progress, and failure details to flow into the host logging pipeline.</remarks>
+    /// <remarks>Passing <see langword="null"/> removes the current logger factory. Configure logging
+    /// before starting long-running storage operations when you want initialization, progress, and
+    /// failure details to flow into the host logging pipeline.</remarks>
     /// <param name="loggerFactory">The logger factory that should receive Dhara Storage log events, or <see langword="null"/> to disable forwarding.</param>
-    /// <exception cref="PlatformNotSupportedException">Thrown when logging is configured on an unsupported operating system or process architecture.</exception>
     public static void UseLoggerFactory(ILoggerFactory? loggerFactory) => DharaStorageLogBridge.UseLoggerFactory(loggerFactory);
 
     /// <summary>
@@ -48,37 +51,65 @@ public static class DharaStorage
     /// <param name="path">The file path to analyze.</param>
     /// <returns>An <see cref="AnalysisReport"/> describing the strongest file-type matches for <paramref name="path"/>.</returns>
     /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
-    public static AnalysisReport AnalyzePath(string path) => Interop.Native.NativeQueryInvoker.AnalyzePath(path);
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot analyze the path.</exception>
+    public static AnalysisReport AnalyzePath(string path)
+    {
+        var response = DaemonClient.Call(
+            (client, options) => client.AnalyzePath(new AnalyzePathRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.AnalyzePath));
+        return DaemonModelFactory.ToAnalysisReport(response, path);
+    }
 
     /// <summary>
     /// Queries file information immediately.
     /// </summary>
     /// <param name="path">The file path to inspect.</param>
     /// <param name="includeAnalysis"><see langword="true"/> to include content-analysis results in the returned snapshot; otherwise, <see langword="false"/> to load metadata only.</param>
-    /// <param name="includeIcon"><see langword="true"/> to load OS shell icon RGBA pixels; otherwise, <see langword="false"/>.</param>
-    /// <param name="iconSize">Requested shell icon dimension in pixels when <paramref name="includeIcon"/> is <see langword="true"/>.</param>
+    /// <param name="includeIcon">Reserved for a future shell-icon RPC; icons are not available over the current daemon transport and <see cref="FileInformation.Icon"/> is always <see langword="null"/>.</param>
+    /// <param name="iconSize">Reserved alongside <paramref name="includeIcon"/>; currently unused.</param>
     /// <returns>A <see cref="FileInformation"/> snapshot for <paramref name="path"/>.</returns>
     /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot read file information.</exception>
     public static FileInformation GetFileInformation(
         string path,
         bool includeAnalysis = false,
         bool includeIcon = false,
-        int iconSize = 32) =>
-        Interop.Native.NativeQueryInvoker.GetFileInformation(path, includeAnalysis, includeIcon, iconSize);
+        int iconSize = 32)
+    {
+        _ = includeIcon;
+        _ = iconSize;
+        var response = DaemonClient.Call(
+            (client, options) => client.GetFileInfo(new GetFileInfoRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.GetFileInfo));
+        var analysis = includeAnalysis ? AnalyzePath(path) : null;
+        return DaemonModelFactory.ToFileInformation(response, analysis);
+    }
 
     /// <summary>
     /// Queries directory information immediately.
     /// </summary>
     /// <param name="path">The directory path to inspect.</param>
     /// <param name="includeSummary"><see langword="true"/> to include recursive size and entry counts in the returned snapshot; otherwise, <see langword="false"/> to load metadata only.</param>
-    /// <param name="includeIcon"><see langword="true"/> to load OS shell icon RGBA pixels; otherwise, <see langword="false"/>.</param>
-    /// <param name="iconSize">Requested shell icon dimension in pixels when <paramref name="includeIcon"/> is <see langword="true"/>.</param>
+    /// <param name="includeIcon">Reserved for a future shell-icon RPC; icons are not available over the current daemon transport and <see cref="DirectoryInformation.Icon"/> is always <see langword="null"/>.</param>
+    /// <param name="iconSize">Reserved alongside <paramref name="includeIcon"/>; currently unused.</param>
     /// <returns>A <see cref="DirectoryInformation"/> snapshot for <paramref name="path"/>.</returns>
     /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot read directory information.</exception>
     public static DirectoryInformation GetDirectoryInformation(
         string path,
         bool includeSummary = false,
         bool includeIcon = false,
-        int iconSize = 32) =>
-        Interop.Native.NativeQueryInvoker.GetDirectoryInformation(path, includeSummary, includeIcon, iconSize);
+        int iconSize = 32)
+    {
+        _ = includeIcon;
+        _ = iconSize;
+        var response = DaemonClient.Call(
+            (client, options) => client.GetDirectoryInfo(new GetDirectoryInfoRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.GetDirectoryInfo));
+        var summary = includeSummary ? DaemonModelFactory.BuildDirectorySummary(path) : null;
+        return DaemonModelFactory.ToDirectoryInformation(response, summary);
+    }
 }

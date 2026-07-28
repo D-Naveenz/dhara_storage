@@ -1,0 +1,46 @@
+[package]
+name = "dhara-sd"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+authors = ["Naveen Dharmathunga"]
+description = "Dhara Storage daemon — gRPC control plane with OS handle transfer for foreign-language bindings."
+publish = false
+
+[[bin]]
+name = "dhara-sd"
+path = "src/main.rs"
+
+[package.metadata.winresource]
+ProductName = "Dhara Storage Daemon"
+FileDescription = "Dhara Storage sidecar daemon (dhara-sd)"
+OriginalFilename = "dhara-sd.exe"
+LegalCopyright = "Copyright © 2026 Naveen Dharmathunga"
+CompanyName = "Naveen Dharmathunga"
+
+[dependencies]
+dhara_storage = { workspace = true, features = ["async-tokio"] }
+tokio = { version = "1.52", features = ["full"] }
+tonic = "0.13"
+prost = "0.13"
+futures = "0.3"
+async-stream = "0.3"
+tokio-stream = "0.1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+uuid = { version = "1.18", features = ["v4"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Threading",
+] }
+
+[build-dependencies]
+tonic-build = "0.13"
+protoc-bin-vendored = "3.1"
+winresource = "0.1"

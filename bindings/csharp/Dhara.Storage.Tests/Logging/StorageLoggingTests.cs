@@ -7,7 +7,7 @@ namespace Dhara.Storage.Tests.Logging;
 public sealed class StorageLoggingTests
 {
     [Fact]
-    public async Task UseLoggerFactory_ForwardsManagedAndNativeLogs()
+    public async Task UseLoggerFactory_ForwardsManagedDaemonClientLogs()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var temp = new TemporaryDirectory();
@@ -28,19 +28,16 @@ public sealed class StorageLoggingTests
             DharaStorage.UseLoggerFactory(null);
         }
 
+        // The dhara-sd daemon logs to its own process output rather than across the gRPC
+        // boundary, so only managed wrapper log records (from DaemonClient) are observable here.
         var entries = loggerFactory.Entries;
         Assert.Contains(entries, entry =>
-            entry.Category == "Dhara.Storage.NativeOperationHandle" &&
+            entry.Category == "Dhara.Storage.DaemonClient" &&
+            entry.Level == LogLevel.Debug &&
+            entry.Message.Contains("OpenReadHandle", StringComparison.Ordinal));
+        Assert.Contains(entries, entry =>
+            entry.Category == "Dhara.Storage.DaemonClient" &&
             entry.Level == LogLevel.Information &&
             entry.Message.Contains("completed", StringComparison.OrdinalIgnoreCase));
-
-        var nativeEntry = entries.FirstOrDefault(entry =>
-            entry.Category == "dhara_storage::operations::file" &&
-            entry.Fields.TryGetValue("nativeTarget", out var target) &&
-            string.Equals(target?.ToString(), "dhara_storage::operations::file", StringComparison.Ordinal));
-        Assert.NotNull(nativeEntry);
-        var confirmedNativeEntry = nativeEntry!;
-        Assert.Equal("dhara_storage::operations::file", confirmedNativeEntry.Fields["nativeTarget"]);
-        Assert.Contains(confirmedNativeEntry.Fields.Keys, key => key.StartsWith("native.", StringComparison.Ordinal));
     }
 }

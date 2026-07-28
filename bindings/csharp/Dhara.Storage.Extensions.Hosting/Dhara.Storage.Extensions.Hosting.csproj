@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Generic Host integration for Dhara.Storage: starts the `dhara-sd` sidecar with the host and
+    stops it during host shutdown, so applications do not need to manage DharaRuntime manually.
+    -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    <PackageId>Dhara.Storage.Extensions.Hosting</PackageId>
+    <Version>0.9.6</Version>
+    <Description>Generic Host integration that starts and stops the Dhara Storage dhara-sd sidecar with the application lifetime.</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/D-Naveenz/dhara_storage</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/D-Naveenz/dhara_storage</PackageProjectUrl>
+    <Authors>Naveen Dharmathunga</Authors>
+    <PackageTags>storage;hosting;grpc;dependency-injection;rust</PackageTags>
+  </PropertyGroup>
+  <PropertyGroup>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>© 2026 Naveen Dharmathunga and contributors</Copyright>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Dhara.Storage\Dhara.Storage.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Pack="true" PackagePath="\" Include="README.md" />
+  </ItemGroup>
+</Project>

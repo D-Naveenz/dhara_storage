@@ -12,12 +12,13 @@ flowchart TB
   end
 
   subgraph interop [interop]
-    ffi[dharastorage-ffi cdylib dharastorage]
-    daemon[dhara-storage-daemon-pilot]
+    ffi[dharastorage-ffi bench only]
+    daemon[dhara-sd]
   end
 
   subgraph bindings [bindings]
     csharp[csharp Dhara.Storage]
+    hosting[Extensions.Hosting]
   end
 
   subgraph tool [tooling/drot]
@@ -30,7 +31,8 @@ flowchart TB
   coreCrate --> runtime
   runtime --> ffi
   runtime --> daemon
-  ffi --> csharp
+  daemon --> csharp
+  csharp --> hosting
   plugin --> kernel
   bin --> kernel
   bin --> plugin
@@ -43,11 +45,11 @@ flowchart TB
 |------|------|
 | `core/dhara_storage_core` | Framework / abstraction layer (`definitions` = DSFD today; no embedded defs) |
 | `core/dhara_storage` | Business runtime; embeds `filedefs.dat` |
-| `interop/dharastorage-ffi` | C ABI crate (`dharastorage-ffi` package, `dharastorage` lib name) |
-| `interop/dhara-storage-daemon-pilot` | Pilot gRPC daemon (Windows named pipes) |
-| `bindings/csharp/` | `Dhara.Storage` NuGet source, tests, consumer smoke |
+| `interop/dhara-sd` | Sidecar daemon (`dhara-sd`); gRPC + handle transfer |
+| `interop/dharastorage-ffi` | C ABI crate — benchmark evidence only (not NuGet) |
+| `bindings/csharp/` | `Dhara.Storage` NuGet, Hosting extensions, tests |
 | `benchmark/` | Manual BenchmarkDotNet harness (not CI/CD) |
-| `tooling/drot/src/*` | Nested workspace: kernel → plugin → hosts (tui / binary) |
+| `tooling/drot/crates/*` | Nested workspace: kernel → plugin → hosts (tui / binary) |
 | `dhara.config.toml` | Workspace semver, tool semver, NuGet/CI metadata |
 
 ## Operator tool crates

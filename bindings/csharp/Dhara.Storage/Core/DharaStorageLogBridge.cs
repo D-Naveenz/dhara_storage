@@ -1,16 +1,21 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Dhara.Storage.Interop.Native;
 
 namespace Dhara.Storage.Core;
 
+/// <summary>
+/// Central logger factory used by the managed Dhara Storage wrapper types.
+/// </summary>
+/// <remarks>The daemon (<c>dhara-sd</c>) logs to its own process output rather than across the
+/// gRPC boundary, so this bridge only forwards managed wrapper log records; it does not bridge
+/// native/daemon log records the way the retired in-process FFI logger did.</remarks>
 internal static class DharaStorageLogBridge
 {
     private static readonly object Gate = new();
 
     private static ILoggerFactory? _loggerFactory;
-    private static bool _nativeBridgeRegistered;
 
+    /// <summary>Sets or clears the logger factory used to create loggers for wrapper log records.</summary>
     internal static void UseLoggerFactory(ILoggerFactory? loggerFactory)
     {
         lock (Gate)
@@ -20,25 +25,15 @@ internal static class DharaStorageLogBridge
                 return;
             }
 
-            if (loggerFactory is null)
-            {
-                if (_nativeBridgeRegistered)
-                {
-                    NativeLogging.UnregisterLogger();
-                    _nativeBridgeRegistered = false;
-                }
-
-                _loggerFactory = null;
-                return;
-            }
-
             _loggerFactory = loggerFactory;
-            NativeLogging.RegisterLogger();
-            _nativeBridgeRegistered = true;
-            LogManaged(LogLevel.Information, "Dhara.Storage.Logging", "Configured Dhara.Storage host logging.");
+            if (loggerFactory is not null)
+            {
+                LogManaged(LogLevel.Information, "Dhara.Storage.Logging", "Configured Dhara.Storage host logging.");
+            }
         }
     }
 
+    /// <summary>Logs a managed wrapper event through the configured logger factory, if any.</summary>
     internal static void LogManaged(
         LogLevel level,
         string category,
@@ -54,46 +49,6 @@ internal static class DharaStorageLogBridge
 
         using var scope = fields is null ? null : logger.BeginScope(fields);
         logger.Log(level, exception, "{Message}", message);
-    }
-
-    internal static void LogNative(NativeLogRecordDto record)
-    {
-        var logger = CreateLogger(record.Target);
-        var level = record.ToLogLevel();
-        if (!logger.IsEnabled(level))
-        {
-            return;
-        }
-
-        var scope = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["nativeTimestampUnixMs"] = record.TimestampUnixMs,
-            ["nativeLevel"] = record.Level,
-            ["nativeTarget"] = record.Target,
-        };
-
-        if (!string.IsNullOrWhiteSpace(record.ModulePath))
-        {
-            scope["nativeModulePath"] = record.ModulePath;
-        }
-
-        if (!string.IsNullOrWhiteSpace(record.File))
-        {
-            scope["nativeFile"] = record.File;
-        }
-
-        if (record.Line.HasValue)
-        {
-            scope["nativeLine"] = record.Line.Value;
-        }
-
-        foreach (var field in record.Fields)
-        {
-            scope[$"native.{field.Key}"] = field.Value;
-        }
-
-        using var _ = logger.BeginScope(scope);
-        logger.Log(level, "{Message}", record.Message);
     }
 
     private static ILogger CreateLogger(string category) =>

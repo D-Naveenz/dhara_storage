@@ -43,7 +43,7 @@ Pick the surface that matches how you build. Each link is the install-and-usage 
 
 Published packages track the current workspace line on [crates.io][crates-dhara] and [NuGet][nuget-dhara].
 
-Binding-transport pilot (FFI vs gRPC daemon): [benchmark results][binding-pilot].
+Binding benchmarks (FFI evidence vs `dhara-sd`): [results & ladder][binding-benchmarks].
 
 </div>
 
@@ -66,6 +66,6 @@ Licensed under [Apache-2.0][license].
 [crates-dhara]: https://crates.io/crates/dhara_storage
 [nuget-dhara]: https://www.nuget.org/packages/Dhara.Storage
 [docs-index]: docs/README.md
-[binding-pilot]: docs/binding-pilot-benchmarks.md
+[binding-benchmarks]: docs/binding-benchmarks.md
 [agents]: AGENTS.md
 [license]: LICENSE.txt

@@ -3,7 +3,7 @@ members = [
     "core/dhara_storage_core",
     "core/dhara_storage",
     "interop/dharastorage-ffi",
-    "interop/dhara-storage-daemon-pilot",
+    "interop/dhara-sd",
 ]
 resolver = "3"
 

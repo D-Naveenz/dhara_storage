@@ -5,7 +5,7 @@
 
 .NET API for **file and directory handles**, content-based analysis, I/O with progress and cancellation, and directory watching—usable from ordinary libraries and desktop apps on Windows, Linux, and macOS.
 
-The package ships **native** libraries for supported runtimes so storage and analysis work at native speed inside your .NET process. You work in C#; you do not need to write Rust.
+The package bundles a small native `dhara-sd` sidecar for supported runtimes and talks to it over a local gRPC connection, so storage and analysis run at native speed alongside your .NET process. You work in C#; you do not need to write Rust, and the sidecar starts automatically on first use.
 
 ## Why use it
 
@@ -13,7 +13,7 @@ The package ships **native** libraries for supported runtimes so storage and ana
 - Content-based MIME and type candidates (`AnalyzePath` / analysis on handles)
 - Sync and async read, write, copy, move, rename, delete
 - Directory watching with typed change events
-- One NuGet with native assets for supported RIDs
+- One NuGet with a bundled sidecar for supported RIDs
 
 ## Prerequisites
 
@@ -64,16 +64,24 @@ directory.StartWatching();
 directory.Changed += (_, change) => Console.WriteLine(change.Path);
 ```
 
-Optional shell icons return raw RGBA pixels when `includeIcon: true`. `ShellDetails` is Windows-only today.
+### 4. Host lifetime (ASP.NET Core, worker services)
+
+Add [`Dhara.Storage.Extensions.Hosting`](https://www.nuget.org/packages/Dhara.Storage.Extensions.Hosting) to start and stop the sidecar with your application's `IHost`:
+
+```csharp
+builder.Services.AddDharaStorage();
+```
+
+Shell icons and shell details are not available over the sidecar transport yet; `Icon` and `ShellDetails` are always `null`.
 
 ## Related
 
 - Product overview: [Dhara Storage][root]
-- Native ABI (advanced): [dharastorage][ffi]
+- Generic Host integration: [Dhara.Storage.Extensions.Hosting][hosting]
 
 ## License
 
 Apache-2.0.
 
 [root]: https://github.com/D-Naveenz/dhara_storage
-[ffi]: https://github.com/D-Naveenz/dhara_storage/blob/main/interop/dharastorage-ffi/README.md
+[hosting]: https://github.com/D-Naveenz/dhara_storage/blob/main/bindings/csharp/Dhara.Storage.Extensions.Hosting/README.md

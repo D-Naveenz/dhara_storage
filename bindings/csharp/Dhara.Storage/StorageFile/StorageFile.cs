@@ -1,22 +1,27 @@
 using Dhara.Storage.Abstractions;
 using Dhara.Storage.Core;
-using Dhara.Storage.Interop.Handles;
-using Dhara.Storage.Interop.Native;
 using Dhara.Storage.Models.Analysis;
 using Dhara.Storage.Models.Information;
 using Dhara.Storage.Models.Progress;
+using Dhara.Storage.Runtime;
+using Dhara.Storage.Sd.V1;
+using Microsoft.Win32.SafeHandles;
 
 namespace Dhara.Storage;
 
 /// <summary>
-/// Path-based file wrapper backed by the native Dhara Storage runtime.
+/// Path-based file wrapper backed by the <c>dhara-sd</c> sidecar daemon.
 /// </summary>
 /// <remarks>
 /// Prefer <see cref="DharaStorage.File"/> from application code. The wrapper caches
-/// metadata snapshots; call <see cref="RefreshInformation"/> after external changes.
+/// metadata snapshots; call <see cref="RefreshInformation"/> after external changes. Reads and
+/// writes use OS handle transfer (the daemon duplicates a native file handle into this process)
+/// rather than sending bytes over gRPC.
 /// </remarks>
 public sealed class StorageFile : StorageItemBase, IStorageFile
 {
+    private const int StreamBufferSize = 64 * 1024;
+
     private FileInformation? _cachedInformation;
     private FileInformation? _cachedInformationWithAnalysis;
 
@@ -32,13 +37,13 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public override bool Exists => File.Exists(FullPath);
 
     /// <inheritdoc />
-    public FileInformation Information => _cachedInformation ??= NativeQueryInvoker.GetFileInformation(FullPath, includeAnalysis: false);
+    public FileInformation Information => _cachedInformation ??= LoadInformation(includeAnalysis: false);
 
     /// <inheritdoc />
     public FileInformation RefreshInformation(bool includeAnalysis = false)
     {
         EnsureNotDisposed();
-        var info = NativeQueryInvoker.GetFileInformation(FullPath, includeAnalysis);
+        var info = LoadInformation(includeAnalysis);
         if (includeAnalysis)
         {
             _cachedInformationWithAnalysis = info;
@@ -56,45 +61,62 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public AnalysisReport Analyze()
     {
         EnsureNotDisposed();
-        return NativeQueryInvoker.AnalyzePath(FullPath);
+        var path = FullPath;
+        var response = DaemonClient.Call(
+            (client, options) => client.AnalyzePath(new AnalyzePathRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.AnalyzePath));
+        return DaemonModelFactory.ToAnalysisReport(response, path);
     }
 
     /// <inheritdoc />
     public byte[] ReadBytes()
     {
         EnsureNotDisposed();
-        return NativeQueryInvoker.ReadFileBytes(FullPath);
+        var path = FullPath;
+        var response = DaemonClient.Call(
+            (client, options) => client.OpenReadHandle(new OpenReadHandleRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.OpenReadHandle));
+
+        using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
+        using var source = new FileStream(safeHandle, FileAccess.Read, StreamBufferSize);
+        using var buffer = new MemoryStream(checked((int)response.Size));
+        source.CopyTo(buffer, StreamBufferSize);
+        return buffer.ToArray();
     }
 
     /// <inheritdoc />
-    public Task<byte[]> ReadBytesAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
+    public async Task<byte[]> ReadBytesAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_read_file(FullPath, out var nativeHandle, out var errorPtr, out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-        return NativeOperationRunner.RunAsync(handle, static operation => operation.TakeBytesResult(), progress, cancellationToken);
+        var path = FullPath;
+        var response = await DaemonClient.CallAsync(
+            (client, options) => client.OpenReadHandleAsync(new OpenReadHandleRequest { Path = path }, options),
+            cancellationToken,
+            path,
+            nameof(DharaSd.DharaSdClient.OpenReadHandle)).ConfigureAwait(false);
+
+        using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
+        using var source = new FileStream(safeHandle, FileAccess.Read, StreamBufferSize, isAsync: true);
+        using var result = new MemoryStream(checked((int)response.Size));
+        await CopyWithProgressAsync(source, result, response.Size, progress, cancellationToken).ConfigureAwait(false);
+        return result.ToArray();
     }
 
     /// <inheritdoc />
     public string ReadText()
     {
         EnsureNotDisposed();
-        return NativeQueryInvoker.ReadFileText(FullPath);
+        return System.Text.Encoding.UTF8.GetString(ReadBytes());
     }
 
     /// <inheritdoc />
-    public Task<string> ReadTextAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
+    public async Task<string> ReadTextAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_read_file_text(FullPath, out var nativeHandle, out var errorPtr, out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-        return NativeOperationRunner.RunAsync(handle, static operation => operation.TakeStringResult(), progress, cancellationToken);
+        var bytes = await ReadBytesAsync(progress, cancellationToken).ConfigureAwait(false);
+        return System.Text.Encoding.UTF8.GetString(bytes);
     }
 
     /// <inheritdoc />
@@ -102,66 +124,20 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
         WriteAsync(content, progress, overwrite, createParentDirectories).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public unsafe Task WriteAsync(byte[] content, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
+    public async Task WriteAsync(byte[] content, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
     {
-        EnsureNotDisposed();
-
-        if (progress is null)
-        {
-            NativeQueryInvoker.WriteFileBytes(FullPath, content);
-            InvalidateCaches();
-            return Task.CompletedTask;
-        }
-
-        NativeOperationHandle handle;
-        fixed (byte* ptr = content)
-        {
-            var status = NativeOperations.dhara_operation_start_write_file(
-                FullPath,
-                ptr,
-                (nuint)content.Length,
-                NativeHelpers.ToNativeBool(overwrite),
-                NativeHelpers.ToNativeBool(createParentDirectories),
-                out var nativeHandle,
-                out var errorPtr,
-                out var errorLen);
-            handle = NativeOperationHandle.Create(status, nativeHandle, errorPtr, errorLen);
-        }
-
-        return AwaitWriteCompletionAsync(handle, progress, cancellationToken);
+        ArgumentNullException.ThrowIfNull(content);
+        using var stream = new MemoryStream(content, writable: false);
+        await WriteAsync(stream, progress, overwrite, createParentDirectories, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
     public void WriteText(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true) =>
-        WriteTextAsync(text, progress, overwrite, createParentDirectories).GetAwaiter().GetResult();
+        Write(System.Text.Encoding.UTF8.GetBytes(text), progress, overwrite, createParentDirectories);
 
     /// <inheritdoc />
-    public Task WriteTextAsync(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
-    {
-        EnsureNotDisposed();
-
-        if (progress is null)
-        {
-            NativeQueryInvoker.WriteFileText(FullPath, text);
-            InvalidateCaches();
-            return Task.CompletedTask;
-        }
-
-        var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_write_file_text(
-                FullPath,
-                text,
-                NativeHelpers.ToNativeBool(overwrite),
-                NativeHelpers.ToNativeBool(createParentDirectories),
-                out var nativeHandle,
-                out var errorPtr,
-                out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-
-        return AwaitWriteCompletionAsync(handle, progress, cancellationToken);
-    }
+    public Task WriteTextAsync(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default) =>
+        WriteAsync(System.Text.Encoding.UTF8.GetBytes(text), progress, overwrite, createParentDirectories, cancellationToken);
 
     /// <inheritdoc />
     public async Task WriteAsync(Stream stream, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
@@ -169,35 +145,26 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
         EnsureNotDisposed();
         ArgumentNullException.ThrowIfNull(stream);
 
-        using var session = NativeWriteSessionHandle.Create(FullPath, overwrite, createParentDirectories);
-        var buffer = new byte[64 * 1024];
-        ulong transferred = 0;
-        var total = stream.CanSeek ? (ulong?)stream.Length : null;
-
-        try
-        {
-            while (true)
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                var read = await stream.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
-                if (read == 0)
+        var path = FullPath;
+        var response = await DaemonClient.CallAsync(
+            (client, options) => client.OpenWriteHandleAsync(
+                new OpenWriteHandleRequest
                 {
-                    break;
-                }
+                    Path = path,
+                    Overwrite = overwrite,
+                    CreateParentDirectories = createParentDirectories,
+                },
+                options),
+            cancellationToken,
+            path,
+            nameof(DharaSd.DharaSdClient.OpenWriteHandle)).ConfigureAwait(false);
 
-                session.WriteChunk(buffer.AsSpan(0, read));
-                transferred += (ulong)read;
-                progress?.Report(new StorageProgress(total, transferred, 0));
-            }
-
-            session.Complete();
-            InvalidateCaches();
-        }
-        catch
-        {
-            session.Abort();
-            throw;
-        }
+        using var safeHandle = new SafeFileHandle((nint)response.Handle, ownsHandle: true);
+        using var destination = new FileStream(safeHandle, FileAccess.Write, StreamBufferSize, isAsync: true);
+        var total = stream.CanSeek ? (ulong?)stream.Length : null;
+        await CopyWithProgressAsync(stream, destination, total, progress, cancellationToken).ConfigureAwait(false);
+        await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+        InvalidateCaches();
     }
 
     /// <inheritdoc />
@@ -208,14 +175,13 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        // Always use the operation ABI so `overwrite` is applied (sync query helpers omit it).
-        var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_copy_file(FullPath, destination, NativeHelpers.ToNativeBool(overwrite), out var nativeHandle, out var errorPtr, out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-
-        var newPath = await NativeOperationRunner.RunAsync(handle, static operation => operation.TakeStringResult(), progress, cancellationToken).ConfigureAwait(false);
+        var source = FullPath;
+        var newPath = await DaemonClient.ConsumeCopyProgressAsync(
+            (client, options) => client.CopyFile(new CopyFileRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
+            progress,
+            source,
+            nameof(DharaSd.DharaSdClient.CopyFile),
+            cancellationToken).ConfigureAwait(false);
         return new StorageFile(newPath);
     }
 
@@ -227,15 +193,14 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        // Always use the operation ABI so `overwrite` is applied (sync query helpers omit it).
-        var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_move_file(FullPath, destination, NativeHelpers.ToNativeBool(overwrite), out var nativeHandle, out var errorPtr, out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-        var newPath = await NativeOperationRunner.RunAsync(handle, static operation => operation.TakeStringResult(), progress, cancellationToken).ConfigureAwait(false);
+        var source = FullPath;
+        var response = await DaemonClient.CallAsync(
+            (client, options) => client.MovePathAsync(new MovePathRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
+            cancellationToken,
+            source,
+            nameof(DharaSd.DharaSdClient.MovePath)).ConfigureAwait(false);
 
-        UpdatePath(newPath);
+        UpdatePath(response.Path);
     }
 
     /// <inheritdoc />
@@ -245,13 +210,13 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task RenameAsync(string newName, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        using var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_rename_file(FullPath, newName, out var nativeHandle, out var errorPtr, out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-        await handle.WaitForCompletionAsync(null, cancellationToken).ConfigureAwait(false);
-        UpdatePath(handle.TakeStringResult());
+        var path = FullPath;
+        var response = await DaemonClient.CallAsync(
+            (client, options) => client.RenamePathAsync(new RenamePathRequest { Path = path, NewName = newName }, options),
+            cancellationToken,
+            path,
+            nameof(DharaSd.DharaSdClient.RenamePath)).ConfigureAwait(false);
+        UpdatePath(response.Path);
     }
 
     /// <inheritdoc />
@@ -261,12 +226,12 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task DeleteAsync(CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        using var handle = NativeOperationHandle.Create(() =>
-        {
-            var status = NativeOperations.dhara_operation_start_delete_file(FullPath, out var nativeHandle, out var errorPtr, out var errorLen);
-            return (status, nativeHandle, errorPtr, errorLen);
-        });
-        await handle.WaitForCompletionAsync(null, cancellationToken).ConfigureAwait(false);
+        var path = FullPath;
+        await DaemonClient.CallAsync(
+            (client, options) => client.DeletePathAsync(new DeletePathRequest { Path = path, Recursive = false }, options),
+            cancellationToken,
+            path,
+            nameof(DharaSd.DharaSdClient.DeletePath)).ConfigureAwait(false);
         InvalidateCaches();
     }
 
@@ -277,16 +242,51 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
         _cachedInformationWithAnalysis = null;
     }
 
-    private async Task AwaitWriteCompletionAsync(
-        NativeOperationHandle handle,
+    private FileInformation LoadInformation(bool includeAnalysis)
+    {
+        EnsureNotDisposed();
+        var path = FullPath;
+        var response = DaemonClient.Call(
+            (client, options) => client.GetFileInfo(new GetFileInfoRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.GetFileInfo));
+        var analysis = includeAnalysis ? DaemonModelFactory.ToAnalysisReport(
+            DaemonClient.Call(
+                (client, options) => client.AnalyzePath(new AnalyzePathRequest { Path = path }, options),
+                path,
+                nameof(DharaSd.DharaSdClient.AnalyzePath)),
+            path) : null;
+        return DaemonModelFactory.ToFileInformation(response, analysis);
+    }
+
+    private static async Task CopyWithProgressAsync(
+        Stream source,
+        Stream destination,
+        ulong? totalBytes,
         IProgress<StorageProgress>? progress,
         CancellationToken cancellationToken)
     {
-        using (handle)
+        var buffer = new byte[StreamBufferSize];
+        ulong transferred = 0;
+        var started = DateTime.UtcNow;
+
+        while (true)
         {
-            await handle.WaitForCompletionAsync(progress, cancellationToken).ConfigureAwait(false);
-            handle.TakeStringResult();
-            InvalidateCaches();
+            var read = await source.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                break;
+            }
+
+            await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            transferred += (ulong)read;
+            progress?.Report(new StorageProgress(totalBytes, transferred, ComputeRate(started, transferred)));
         }
+    }
+
+    private static double ComputeRate(DateTime startedUtc, ulong bytesTransferred)
+    {
+        var elapsedSeconds = (DateTime.UtcNow - startedUtc).TotalSeconds;
+        return elapsedSeconds > 0 ? bytesTransferred / elapsedSeconds : 0;
     }
 }

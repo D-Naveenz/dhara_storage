@@ -15,7 +15,9 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Typed C-compatible ABI][typed-abi] | FFI authors | `#[repr(C)]` rules, ownership, Rust ↔ C# marshalling |
 | [CI/CD pipelines][ci-cd] | Release engineers | GitHub Actions jobs, native merge, `drot` touchpoints |
 | [Workspace architecture][architecture] | Agents, contributors | Tool crate DAG, bindings layout, publish split, DAL coupling |
-| [Binding-transport pilot benchmarks][binding-pilot] | Implementers | FFI vs daemon Windows pilot, BenchmarkDotNet harness, decision thresholds |
+| [Daemon transport][daemon-transport] | Implementers | `dhara-sd` named pipes / UDS plan, handle transfer |
+| [Binding benchmarks][binding-benchmarks] | Implementers | FFI vs daemon ladder, BenchmarkDotNet harness |
+| [Windows code signing][windows-signing] | Release engineers | winresource vs Authenticode / SAC |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
 ## Package READMEs (publish surfaces)
@@ -53,7 +55,9 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [typed-abi]: typed-c-compatible-abi.md
 [ci-cd]: ci-cd-pipelines.md
 [architecture]: architecture.md
-[binding-pilot]: binding-pilot-benchmarks.md
+[daemon-transport]: daemon-transport.md
+[binding-benchmarks]: binding-benchmarks.md
+[windows-signing]: windows-code-signing.md
 [native-packaging]: native-packaging.md
 [agents]: ../AGENTS.md
 [dhara-config]: ../dhara.config.toml

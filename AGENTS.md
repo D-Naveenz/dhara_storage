@@ -79,17 +79,18 @@ Agents editing READMEs must **not** add:
 |------|------|
 | `core/dhara_storage` | Business runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
 | `core/dhara_storage_core` | Framework / abstraction layer for the runtime (DSFD definitions today; planned: process/queue primitives) |
-| `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) for non-Rust hosts |
-| `interop/dhara-storage-daemon-pilot` | Pilot gRPC daemon (named pipes) — experimental host transport |
-| `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — thin managed API over the ABI |
-| `benchmark/Dhara.Storage.BenchPilot` | Manual BenchmarkDotNet harness (not CI/CD) |
+| `interop/dhara-sd` | Sidecar daemon (`dhara-sd`) — gRPC control + handle transfer for foreign bindings |
+| `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) — **benchmark / evidence only**; not shipped via NuGet |
+| `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — managed API over `dhara-sd` |
+| `bindings/csharp/Dhara.Storage.Extensions.Hosting` | Generic Host lifetime for the sidecar |
+| `benchmark/Dhara.Storage.Benchmarks` | Manual BenchmarkDotNet harness (FFI vs daemon rung 1; not CI/CD) |
 | `tooling/drot` | Submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) — operator CLI/TUI |
 | `dhara.config.toml` | Shared product versions, NuGet metadata, RIDs (not DROT tool version) |
 
 **Design choices**
 
 - `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
-- Keep `dhara_storage` Rust-native; solve .NET interop in FFI + `Dhara.Storage`.
+- Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
 - Current product line: **0.9.6** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule.
 
@@ -134,7 +135,7 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 
 ## Guardrails
 
-- Keep `dhara_storage` Rust-native; interop constraints stay in FFI and `Dhara.Storage`.
+- Keep `dhara_storage` Rust-native; foreign binding interop is the `dhara-sd` daemon (+ Hosting). Keep `dharastorage-ffi` only for evidence benchmarks until retired.
 - Treat Windows as the primary workstation; ship all five 64-bit RIDs via CI merge.
 - When rewriting README marketing, use **Product intent → Locked human pitch** above — do not invent a new story.
 - Do not add local private paths to this file.
