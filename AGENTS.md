@@ -92,7 +92,7 @@ Agents editing READMEs must **not** add:
 - `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
-- Current product line: **0.9.6** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule.
+- Current product line: **0.9.22** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule.
 
 Deep reference: [docs/README.md](docs/README.md).
 
@@ -101,12 +101,15 @@ Deep reference: [docs/README.md](docs/README.md).
 ## Local commands
 
 - Init submodule: `git submodule update --init --recursive`
-- Ensure production-shaped CLI: `./tooling/scripts/ensure-drot-dist.ps1` (rebuilds when `target/dist/drot` version ≠ `tooling/drot/Cargo.toml`)
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — ensures dist, then `target/dist/drot -r <repo> quality run`
+- Ensure production-shaped CLI: `./tooling/scripts/run-drot.ps1` (version-gates `target/dist/drot`, then exec; use `--force-build` to rebuild from submodule)
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot --yes quality run`
+- Full repository build (TUI or CLI): `./tooling/scripts/run-drot.ps1 --yes build run` (config → defs → quality → native → verify; skip flags available)
 - Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
 - Active DROT development: work in the orchestration repo (or submodule); `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
 - Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)
 - **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. Workspace/NuGet manifest drift reconciles on the next `drot` run (confirm activation, or `--yes` in CI/scripts).
+
+**DROT rollout (orchestration repo):** commit submodule changes (core dep, `build run`, dependabot), merge on `dhara_repo_orchestration`, wait for `pack-windows` / `pack-linux` artifacts, then bump the storage `tooling/drot` gitlink to that SHA. Publish `dhara_storage_core` **0.9.22** to crates.io before pinning DROT to semver `0.9.22` if desired.
 
 ### Release / env (operator)
 
@@ -129,7 +132,7 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
-- **DROT ↔ core:** Until `dhara_storage_core` is on crates.io, `drot_dhara_storage` keeps compiling against published `dhara_storage_dal` for encode/decode (orchestration CI). Embed sync still writes `core/dhara_storage/resources/filedefs.dat`. After core is published: switch the plugin dep to `dhara_storage_core` and optional `[patch.crates-io]` for monorepo co-dev.
+- **DROT ↔ core:** `drot_dhara_storage` depends on published **`dhara_storage_core`** (crates.io; no `dhara_storage_dal`). `filedefs.dat` lives only under `core/dhara_storage/resources/` and is resolved at runtime once `-r` points at the storage repo. Storage CI downloads prebuilt `drot` from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); local dev uses [`run-drot`](tooling/scripts/run-drot.ps1).
 
 ---
 

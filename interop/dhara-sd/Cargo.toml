@@ -14,8 +14,8 @@ name = "dhara-sd"
 path = "src/main.rs"
 
 [package.metadata.winresource]
-ProductName = "Dhara Storage Daemon"
-FileDescription = "Dhara Storage sidecar daemon (dhara-sd)"
+ProductName = "Dhara Storage"
+FileDescription = "Dhara Storage sidecar daemon"
 OriginalFilename = "dhara-sd.exe"
 LegalCopyright = "Copyright © 2026 Naveen Dharmathunga"
 CompanyName = "Naveen Dharmathunga"

@@ -165,17 +165,20 @@ future builder features.
 | `dhara_storage` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
 | `tooling/drot/src/drot_dhara_storage/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
-Typical operator commands:
+Typical operator commands (via [`run-drot`](../tooling/scripts/run-drot.ps1)):
 
 ```powershell
 # Build from the default TrID archive into core/dhara_storage/resources/filedefs.dat
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs build-trid-xml -v
+./tooling/scripts/run-drot.ps1 --yes defs build-trid-xml
 
 # Inspect the current package
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs inspect
+./tooling/scripts/run-drot.ps1 --yes defs inspect
 
 # Re-copy / rebuild the embedded runtime artifact when needed
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs sync-embedded
+./tooling/scripts/run-drot.ps1 --yes defs sync-embedded
+
+# Full repository build (config → defs → quality → native → verify)
+./tooling/scripts/run-drot.ps1 --yes build run
 ```
 
 The sidecar TOML uses the source stem (`triddefs_xml.source.toml` beside

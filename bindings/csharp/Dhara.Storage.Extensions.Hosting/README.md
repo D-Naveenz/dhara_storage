@@ -8,7 +8,7 @@
 ## Install
 
 ```powershell
-dotnet add package Dhara.Storage.Extensions.Hosting --version 0.9.6
+dotnet add package Dhara.Storage.Extensions.Hosting --version 0.9.22
 ```
 
 ## Usage

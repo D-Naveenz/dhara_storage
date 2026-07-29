@@ -69,15 +69,11 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build DROT from submodule
-        shell: bash
-        run: |
-          set -euo pipefail
-          # Build from the checked-out submodule so stage-native expects dhara-sd layout
-          # even before orchestration CI publishes a new artifact for this SHA.
-          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
-          cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
-          test -f target/dist/drot.exe
+      - name: Download DROT
+        uses: ./.github/actions/download-drot
+        with:
+          artifact_name: drot-windows-x64
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
 
       - name: Stage native assets
         shell: bash
@@ -263,13 +259,11 @@ jobs:
       - name: Setup Linux GUI dependencies
         uses: ./.github/actions/setup-linux-tool-deps
 
-      - name: Build DROT from submodule
-        shell: bash
-        run: |
-          set -euo pipefail
-          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
-          cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
-          chmod +x target/dist/drot
+      - name: Download DROT
+        uses: ./.github/actions/download-drot
+        with:
+          artifact_name: drot-linux-x64
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
 
       - name: Download native stages
         uses: actions/download-artifact@v8
@@ -366,13 +360,11 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Build DROT from submodule
-        shell: bash
-        run: |
-          set -euo pipefail
-          export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target"
-          cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
-          test -f target/dist/drot
+      - name: Download DROT
+        uses: ./.github/actions/download-drot
+        with:
+          artifact_name: drot-linux-x64
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
 
       - name: Download merged native stage
         uses: actions/download-artifact@v8

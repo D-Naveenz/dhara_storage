@@ -15,6 +15,10 @@
     <DaemonExePath>$(CargoTargetDir)\$(NativeConfiguration)\$(DaemonExeName)</DaemonExePath>
     <NativeLibFileName>dharastorage.dll</NativeLibFileName>
     <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
+    <AssemblyTitle>Dhara Storage Benchmark Tool</AssemblyTitle>
+    <Product>Dhara Storage</Product>
+    <Authors>Naveen Dharmathunga</Authors>
+    <Version>0.9.22</Version>
   </PropertyGroup>
 
   <ItemGroup>

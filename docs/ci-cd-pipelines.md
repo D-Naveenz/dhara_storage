@@ -56,8 +56,8 @@ flowchart TB
 | `cargo test` (core crates) | Direct `cargo test` on `platform (linux)` only |
 | `dotnet test` | Direct `dotnet test` on `platform (linux)` only |
 | Native staging (Linux/macOS) | Direct `cargo build -p dhara-sd --release --target …` + copy into `runtimes/` |
-| Native staging (Windows) | Submodule-built `drot package stage-native --msvc-env` (expects `dhara-sd.exe`) |
-| `drot` dist build | `CARGO_TARGET_DIR=target cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist` on pack/verify/windows stage jobs |
+| Native staging (Windows) | Downloaded `drot package stage-native --msvc-env` (expects `dhara-sd.exe`) |
+| `drot` binary | [`download-drot`](../.github/actions/download-drot/action.yml) artifact for pinned `tooling/drot` submodule SHA — **not** rebuilt on product-only PRs |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
 | `package pack` | `drot package pack` on `NuGet package (linux)` with merged `--native-stage` |
 | `verify package` | `drot verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
@@ -68,12 +68,12 @@ flowchart TB
 
 **NativeAOT smoke on Linux:** `NuGet verify (linux)` installs `clang` and `zlib1g-dev` before `verify package`.
 
-## Tool cache
+## Tool acquisition
 
-- **Cache key:** `dhara-tool-{source-hash}-{os-arch}` where `source-hash` is a SHA256 prefix over tracked `tooling/drot/**`, root `Cargo.toml`, and `Cargo.lock` (computed inline in workflow bash).
-- **Warmers:** `platform (windows)` saves `windows-x64`; `NuGet package (linux)` and `NuGet verify (linux)` share `linux-x64`.
-- **DROT artifacts:** storage CI downloads `drot-{os-arch}` from `dhara_repo_orchestration` for the pinned `tooling/drot` submodule SHA (secret `DROT_ARTIFACTS_TOKEN`). Local `ensure-drot-dist` builds from the submodule. Tool version is not in `dhara.config.toml`.
-- **Binary path:** `target/dist/drot` (`.exe` on Windows), `[profile.dist]` in root [`Cargo.toml`](../Cargo.toml).
+- **CI:** [`download-drot`](../.github/actions/download-drot/action.yml) fetches `drot-windows-x64` or `drot-linux-x64` from `dhara_repo_orchestration` for `git rev-parse HEAD:tooling/drot` (secret `DROT_ARTIFACTS_TOKEN`). Product-only PRs skip rebuilding the tool when the submodule gitlink is unchanged.
+- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) version-gates `target/dist/drot` against `tooling/drot/Cargo.toml`, builds from the submodule only when missing or stale (`--force-build`), then exec with `-r` defaulting to the storage repo root.
+- **Full local build:** `run-drot --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
+- **Binary path:** `target/dist/drot` (`.exe` on Windows). `[profile.dist]` lives in [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
 
 ## Path-scoped merge publishes
 
@@ -100,7 +100,7 @@ Direct commands (no `drot`); [`setup-linux-tool-deps`](../.github/actions/setup-
 
 After `code quality (linux)` — **native staging only**:
 
-1. Build `drot` from the submodule (`profile dist`).
+1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-windows-x64`).
 2. `drot package stage-native --msvc-env` (stages `dhara-sd.exe`).
 3. Upload `native-stage-windows`.
 
@@ -127,7 +127,7 @@ CI does **not** run `cargo test -p drot`; developers validate the tool locally.
 
 After all platform jobs:
 
-1. Build `drot` from the submodule (`profile dist`).
+1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
 3. `drot package pack --native-stage target/dist/artifacts/native-stage`
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
@@ -136,7 +136,7 @@ After all platform jobs:
 
 After `NuGet package (linux)`:
 
-1. Build `drot` from the submodule.
+1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download `release-native-stage` artifact.
 3. `drot verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `linux-x64`).
 
@@ -155,7 +155,7 @@ After `NuGet package (linux)`:
 
 ## Local parity
 
-[`ensure-drot-dist.ps1`][ensure-dist-ps1] / [`.sh`][ensure-dist-sh] version-gate the dist binary. [`verify-local.ps1`][verify-local-ps1] runs the full tool quality surface (including tool clippy/tests) — stricter than PR CI.
+[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] version-gate the dist binary and exec drot. [`verify-local.ps1`][verify-local-ps1] runs `run-drot --yes quality run` — stricter than PR CI.
 
 ## Related docs
 
@@ -171,6 +171,8 @@ After `NuGet package (linux)`:
 [workspace-cargo]: ../Cargo.toml
 [verify-local-ps1]: ../tooling/scripts/verify-local.ps1
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
+[run-drot-ps1]: ../tooling/scripts/run-drot.ps1
+[run-drot-sh]: ../tooling/scripts/run-drot.sh
 [ensure-dist-ps1]: ../tooling/scripts/ensure-drot-dist.ps1
 [ensure-dist-sh]: ../tooling/scripts/ensure-drot-dist.sh
 [logging]: logging.md

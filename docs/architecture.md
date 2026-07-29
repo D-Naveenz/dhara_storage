@@ -146,8 +146,8 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 
 | Concern | Mechanism |
 |---------|-----------|
-| **Compile-time codec (interim)** | `drot_dhara_storage` pins published `dhara_storage_dal` from crates.io so orchestration CI builds without a local core tree |
-| **Compile-time core (after publish)** | Switch plugin dep to `dhara_storage_core = "0.9.6"`; optional DROT workspace `[patch.crates-io]` to the local path |
+| **Compile-time codec** | `drot_dhara_storage` pins published `dhara_storage_core` from crates.io (no `dhara_storage_dal`) |
+| **Compile-time core (after publish)** | Switch plugin dep to `dhara_storage_core = "0.9.22"`; optional DROT workspace `[patch.crates-io]` to the local path |
 | **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `core/dhara_storage/resources/filedefs.dat` — data path, not a path dependency |
 | **Package version read** | Builder stamps `packageVersion` from linked codec crate `PACKAGE_VERSION` (dal interim; core after cutover) |
 
@@ -155,7 +155,7 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 |----------|-------------------|--------------|
 | `dhara_storage` / `dhara_storage_core` | `[versions].workspace` in `dhara.config.toml` | Minor release |
 | `drot` | `tooling/drot/Cargo.toml` only | Independent tool releases via submodule pin |
-| Tool codec dep | crates.io `dhara_storage_dal` (interim) → `dhara_storage_core` after publish | Patch when publishing hotfix codec |
+| Tool codec dep | crates.io `dhara_storage_core` | Optional `[patch.crates-io]` in storage root for co-dev |
 
 CI `pipeline.yml` may download DROT artifacts or build from source; the interim dal pin keeps orchestration artifact builds green.
 ## Related docs
