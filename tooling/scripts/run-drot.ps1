@@ -7,10 +7,12 @@
 #   ./tooling/scripts/run-drot.ps1
 #   ./tooling/scripts/run-drot.ps1 -Cli --yes quality run
 #   ./tooling/scripts/run-drot.ps1 -Cli --yes build run --skip-verify
+[CmdletBinding(PositionalBinding = $false)]
 param(
-    [Alias("Force")]
-    [switch] $ForceBuild,
+    # Named switch (not ForceBuild+Alias): PositionalBinding=$false + Alias("Force") was unreliable.
+    [switch] $Force,
     [switch] $Cli,
+    # Named-only: otherwise `--yes` / subcommands bind positionally to Repository.
     [string] $Repository,
     [Parameter(ValueFromRemainingArguments = $true)]
     [string[]] $DrotArgs
@@ -22,7 +24,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 
 $ensureArgs = @()
-if ($ForceBuild) {
+if ($Force) {
     $ensureArgs += "-Force"
 }
 & (Join-Path $PSScriptRoot "ensure-drot-dist.ps1") @ensureArgs
@@ -43,13 +45,13 @@ if (-not (Test-Path $bin)) {
     throw "drot binary missing at $bin after ensure-drot-dist"
 }
 
-$args = @()
+$launchArgs = @()
 if ($Repository) {
-    $args += "-r", $Repository
+    $launchArgs += "-r", $Repository
 } elseif ($DrotArgs -notcontains "-r" -and $DrotArgs -notcontains "--repository") {
-    $args += "-r", $repoRoot
+    $launchArgs += "-r", $repoRoot
 }
-$args += $DrotArgs
+$launchArgs += $DrotArgs
 
-& $bin @args
+& $bin @launchArgs
 exit $LASTEXITCODE

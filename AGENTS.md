@@ -95,7 +95,7 @@ Agents editing READMEs must **not** add:
 - `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
-- Current product line: **0.9.22** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule (**0.9.13** in `tooling/drot/Cargo.toml`).
+- Current product line: **0.9.22** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule (**0.9.14** in `tooling/drot/Cargo.toml`).
 
 Deep reference: [docs/README.md](docs/README.md).
 
