@@ -14,13 +14,16 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
   </ItemGroup>
 
+  <!-- Hosting stays a project reference: only Dhara.Storage is packed/published by drot today. -->
+  <ItemGroup>
+    <ProjectReference Include="..\Dhara.Storage.Extensions.Hosting\Dhara.Storage.Extensions.Hosting.csproj" />
+  </ItemGroup>
+
   <ItemGroup Condition="'$(DharaStoragePackageVersion)' == ''">
     <ProjectReference Include="..\Dhara.Storage\Dhara.Storage.csproj" />
-    <ProjectReference Include="..\Dhara.Storage.Extensions.Hosting\Dhara.Storage.Extensions.Hosting.csproj" />
   </ItemGroup>
 
   <ItemGroup Condition="'$(DharaStoragePackageVersion)' != ''">
     <PackageReference Include="Dhara.Storage" Version="$(DharaStoragePackageVersion)" />
-    <PackageReference Include="Dhara.Storage.Extensions.Hosting" Version="$(DharaStoragePackageVersion)" />
   </ItemGroup>
 </Project>

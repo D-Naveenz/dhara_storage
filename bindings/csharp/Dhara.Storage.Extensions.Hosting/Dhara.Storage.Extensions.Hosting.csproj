@@ -28,8 +28,12 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="10.0.10" />
   </ItemGroup>
-  <ItemGroup>
+  <!-- Prefer packed Dhara.Storage when smoke/verify sets DharaStoragePackageVersion. -->
+  <ItemGroup Condition="'$(DharaStoragePackageVersion)' == ''">
     <ProjectReference Include="..\Dhara.Storage\Dhara.Storage.csproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(DharaStoragePackageVersion)' != ''">
+    <PackageReference Include="Dhara.Storage" Version="$(DharaStoragePackageVersion)" />
   </ItemGroup>
   <ItemGroup>
     <None Pack="true" PackagePath="\" Include="README.md" />
