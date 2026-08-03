@@ -136,6 +136,7 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 ## CI/CD
 
 - PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — environment `staging` — [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
+- CodeQL SAST: [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) — separate from Pipeline (fmt/clippy/doc stay in quality); no GitHub Environment; see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml) (`release-cargo`, OIDC + optional bootstrap token), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) (`release-nuget`, OIDC) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN` on `staging`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.

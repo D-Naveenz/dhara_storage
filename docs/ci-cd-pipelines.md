@@ -8,12 +8,13 @@ Human-readable map of GitHub Actions workflows and where `drot` is used versus d
 |----------|-------|------|--------------------|
 | [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` | `staging` |
 | [pipeline.yml][pipeline-yml] | `workflow_dispatch` (`force_tool_rebuild`) | Same jobs | `staging` |
+| [codeql.yml][codeql-yml] | `pull_request` / `push` to `main` / weekly cron | `Analyze (actions\|csharp\|rust)` | — (none; no staging secrets) |
 | [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
 | [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
 | [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
 | [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
 
-**Concurrency:** PR pipeline runs cancel in-progress; merge publishes do not.
+**Concurrency:** PR pipeline and CodeQL runs cancel in-progress; merge publishes do not.
 
 ### GitHub Environments
 
@@ -47,6 +48,12 @@ flowchart TB
     PACK --> ART[release artifacts]
   end
 
+  subgraph sast ["codeql.yml / no environment"]
+    CA["Analyze actions"]
+    CC["Analyze csharp"]
+    CRU["Analyze rust"]
+  end
+
   subgraph cd_cargo ["publish-crates.yml / release-cargo"]
     FC[cargo_scope filter]
     CR["cargo release (linux)"]
@@ -65,6 +72,7 @@ flowchart TB
 
 | Work | CI implementation |
 |------|-------------------|
+| CodeQL SAST (`actions`, `csharp`, `rust`) | Dedicated [`codeql.yml`][codeql-yml] — not folded into Pipeline; C# uses `build-mode: manual` + `dotnet build` with `StagedNativeRoot` so `BuildDaemon` is skipped; rust/actions use `none` |
 | `fmt` / `clippy` / `doc` (core + FFI) | Direct `cargo` on `ubuntu-latest` — **no tool**; [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib (`dhara_storage` / `file_icon_provider`) |
 | `fmt` on `drot` | Direct `cargo fmt` only (no clippy/doc for tool in CI) |
 | `cargo test` (core crates) | Direct `cargo test` on `platform (linux)` only |
@@ -99,6 +107,18 @@ flowchart TB
 | **nuget_scope** | `core/**`, `interop/**`, `bindings/**`, `dhara.config.toml`, root manifests | `tooling/**`, `docs/**`, pure markdown |
 
 NuGet CD still **requires PR artifacts** from `NuGet package (linux)` at merge second parent (`HEAD^2`).
+
+## CodeQL (`codeql.yml`)
+
+Separate from Pipeline: security/SAST only (fmt/clippy stay in `code quality`). No GitHub Environment — does not need `DROT_ARTIFACTS_TOKEN`.
+
+| Language | Build mode | Notes |
+|----------|------------|-------|
+| `actions` | `none` | Workflow YAML |
+| `rust` | `none` | Default for Rust |
+| `csharp` | `manual` | `setup-dotnet` 10.0.x; build `Dhara.Storage` + `Dhara.Storage.Extensions.Hosting` with a dummy `StagedNativeRoot` so packing’s sidecar `BuildDaemon` does not run |
+
+Triggers: PR and push to `main`, plus weekly cron. Alerts appear under the repo **Security → Code scanning** tab.
 
 ## PR jobs
 
@@ -184,6 +204,7 @@ After `NuGet package (linux)`:
 - [Docs index][docs-index]
 
 [pipeline-yml]: ../.github/workflows/pipeline.yml
+[codeql-yml]: ../.github/workflows/codeql.yml
 [publish-crates-yml]: ../.github/workflows/publish-crates.yml
 [publish-nuget-yml]: ../.github/workflows/publish-nuget.yml
 [workspace-cargo]: ../Cargo.toml
