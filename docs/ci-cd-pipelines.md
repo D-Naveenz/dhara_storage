@@ -98,7 +98,7 @@ flowchart TB
 | Native staging (Windows) | Downloaded `drot package stage-native --msvc-env` (expects `dhara-sd.exe`) |
 | `drot` binary | [`download-drot`](../.github/actions/download-drot/action.yml) artifact for pinned `tooling/drot` submodule SHA — **not** rebuilt on product-only PRs |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
-| `package pack` | `drot package pack` on `NuGet package (linux)` with merged `--native-stage` |
+| `package pack` | `drot package pack` (`Dhara.Storage`) then `dotnet pack` (`Dhara.Storage.Extensions.Hosting`) on `NuGet package (linux)` with merged `--native-stage` |
 | `verify package` | `drot verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
 | Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
 | NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
@@ -180,8 +180,9 @@ After all platform jobs:
 
 1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
-3. `drot package pack --native-stage target/dist/artifacts/native-stage`
-4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
+3. `drot package pack --native-stage target/dist/artifacts/native-stage` (`Dhara.Storage`)
+4. `dotnet pack` `Dhara.Storage.Extensions.Hosting` into the same `target/dist/output/nuget` folder (same workspace version + product icon; `StagedNativeRoot` so the Storage project reference does not run `BuildDaemon`)
+5. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
 
 ### `NuGet verify (linux)`
 
@@ -205,7 +206,7 @@ After `NuGet package (linux)`:
 2. `publish` job uses GitHub Environment `release-nuget` with `id-token: write`.
 3. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
 4. Download PR CI artifacts for that commit.
-5. Auth / publish: [`NuGet/login@v1`](https://github.com/NuGet/login) (OIDC, `continue-on-error`) then `dotnet nuget push` (no `--skip-duplicate`, so duplicates are detected). Already-live versions exit successfully. Other OIDC failures fall back to `NUGET_API_KEY` when set. Source from `vars.NUGET_SOURCE` or `dhara.config.toml`. Dry-run skips push.
+5. Auth / publish: [`NuGet/login@v1`](https://github.com/NuGet/login) (OIDC, `continue-on-error`) then `dotnet nuget push` for **each** non-symbols `.nupkg` (currently `Dhara.Storage` then `Dhara.Storage.Extensions.Hosting`; no `--skip-duplicate`, so duplicates are detected). Already-live versions exit successfully per package. Other OIDC failures fall back to `NUGET_API_KEY` when set. Source from `vars.NUGET_SOURCE` or `dhara.config.toml`. Dry-run skips push.
 
 ## Local parity
 

@@ -85,7 +85,7 @@ Agents editing READMEs must **not** add:
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`) — gRPC control + handle transfer for foreign bindings |
 | `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) — **benchmark / evidence only**; not shipped via NuGet |
 | `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — managed API over `dhara-sd` |
-| `bindings/csharp/Dhara.Storage.Extensions.Hosting` | Generic Host lifetime for the sidecar |
+| `bindings/csharp/Dhara.Storage.Extensions.Hosting` | .NET 10 NuGet — Generic Host lifetime for the sidecar |
 | `benchmark/Dhara.Storage.Benchmarks` | Manual BenchmarkDotNet harness (FFI vs daemon rung 1; not CI/CD) |
 | `tooling/drot` | Submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) — operator CLI/TUI; **owns** its [AGENTS.md](tooling/drot/AGENTS.md) and [docs/](tooling/drot/docs/) |
 | `dhara.config.toml` | Shared product versions, NuGet metadata, RIDs (not DROT tool version) |

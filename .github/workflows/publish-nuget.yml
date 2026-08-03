@@ -134,17 +134,33 @@ jobs:
           echo "::error::No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure NuGet package (linux) succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
           exit 1
 
-      - name: Resolve pre-packed NuGet path
+      - name: Resolve pre-packed NuGet packages
         id: nupkg
         shell: bash
         run: |
           set -euo pipefail
-          package=$(find target/dist/output/nuget -maxdepth 1 -name '*.nupkg' -print -quit)
-          if [ -z "$package" ]; then
+          shopt -s nullglob
+          packages=(target/dist/output/nuget/*.nupkg)
+          filtered=()
+          for p in "${packages[@]}"; do
+            case "$p" in
+              *.symbols.nupkg) continue ;;
+              *) filtered+=("$p") ;;
+            esac
+          done
+          if [ "${#filtered[@]}" -eq 0 ]; then
             echo "::error::NuGet package artifact was not downloaded."
             exit 1
           fi
-          echo "path=${package}" >> "${GITHUB_OUTPUT}"
+          # Lexicographic order puts Dhara.Storage before Dhara.Storage.Extensions.Hosting.
+          IFS=$'\n' sorted=($(printf '%s\n' "${filtered[@]}" | sort))
+          unset IFS
+          echo "packages<<EOF" >> "${GITHUB_OUTPUT}"
+          printf '%s\n' "${sorted[@]}" >> "${GITHUB_OUTPUT}"
+          echo "EOF" >> "${GITHUB_OUTPUT}"
+          echo "count=${#sorted[@]}" >> "${GITHUB_OUTPUT}"
+          printf 'Resolved %s package(s):\n' "${#sorted[@]}"
+          printf '  %s\n' "${sorted[@]}"
 
       - name: NuGet login (OIDC)
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
@@ -154,13 +170,13 @@ jobs:
         with:
           user: ${{ vars.NUGET_USER }}
 
-      - name: Publish NuGet package
+      - name: Publish NuGet packages
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         shell: bash
         env:
           OIDC_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
           FALLBACK_API_KEY: ${{ secrets.NUGET_API_KEY }}
-          NUPKG_PATH: ${{ steps.nupkg.outputs.path }}
+          NUPKG_LIST: ${{ steps.nupkg.outputs.packages }}
           NUGET_SOURCE: ${{ vars.NUGET_SOURCE }}
         run: |
           set -euo pipefail
@@ -180,10 +196,11 @@ jobs:
           try_push() {
             local key="$1"
             local label="$2"
+            local nupkg="$3"
             local out code
-            echo "Attempting NuGet push via ${label}..."
+            echo "Attempting NuGet push of $(basename "$nupkg") via ${label}..."
             set +e
-            out=$(dotnet nuget push "$NUPKG_PATH" \
+            out=$(dotnet nuget push "$nupkg" \
               --api-key "$key" \
               --source "$source" \
               2>&1)
@@ -191,59 +208,80 @@ jobs:
             set -e
             printf '%s\n' "$out"
             if [ "$code" -eq 0 ]; then
-              echo "::notice::NuGet publish succeeded via ${label}."
+              echo "::notice::NuGet publish of $(basename "$nupkg") succeeded via ${label}."
               return 0
             fi
             if is_duplicate_output "$out"; then
-              echo "::notice::Package version already live on the feed (${label}). Nothing further to publish."
+              echo "::notice::$(basename "$nupkg") already live on the feed (${label})."
               return 2
             fi
-            echo "::warning::NuGet push via ${label} failed (exit ${code})."
+            echo "::warning::NuGet push of $(basename "$nupkg") via ${label} failed (exit ${code})."
             return 1
           }
 
-          if [ -n "${OIDC_API_KEY:-}" ]; then
-            if try_push "$OIDC_API_KEY" "OIDC Trusted Publishing"; then
-              exit 0
+          push_one() {
+            local nupkg="$1"
+            if [ -n "${OIDC_API_KEY:-}" ]; then
+              if try_push "$OIDC_API_KEY" "OIDC Trusted Publishing" "$nupkg"; then
+                return 0
+              else
+                rc=$?
+                if [ "$rc" -eq 2 ]; then
+                  return 0
+                fi
+                echo "::warning::OIDC publish failed for $(basename "$nupkg") (Trusted Publishing may be misconfigured). Falling back to API key."
+              fi
+            else
+              echo "::warning::OIDC login did not produce an API key. Falling back to API key."
+            fi
+
+            if [ -z "${FALLBACK_API_KEY:-}" ]; then
+              echo "::error::NUGET_API_KEY is not set on environment release-nuget; cannot fall back from OIDC."
+              return 1
+            fi
+
+            if try_push "$FALLBACK_API_KEY" "API key" "$nupkg"; then
+              return 0
             else
               rc=$?
               if [ "$rc" -eq 2 ]; then
-                exit 0
+                return 0
               fi
-              echo "::warning::OIDC publish failed (Trusted Publishing may be misconfigured). Falling back to API key."
+              echo "::error::NuGet publish of $(basename "$nupkg") failed via API key."
+              return 1
             fi
-          else
-            echo "::warning::OIDC login did not produce an API key. Falling back to API key."
-          fi
+          }
 
-          if [ -z "${FALLBACK_API_KEY:-}" ]; then
-            echo "::error::NUGET_API_KEY is not set on environment release-nuget; cannot fall back from OIDC."
+          mapfile -t packages <<< "$NUPKG_LIST"
+          if [ "${#packages[@]}" -eq 0 ] || [ -z "${packages[0]:-}" ]; then
+            echo "::error::No NuGet packages resolved for publish."
             exit 1
           fi
 
-          if try_push "$FALLBACK_API_KEY" "API key"; then
-            exit 0
-          else
-            rc=$?
-            if [ "$rc" -eq 2 ]; then
-              exit 0
+          failed=0
+          for nupkg in "${packages[@]}"; do
+            [ -n "$nupkg" ] || continue
+            if ! push_one "$nupkg"; then
+              failed=1
             fi
-            echo "::error::NuGet publish failed via API key."
-            exit 1
-          fi
+          done
+          exit "$failed"
 
       - name: Dry-run validation
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
         shell: bash
+        env:
+          NUPKG_LIST: ${{ steps.nupkg.outputs.packages }}
         run: |
           set -euo pipefail
-          echo "Dry run: validated pre-packed NuGet artifact at ${{ steps.nupkg.outputs.path }}"
+          echo "Dry run: validated ${{ steps.nupkg.outputs.count }} pre-packed NuGet package(s):"
+          printf '%s\n' "$NUPKG_LIST"
 
       - name: Upload NuGet artifacts
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: Dhara.Storage-package
+          name: nuget-packages
           path: |
             target/dist/output/nuget/*.nupkg
             target/dist/output/nuget/*.snupkg
