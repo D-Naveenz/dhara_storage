@@ -6,7 +6,7 @@ use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::sync::Arc;
 
-use nix::sys::socket::{ControlMessage, MsgFlags, sendmsg};
+use nix::sys::socket::{ControlMessage, MsgFlags, UnixAddr, sendmsg};
 use tonic::Status;
 
 use crate::service::DaemonState;
@@ -52,7 +52,8 @@ pub fn send_fd(state: &DaemonState, fd: RawFd) -> Result<(), Status> {
     let payload = [1u8];
     let iov = &[IoSlice::new(&payload)];
     let fds = [fd];
-    sendmsg(
+    // Connected socket: no destination address; pin UnixAddr so nix can infer `S`.
+    sendmsg::<UnixAddr>(
         stream.as_raw_fd(),
         iov,
         &[ControlMessage::ScmRights(&fds)],

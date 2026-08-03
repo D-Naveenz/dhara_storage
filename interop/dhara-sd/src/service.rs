@@ -354,8 +354,8 @@ impl DharaSd for DharaSdService {
         {
             let state = self.state.clone();
             let size = tokio::task::spawn_blocking(move || {
-                let file = std::fs::File::open(&path).map_err(map_storage_error)?;
-                let size = file.metadata().map_err(map_storage_error)?.len();
+                let file = std::fs::File::open(&path).map_err(map_io_error)?;
+                let size = file.metadata().map_err(map_io_error)?.len();
                 fd_pass::send_fd(&state, file.as_raw_fd())?;
                 Ok::<_, Status>(size)
             })
@@ -398,7 +398,7 @@ impl DharaSd for DharaSdService {
             tokio::task::spawn_blocking(move || {
                 if create_parents {
                     if let Some(parent) = path.parent() {
-                        std::fs::create_dir_all(parent).map_err(map_storage_error)?;
+                        std::fs::create_dir_all(parent).map_err(map_io_error)?;
                     }
                 }
 
@@ -416,7 +416,7 @@ impl DharaSd for DharaSdService {
                         .create_new(true)
                         .open(&path)
                 }
-                .map_err(map_storage_error)?;
+                .map_err(map_io_error)?;
 
                 let fd = file.as_raw_fd();
                 fd_pass::send_fd(&state, fd)?;
@@ -782,6 +782,12 @@ where
 
 fn map_storage_error(err: dhara_storage::StorageError) -> Status {
     warn!(error = %err, "storage operation failed");
+    Status::internal(err.to_string())
+}
+
+#[cfg(unix)]
+fn map_io_error(err: std::io::Error) -> Status {
+    warn!(error = %err, "I/O operation failed");
     Status::internal(err.to_string())
 }
 
