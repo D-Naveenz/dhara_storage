@@ -6,7 +6,7 @@ pub mod uds;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crate::service::{create_service, DaemonState};
+use crate::service::{DaemonState, create_service};
 
 /// Serve the daemon over Unix domain sockets.
 pub async fn run(

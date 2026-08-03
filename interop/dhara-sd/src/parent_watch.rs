@@ -1,7 +1,7 @@
 //! Exit the daemon when the binding host process disappears.
 
-use std::sync::atomic::Ordering;
 use std::sync::Arc;
+use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use tokio::time;
@@ -50,7 +50,10 @@ pub fn spawn_parent_watchdog(state: Arc<DaemonState>, parent_pid: u32) {
             interval.tick().await;
             let pid = state.parent_pid().unwrap_or(parent_pid);
             if !is_process_alive(pid) {
-                info!(parent_pid = pid, "parent process exited; shutting down dhara-sd");
+                info!(
+                    parent_pid = pid,
+                    "parent process exited; shutting down dhara-sd"
+                );
                 std::process::exit(0);
             }
         }

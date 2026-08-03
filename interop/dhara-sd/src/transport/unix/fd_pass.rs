@@ -6,13 +6,16 @@ use std::os::unix::net::UnixListener;
 use std::path::Path;
 use std::sync::Arc;
 
-use nix::sys::socket::{sendmsg, ControlMessage, MsgFlags};
+use nix::sys::socket::{ControlMessage, MsgFlags, sendmsg};
 use tonic::Status;
 
 use crate::service::DaemonState;
 
 /// Bind `path` and accept the host FD-pass connection in a background thread.
-pub fn spawn_acceptor(path: &Path, state: Arc<DaemonState>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn spawn_acceptor(
+    path: &Path,
+    state: Arc<DaemonState>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if path.exists() {
         std::fs::remove_file(path)?;
     }
@@ -22,17 +25,15 @@ pub fn spawn_acceptor(path: &Path, state: Arc<DaemonState>) -> Result<(), Box<dy
 
     let listener = UnixListener::bind(path)?;
     let path_display = path.display().to_string();
-    std::thread::spawn(move || {
-        match listener.accept() {
-            Ok((stream, _)) => {
-                if let Ok(mut guard) = state.fd_pass_conn.lock() {
-                    *guard = Some(stream);
-                }
-                tracing::info!(endpoint = %path_display, "fd-pass client connected");
+    std::thread::spawn(move || match listener.accept() {
+        Ok((stream, _)) => {
+            if let Ok(mut guard) = state.fd_pass_conn.lock() {
+                *guard = Some(stream);
             }
-            Err(err) => {
-                tracing::error!(endpoint = %path_display, error = %err, "fd-pass accept failed");
-            }
+            tracing::info!(endpoint = %path_display, "fd-pass client connected");
+        }
+        Err(err) => {
+            tracing::error!(endpoint = %path_display, error = %err, "fd-pass accept failed");
         }
     });
     Ok(())

@@ -3,10 +3,10 @@
 use std::io::Cursor;
 use std::path::PathBuf;
 use std::pin::Pin;
-use std::sync::atomic::{AtomicU32, AtomicBool, Ordering};
 use std::sync::Arc;
 #[cfg(unix)]
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
@@ -14,8 +14,8 @@ use dhara_storage::{
     FileInfo, SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
     StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions, analyze_path,
     copy_directory_with_options, copy_file_with_options, create_directory, create_directory_all,
-    delete_directory_with_options, delete_file, move_directory_with_options, move_file_with_options,
-    read_file, rename_directory, rename_file, write_file_from_reader,
+    delete_directory_with_options, delete_file, move_directory_with_options,
+    move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
 };
 use futures::{Stream, StreamExt};
 use tokio::sync::broadcast;
@@ -33,10 +33,10 @@ use std::os::unix::net::UnixStream;
 use crate::log_broadcast::level_rank;
 use crate::proto::dhara_sd_server::{DharaSd, DharaSdServer};
 use crate::proto::*;
-#[cfg(windows)]
-use crate::transport::windows::handle_dup;
 #[cfg(unix)]
 use crate::transport::unix::fd_pass;
+#[cfg(windows)]
+use crate::transport::windows::handle_dup;
 
 /// Shared daemon state for handshake PID, logging, and synthetic queue stubs.
 pub struct DaemonState {
@@ -336,17 +336,17 @@ impl DharaSd for DharaSdService {
         &self,
         request: Request<OpenReadHandleRequest>,
     ) -> Result<Response<OpenReadHandleResponse>, Status> {
-        self.state
-            .parent_pid()
-            .ok_or_else(|| Status::failed_precondition("handshake required before OpenReadHandle"))?;
+        self.state.parent_pid().ok_or_else(|| {
+            Status::failed_precondition("handshake required before OpenReadHandle")
+        })?;
 
         let path = PathBuf::from(request.into_inner().path);
 
         #[cfg(windows)]
         {
             let parent_pid = self.state.parent_pid().expect("checked above");
-            let (handle, size) = handle_dup::open_read_and_duplicate(&path, parent_pid)
-                .map_err(Status::internal)?;
+            let (handle, size) =
+                handle_dup::open_read_and_duplicate(&path, parent_pid).map_err(Status::internal)?;
             return Ok(Response::new(OpenReadHandleResponse { handle, size }));
         }
 
@@ -370,9 +370,9 @@ impl DharaSd for DharaSdService {
         &self,
         request: Request<OpenWriteHandleRequest>,
     ) -> Result<Response<OpenWriteHandleResponse>, Status> {
-        self.state
-            .parent_pid()
-            .ok_or_else(|| Status::failed_precondition("handshake required before OpenWriteHandle"))?;
+        self.state.parent_pid().ok_or_else(|| {
+            Status::failed_precondition("handshake required before OpenWriteHandle")
+        })?;
 
         let req = request.into_inner();
         let path = PathBuf::from(req.path);

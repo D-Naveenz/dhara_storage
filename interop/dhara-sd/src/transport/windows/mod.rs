@@ -5,7 +5,7 @@ pub mod pipe;
 
 use std::sync::Arc;
 
-use crate::service::{create_service, DaemonState};
+use crate::service::{DaemonState, create_service};
 
 /// Serve the daemon over a Windows named pipe.
 pub async fn run(

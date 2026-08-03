@@ -36,11 +36,8 @@ pub fn open_write_and_duplicate(
     overwrite: bool,
     create_parents: bool,
 ) -> Result<u64, String> {
-    if create_parents
-        && let Some(parent) = path.parent()
-    {
-        std::fs::create_dir_all(parent)
-            .map_err(|err| format!("create_dir_all failed: {err}"))?;
+    if create_parents && let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|err| format!("create_dir_all failed: {err}"))?;
     }
 
     let disposition = if overwrite {

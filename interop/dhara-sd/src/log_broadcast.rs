@@ -5,11 +5,11 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tokio::sync::broadcast;
 use tracing::{Event, Subscriber};
+use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 use tracing_subscriber::layer::Context;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
-use tracing_subscriber::EnvFilter;
 
 use crate::proto::LogRecord;
 
@@ -22,9 +22,7 @@ pub fn init_tracing() -> broadcast::Sender<LogRecord> {
     let layer = BroadcastLogLayer::new(tx.clone());
 
     tracing_subscriber::registry()
-        .with(
-            EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")),
-        )
+        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info")))
         .with(layer)
         .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
         .init();
