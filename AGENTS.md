@@ -101,9 +101,9 @@ Deep reference: [docs/README.md](docs/README.md).
 ## Local commands
 
 - Init submodule: `git submodule update --init --recursive`
-- Ensure production-shaped CLI: `./tooling/scripts/run-drot.ps1` (version-gates `target/dist/drot`, then exec; use `--force-build` to rebuild from submodule)
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot --yes quality run`
-- Full repository build (TUI or CLI): `./tooling/scripts/run-drot.ps1 --yes build run` (config → defs → quality → native → verify; skip flags available)
+- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (default opens **TUI**; pass `-Cli` / `--cli` for the direct CLI; use `-Force` / `--force-build` to rebuild from submodule)
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot -Cli --yes quality run`
+- Full repository build (CLI): `./tooling/scripts/run-drot.ps1 -Cli --yes build run` (config → defs → quality → native → verify; skip flags available)
 - Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
 - Active DROT development: work in the orchestration repo (or submodule); `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
 - Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)

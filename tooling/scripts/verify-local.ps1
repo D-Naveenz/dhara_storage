@@ -8,7 +8,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..\..")
 Set-Location $repoRoot
 
-$args = @("--yes", "quality", "run")
+$args = @("-Cli", "--yes", "quality", "run")
 if ($SkipDocs) { $args += "--skip-docs" }
 if ($SkipDotnet) { $args += "--skip-dotnet" }
 

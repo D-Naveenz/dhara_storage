@@ -71,8 +71,8 @@ flowchart TB
 ## Tool acquisition
 
 - **CI:** [`download-drot`](../.github/actions/download-drot/action.yml) fetches `drot-windows-x64` or `drot-linux-x64` from `dhara_repo_orchestration` for `git rev-parse HEAD:tooling/drot` (secret `DROT_ARTIFACTS_TOKEN`). Product-only PRs skip rebuilding the tool when the submodule gitlink is unchanged.
-- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) version-gates `target/dist/drot` against `tooling/drot/Cargo.toml`, builds from the submodule only when missing or stale (`--force-build`), then exec with `-r` defaulting to the storage repo root.
-- **Full local build:** `run-drot --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
+- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) version-gates `target/dist/drot` + `drot_tui` against `tooling/drot/Cargo.toml`, builds from the submodule only when missing or stale (`--force-build`). With **no args**, opens the **TUI**. Agents and scripts pass `-Cli` / `--cli` (or any command tokens) to run the direct CLI with `-r` defaulting to the storage repo root.
+- **Full local build:** `run-drot -Cli --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
 - **Binary path:** `target/dist/drot` (`.exe` on Windows). `[profile.dist]` lives in [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
 
 ## Path-scoped merge publishes
@@ -155,7 +155,7 @@ After `NuGet package (linux)`:
 
 ## Local parity
 
-[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] version-gate the dist binary and exec drot. [`verify-local.ps1`][verify-local-ps1] runs `run-drot --yes quality run` — stricter than PR CI.
+[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] version-gate the dist binaries (default TUI; `-Cli` / `--cli` for scripted CLI). [`verify-local.ps1`][verify-local-ps1] runs `run-drot -Cli --yes quality run` — stricter than PR CI.
 
 ## Related docs
 
