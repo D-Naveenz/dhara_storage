@@ -4,22 +4,34 @@ Human-readable map of GitHub Actions workflows and where `drot` is used versus d
 
 ## Triggers
 
-| Workflow | Event | Jobs |
-|----------|-------|------|
-| [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` |
-| [pipeline.yml][pipeline-yml] | `workflow_dispatch` (`force_tool_rebuild`) | Same jobs |
-| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` |
-| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` |
-| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `nuget release (linux)` |
-| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `nuget release (linux)` |
+| Workflow | Event | Jobs | GitHub Environment |
+|----------|-------|------|--------------------|
+| [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` | `staging` |
+| [pipeline.yml][pipeline-yml] | `workflow_dispatch` (`force_tool_rebuild`) | Same jobs | `staging` |
+| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
+| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
+| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
+| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
 
 **Concurrency:** PR pipeline runs cancel in-progress; merge publishes do not.
+
+### GitHub Environments
+
+Separate environments keep Cargo and NuGet deployment history independent and scope credentials per ecosystem.
+
+| Environment | Used by | Auth / secrets |
+|-------------|---------|----------------|
+| `staging` | PR / `workflow_dispatch` jobs in [pipeline.yml][pipeline-yml] | Secret `DROT_ARTIFACTS_TOKEN` |
+| `release-nuget` | `publish` in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (nuget.org profile name); OIDC via [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) — no long-lived `NUGET_API_KEY` |
+| `release-cargo` | `publish` in [publish-crates.yml][publish-crates-yml] | OIDC via [crates.io Trusted Publishing](https://crates.io/docs/trusted-publishing); optional secret `CARGO_REGISTRY_TOKEN` only to bootstrap a crate not yet on crates.io |
+
+Create these under **Settings → Environments**. Restrict `release-*` to `main`; do not add required reviewers on `staging` (that would block every PR). Leave crates.io **Require trusted publishing for all new versions** unchecked while you still need API-token bootstrap for new crates.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-  subgraph pr ["pipeline.yml pull_request"]
+  subgraph pr ["pipeline.yml / staging"]
     Q["code quality (linux)"]
     PW["platform (windows)"]
     PL["platform (linux)"]
@@ -33,13 +45,13 @@ flowchart TB
     PACK --> ART[release artifacts]
   end
 
-  subgraph cd_cargo ["publish-crates.yml"]
+  subgraph cd_cargo ["publish-crates.yml / release-cargo"]
     FC[cargo_scope filter]
     CR["cargo release (linux)"]
     FC --> CR
   end
 
-  subgraph cd_nuget ["publish-nuget.yml"]
+  subgraph cd_nuget ["publish-nuget.yml / release-nuget"]
     FN[nuget_scope filter]
     NU["nuget release (linux)"]
     ART --> NU
@@ -143,15 +155,19 @@ After `NuGet package (linux)`:
 ## CD: `publish-crates`
 
 1. `detect-changes` — `cargo_scope` filter (or always on `workflow_dispatch`).
-2. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) — `cargo release` verifies crate tarballs by building `dhara_storage` (GTK/glib via `file_icon_provider`).
-3. `cargo release --workspace --isolated --allow-branch main --tag-name 'v{{version}}' --no-confirm --execute` (`CARGO_REGISTRY_TOKEN`). Dry-run uses `--allow-branch '*'` and `--no-verify`.
+2. `publish` job uses GitHub Environment `release-cargo` with `id-token: write`.
+3. Auth: if `CARGO_REGISTRY_TOKEN` secret is empty, [`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action) exchanges OIDC for a short-lived token; otherwise the long-lived secret is used (bootstrap for crates not yet on crates.io). Dry-run skips OIDC.
+4. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) — `cargo release` verifies crate tarballs by building `dhara_storage` (GTK/glib via `file_icon_provider`).
+5. `cargo release --workspace --isolated --allow-branch main --tag-name 'v{{version}}' --no-confirm --execute`. Dry-run uses `--allow-branch '*'` and `--no-verify`.
 
 ## CD: `publish-nuget`
 
 1. `detect-changes` — `nuget_scope` filter (or always on `workflow_dispatch`).
-2. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
-3. Download PR CI artifacts for that commit.
-4. `dotnet nuget push` with `NUGET_API_KEY` and source from `dhara.config.toml`.
+2. `publish` job uses GitHub Environment `release-nuget` with `id-token: write`.
+3. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
+4. Download PR CI artifacts for that commit.
+5. [`NuGet/login@v1`](https://github.com/NuGet/login) exchanges OIDC for a short-lived API key (`user` = `vars.NUGET_USER`). Skipped on dry-run.
+6. `dotnet nuget push` with that temp key and source from `dhara.config.toml`.
 
 ## Local parity
 

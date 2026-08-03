@@ -116,14 +116,17 @@ Deep reference: [docs/README.md](docs/README.md).
 
 ### Release / env (operator)
 
-Shared metadata: [dhara.config.toml](dhara.config.toml). Secrets in `.env.local` (from `.env.example`), not git.
+Shared metadata: [dhara.config.toml](dhara.config.toml). Local secrets in `.env.local` (from `.env.example`), not git.
 
-| Variable | Purpose |
-|----------|---------|
-| `CARGO_REGISTRY_TOKEN` | crates.io publish |
-| `NUGET_API_KEY` | NuGet.org publish |
-| `NUGET_SOURCE` | NuGet feed URL |
-| `TOOL_MAX_WORKERS` | Caps Rayon workers in `drot` defs builds |
+| Variable | Purpose | Where (CI) |
+|----------|---------|------------|
+| `NUGET_USER` | nuget.org profile name for OIDC login | GitHub Environment **variable** on `release-nuget` |
+| `CARGO_REGISTRY_TOKEN` | crates.io publish bootstrap (optional) | GitHub Environment `release-cargo` — only when a crate is not yet on crates.io; omit for OIDC Trusted Publishing |
+| `NUGET_SOURCE` | NuGet feed URL | local / `dhara.config.toml` (push source) |
+| `TOOL_MAX_WORKERS` | Caps Rayon workers in `drot` defs builds | local / CI env as needed |
+| `DROT_ARTIFACTS_TOKEN` | Download prebuilt `drot` from orchestration | GitHub Environment `staging` |
+
+CI publish auth: NuGet uses [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) (`NuGet/login@v1`); Cargo uses [crates.io Trusted Publishing](https://crates.io/docs/trusted-publishing) (`rust-lang/crates-io-auth-action`) when `CARGO_REGISTRY_TOKEN` is unset. After first successful OIDC NuGet publish, remove any leftover `NUGET_API_KEY`. Leave crates.io **Require trusted publishing** unchecked while bootstrap tokens may still be needed.
 
 Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- config env init`.
 
@@ -131,9 +134,9 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 
 ## CI/CD
 
-- PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
-- Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
-- **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
+- PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — environment `staging` — [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
+- Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml) (`release-cargo`, OIDC + optional bootstrap token), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) (`release-nuget`, OIDC) — path-filtered; `workflow_dispatch` when automation skips
+- **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN` on `staging`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
 - **DROT ↔ core:** `drot_dhara_storage` depends on published **`dhara_storage_core`** (crates.io; no `dhara_storage_dal`). `filedefs.dat` lives only under `core/dhara_storage/resources/` and is resolved at runtime once `-r` points at the storage repo. Storage CI downloads prebuilt `drot` from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); local dev uses [`run-drot`](tooling/scripts/run-drot.ps1).
 

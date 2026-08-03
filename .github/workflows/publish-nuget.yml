@@ -63,7 +63,10 @@ jobs:
     needs: [detect-changes]
     if: needs.detect-changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    environment: nuget-production
+    environment: release-nuget
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -143,11 +146,18 @@ jobs:
           fi
           echo "path=${package}" >> "${GITHUB_OUTPUT}"
 
+      - name: NuGet login (OIDC)
+        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
+        uses: NuGet/login@v1
+        id: nuget-login
+        with:
+          user: ${{ vars.NUGET_USER }}
+
       - name: Publish NuGet package
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         shell: bash
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
         run: |
           set -euo pipefail
           source=$(grep -E '^\s*source\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
