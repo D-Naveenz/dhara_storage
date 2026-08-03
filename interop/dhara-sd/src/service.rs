@@ -396,10 +396,8 @@ impl DharaSd for DharaSdService {
             let overwrite = req.overwrite;
             let create_parents = req.create_parent_directories;
             tokio::task::spawn_blocking(move || {
-                if create_parents {
-                    if let Some(parent) = path.parent() {
-                        std::fs::create_dir_all(parent).map_err(map_io_error)?;
-                    }
+                if create_parents && let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent).map_err(map_io_error)?;
                 }
 
                 let file = if overwrite {
