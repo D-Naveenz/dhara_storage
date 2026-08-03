@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Changed
+- Bumped DROT tool workspace to **0.9.13** (`tooling/drot`): TUI Tasks tree polish (explorer chrome, marquee, click expand), Learn-style Info tab, compact Actions panel (Unicode capsule Gauge bar, Run/Cancel toggle, Options Reset), keyed UI strings.
 - Replaced the binding pilot with product `dhara-sd`; `Dhara.Storage` NuGet uses the daemon (gRPC + handle transfer) instead of in-process FFI. Rust `dharastorage-ffi` remains for evidence benchmarks only.
 - Added `Dhara.Storage.Extensions.Hosting` for Generic Host lifetime of the sidecar.
 - Promoted BenchPilot to `benchmark/Dhara.Storage.Benchmarks` (FFI vs `dhara-sd` rung 1).

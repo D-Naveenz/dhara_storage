@@ -219,7 +219,7 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 ## Related docs
 
-- [Logging conventions][logging] — audit log format for `drot` builds
+- [Logging conventions][logging] — redirect → DROT audit log format
 - [dhara_storage_core README][readme-core] — crate-local quick reference
 - [drot package/ notes][package-readme] — shipped TrID build inputs
 - [CI/CD pipelines][ci-cd] — defs build in release flow
@@ -227,6 +227,6 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 [logging]: logging.md
 [readme-core]: ../core/dhara_storage_core/README.md
-[package-readme]: ../tooling/drot/src/drot_dhara_storage/package/README.md
+[package-readme]: ../tooling/drot/crates/drot_dhara_storage/package/README.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md

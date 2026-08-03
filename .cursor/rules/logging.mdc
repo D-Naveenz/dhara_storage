@@ -1,78 +1,17 @@
 ---
-description: Log level semantics (generic + Rust/tracing) and Dhara operator-log requirements
+description: Log level semantics — DROT operator logs live in the submodule
 alwaysApply: false
 ---
 
 # Logging
 
-Human reference: `docs/logging.md`. When adding or changing logs, follow level semantics first, then Dhara conventions below.
+**DROT / operator audit logs** are owned by the orchestration submodule:
 
-## Standard level hierarchy
+- Human reference: [`tooling/drot/docs/logging.md`](../../tooling/drot/docs/logging.md)
+- Cursor rule: [`tooling/drot/.cursor/rules/logging.mdc`](../../tooling/drot/.cursor/rules/logging.mdc)
 
-Severity decreases top → bottom; verbosity increases. **Configured level captures that level and everything more severe** (`logged >= threshold`).
+When changing `drot` / `drot_kernel` / `drot_tui` / `drot_dhara_storage` logging, edit those files under `tooling/drot/`. Do not grow a parallel logging essay under storage `docs/`.
 
-```
-FATAL/CRITICAL  — unrecoverable; process must stop
-ERROR           — operation failed; app continues
-WARN            — unusual but non-blocking; investigate later
-INFO            — healthy milestones operators rely on in production
-DEBUG           — engineer diagnostics; usually off in production
-TRACE           — line-by-line / per-item detail; highest volume
-```
+## Storage product code
 
-| Pick this level when… | Example |
-| --------------------- | ------- |
-| ERROR | Module/command aborts; user-visible failure | subprocess or handler hard failure |
-| WARN | Completed with caveats | command run failed after duration; verification mismatch |
-| INFO | One sentence a reader needs without DEBUG | session bookends; **command run** open/close with duration |
-| DEBUG | Supports troubleshooting; safe to omit from default runs | phase transitions, `TrID transform —`, paths, flags |
-| TRACE | Direct console verbose detail in CLI mode | full stderr mirror in direct mode (not file-specific) |
-
-Do **not** emit DEBUG/TRACE content at INFO. Do **not** use INFO for progress counters when console throttling or `--trace` detail is the right tier.
-
-## Rust / tracing (`drot`)
-
-Use `tracing` macros with explicit targets. Audit/operator events: `target: "drot::audit"`.
-
-`log` crate severity (lower number = more severe): Error=1, Warn=2, Info=3, Debug=4, Trace=5.
-
-### Sink thresholds by run mode
-
-| Run mode | Console | File (default) | File `--min` | File `--trace` |
-| -------- | ------- | -------------- | ------------ | -------------- |
-| **direct** | 5 (TRACE) | 3 (INFO) | 2 (WARN) | 4 (DEBUG) |
-| **interactive** | OFF (WARN/ERROR → TUI panel) | 3 (INFO) | 2 (WARN) | 4 (DEBUG) |
-
-## Dhara operator logs — requirements
-
-Logs are for **humans and agents**, not aggregators. Write plain sentences, one fact per line.
-
-### Three audit layers
-
-| Layer | INFO | DEBUG |
-| ----- | ---- | ----- |
-| **Session bookends** | `drot started`; `drot exiting` | flags, log path, resolved paths |
-| **Command run** (`CommandRun`) | `building …`; `built … in {duration}` | command args when needed |
-| **Pipeline phase** | — | `phase {name} started/finished`; `TrID transform —` |
-
-### Must do
-
-- Wrap every command execute in `CommandRun::begin` / `complete` — always emit close INFO with duration.
-- Session INFO: `drot {version} started — mode=…, workers=…` — **no log path on INFO**.
-- Daily log: one `{date}_drot.log` append file + file-only `session end` record after `exiting`.
-- Interactive: TUI `activity_label` + `elapsed_secs` after 4s; no INFO on console.
-- Reduce stage: **no** `(N/total) reduce in progress` lines at any level.
-- `--trace` reduce lines: `({current}/{total}) {file_type} — accepted|rejected: …`; stats once via `TrID transform —` at DEBUG.
-- Single audit dispatch path per progress event (no duplicate callbacks).
-
-### Must not
-
-- Per-session numbered log files (`_N.log`).
-- Phase finish or `TrID transform —` at INFO in default file runs.
-- Duplicate the same stage line from runner and caller.
-- Put self-referential noise on INFO (log file path, “logging initialized”).
-- Log field soup / JSON blobs where one sentence suffices.
-
-### When diagnosing
-
-Read `{tool_root}/logs/{date}_drot.log` → `started` → `building…` / `built … in` → `exiting` → `session end` record. Use `phase ` / `TrID transform` at DEBUG for TrID depth.
+For `core/` / `interop/` / `bindings/` logging that is **not** DROT audit, prefer language-native tracing/logging conventions and keep messages outcome-focused. Do not invent a second operator-audit schema.
