@@ -10,11 +10,6 @@ on:
         required: true
         default: false
         type: boolean
-      verify_package:
-        description: Re-run full verify package on dry-run
-        required: true
-        default: false
-        type: boolean
 
 env:
   CARGO_TERM_COLOR: always
@@ -48,6 +43,7 @@ jobs:
               - 'Cargo.toml'
               - 'Cargo.lock'
               - '.github/workflows/publish-nuget.yml'
+              - '.github/actions/publish-nuget-package/**'
       - name: Resolve scope
         id: check
         shell: bash
@@ -58,26 +54,17 @@ jobs:
             echo "should_run=${{ steps.filter.outputs.nuget_scope }}" >> "$GITHUB_OUTPUT"
           fi
 
-  publish:
-    name: nuget release (linux)
+  prepare:
+    name: prepare nuget artifacts
     needs: [detect-changes]
     if: needs.detect-changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    environment: release-nuget
-    permissions:
-      contents: read
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
           lfs: true
-
-      - name: Install .NET SDK
-        uses: actions/setup-dotnet@v6
-        with:
-          dotnet-version: 10.0.x
 
       - name: Resolve PR CI artifact commit
         id: artifact-commit
@@ -103,7 +90,6 @@ jobs:
           echo "sha=${artifact_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Download PR CI native stage
-        id: native-artifact
         continue-on-error: true
         uses: dawidd6/action-download-artifact@v21
         with:
@@ -114,7 +100,6 @@ jobs:
           path: target/dist/artifacts/native-stage
 
       - name: Download NuGet package artifact
-        id: nupkg-artifact
         continue-on-error: true
         uses: dawidd6/action-download-artifact@v21
         with:
@@ -134,155 +119,76 @@ jobs:
           echo "::error::No PR CI artifacts found for commit ${{ steps.artifact-commit.outputs.sha }} (merge ${{ github.sha }}). Ensure NuGet package (linux) succeeded on the merged PR branch tip before release. Squash merges are not supported for pre-packed CD."
           exit 1
 
-      - name: Resolve pre-packed NuGet packages
-        id: nupkg
-        shell: bash
-        run: |
-          set -euo pipefail
-          shopt -s nullglob
-          packages=(target/dist/output/nuget/*.nupkg)
-          filtered=()
-          for p in "${packages[@]}"; do
-            case "$p" in
-              *.symbols.nupkg) continue ;;
-              *) filtered+=("$p") ;;
-            esac
-          done
-          if [ "${#filtered[@]}" -eq 0 ]; then
-            echo "::error::NuGet package artifact was not downloaded."
-            exit 1
-          fi
-          # Lexicographic order puts Dhara.Storage before Dhara.Storage.Extensions.Hosting.
-          IFS=$'\n' sorted=($(printf '%s\n' "${filtered[@]}" | sort))
-          unset IFS
-          echo "packages<<EOF" >> "${GITHUB_OUTPUT}"
-          printf '%s\n' "${sorted[@]}" >> "${GITHUB_OUTPUT}"
-          echo "EOF" >> "${GITHUB_OUTPUT}"
-          echo "count=${#sorted[@]}" >> "${GITHUB_OUTPUT}"
-          printf 'Resolved %s package(s):\n' "${#sorted[@]}"
-          printf '  %s\n' "${sorted[@]}"
-
-      - name: NuGet login (OIDC)
-        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
-        continue-on-error: true
-        uses: NuGet/login@v1
-        id: nuget-login
-        with:
-          user: ${{ vars.NUGET_USER }}
-
-      - name: Publish NuGet packages
-        if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
-        shell: bash
-        env:
-          OIDC_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-          FALLBACK_API_KEY: ${{ secrets.NUGET_API_KEY }}
-          NUPKG_LIST: ${{ steps.nupkg.outputs.packages }}
-          NUGET_SOURCE: ${{ vars.NUGET_SOURCE }}
-        run: |
-          set -euo pipefail
-
-          source="${NUGET_SOURCE:-}"
-          if [ -z "$source" ]; then
-            source=$(grep -E '^\s*source\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-          fi
-
-          is_duplicate_output() {
-            grep -qiE \
-              'already exists|conflict \(409\)|409 \(conflict\)|the feed and package already exists|conflict' \
-              <<<"$1"
-          }
-
-          # Returns 0 success, 2 already published, 1 other failure.
-          try_push() {
-            local key="$1"
-            local label="$2"
-            local nupkg="$3"
-            local out code
-            echo "Attempting NuGet push of $(basename "$nupkg") via ${label}..."
-            set +e
-            out=$(dotnet nuget push "$nupkg" \
-              --api-key "$key" \
-              --source "$source" \
-              2>&1)
-            code=$?
-            set -e
-            printf '%s\n' "$out"
-            if [ "$code" -eq 0 ]; then
-              echo "::notice::NuGet publish of $(basename "$nupkg") succeeded via ${label}."
-              return 0
-            fi
-            if is_duplicate_output "$out"; then
-              echo "::notice::$(basename "$nupkg") already live on the feed (${label})."
-              return 2
-            fi
-            echo "::warning::NuGet push of $(basename "$nupkg") via ${label} failed (exit ${code})."
-            return 1
-          }
-
-          push_one() {
-            local nupkg="$1"
-            if [ -n "${OIDC_API_KEY:-}" ]; then
-              if try_push "$OIDC_API_KEY" "OIDC Trusted Publishing" "$nupkg"; then
-                return 0
-              else
-                rc=$?
-                if [ "$rc" -eq 2 ]; then
-                  return 0
-                fi
-                echo "::warning::OIDC publish failed for $(basename "$nupkg") (Trusted Publishing may be misconfigured). Falling back to API key."
-              fi
-            else
-              echo "::warning::OIDC login did not produce an API key. Falling back to API key."
-            fi
-
-            if [ -z "${FALLBACK_API_KEY:-}" ]; then
-              echo "::error::NUGET_API_KEY is not set on environment release-nuget; cannot fall back from OIDC."
-              return 1
-            fi
-
-            if try_push "$FALLBACK_API_KEY" "API key" "$nupkg"; then
-              return 0
-            else
-              rc=$?
-              if [ "$rc" -eq 2 ]; then
-                return 0
-              fi
-              echo "::error::NuGet publish of $(basename "$nupkg") failed via API key."
-              return 1
-            fi
-          }
-
-          mapfile -t packages <<< "$NUPKG_LIST"
-          if [ "${#packages[@]}" -eq 0 ] || [ -z "${packages[0]:-}" ]; then
-            echo "::error::No NuGet packages resolved for publish."
-            exit 1
-          fi
-
-          failed=0
-          for nupkg in "${packages[@]}"; do
-            [ -n "$nupkg" ] || continue
-            if ! push_one "$nupkg"; then
-              failed=1
-            fi
-          done
-          exit "$failed"
-
-      - name: Dry-run validation
-        if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true
-        shell: bash
-        env:
-          NUPKG_LIST: ${{ steps.nupkg.outputs.packages }}
-        run: |
-          set -euo pipefail
-          echo "Dry run: validated ${{ steps.nupkg.outputs.count }} pre-packed NuGet package(s):"
-          printf '%s\n' "$NUPKG_LIST"
-
-      - name: Upload NuGet artifacts
-        if: always()
+      - name: Upload prepared NuGet packages
         uses: actions/upload-artifact@v7
         with:
-          name: nuget-packages
+          name: prepared-nuget-packages
           path: |
             target/dist/output/nuget/*.nupkg
             target/dist/output/nuget/*.snupkg
             target/dist/output/nuget/*.symbols.nupkg
+          retention-days: 5
+
+  publish-dhara-storage:
+    name: publish Dhara.Storage
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    environment: release-nuget
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download prepared NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-nuget-packages
+          path: target/dist/output/nuget
+
+      - name: Publish Dhara.Storage
+        uses: ./.github/actions/publish-nuget-package
+        with:
+          package_id: Dhara.Storage
+          dry_run: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || 'false' }}
+          nuget_user: ${{ vars.NUGET_USER }}
+          nuget_source: ${{ vars.NUGET_SOURCE }}
+          fallback_api_key: ${{ secrets.NUGET_API_KEY }}
+
+  publish-dhara-storage-extensions-hosting:
+    name: publish Dhara.Storage.Extensions.Hosting
+    needs: [prepare]
+    runs-on: ubuntu-latest
+    environment: release-nuget
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install .NET SDK
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download prepared NuGet packages
+        uses: actions/download-artifact@v8
+        with:
+          name: prepared-nuget-packages
+          path: target/dist/output/nuget
+
+      - name: Publish Dhara.Storage.Extensions.Hosting
+        uses: ./.github/actions/publish-nuget-package
+        with:
+          package_id: Dhara.Storage.Extensions.Hosting
+          dry_run: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || 'false' }}
+          nuget_user: ${{ vars.NUGET_USER }}
+          nuget_source: ${{ vars.NUGET_SOURCE }}
+          fallback_api_key: ${{ secrets.NUGET_API_KEY }}

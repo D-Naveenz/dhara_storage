@@ -116,22 +116,22 @@ Deep reference: [docs/README.md](docs/README.md).
 
 ### Release / env (operator)
 
-Shared metadata: [dhara.config.toml](dhara.config.toml). Local secrets in `.env.local` (from `.env.example`), not git.
+Shared metadata: [dhara.config.toml](dhara.config.toml) — `[versions]`, `[product]` (authors/URLs/license), `[nuget].source`, `[ci]` pack paths (`package_project` + `managed_package_projects`), RID map. Package-specific id/description/tags/README/icon live in each csproj / Cargo.toml. Local secrets in `.env.local` (from [`.env.example`](.env.example)): hardcoded names `NUGET_API_KEY` and `CARGO_REGISTRY_TOKEN` only.
 
-CI credentials live on **GitHub Environments** (`staging`, `release-nuget`, `release-cargo`) — not repository Actions secrets/variables. Ensure-branch / Dependabot auto-merge / CodeQL use only the built-in Actions `github.token` (no Environment).
+CI credentials live on **GitHub Environments** (`staging`, `release-nuget`, `release-cargo`) — named in workflow YAML only, not in `dhara.config.toml`. Ensure-branch / Dependabot auto-merge / CodeQL use only the built-in Actions `github.token` (no Environment).
 
-| Variable | Purpose | Where (CI) |
-|----------|---------|------------|
+| Variable | Purpose | Where (CI) / local |
+|----------|---------|-------------------|
 | `NUGET_USER` | nuget.org profile name for OIDC login | GitHub Environment **variable** on `release-nuget` |
-| `NUGET_SOURCE` | NuGet push feed URL (optional override) | GitHub Environment **variable** on `release-nuget`; else `dhara.config.toml` |
-| `NUGET_API_KEY` | NuGet.org publish fallback | GitHub Environment `release-nuget` — used only if OIDC publish fails for a non-duplicate reason |
-| `CARGO_REGISTRY_TOKEN` | crates.io publish fallback | GitHub Environment `release-cargo` — used only if OIDC publish fails for a non-duplicate reason |
+| `NUGET_SOURCE` | NuGet push feed URL (optional override) | GitHub Environment **variable** on `release-nuget`; else `dhara.config.toml` `[nuget].source` |
+| `NUGET_API_KEY` | NuGet.org publish (local DROT; CI fallback) | `.env.local` locally; Environment secret on `release-nuget` if OIDC fails |
+| `CARGO_REGISTRY_TOKEN` | crates.io publish (local DROT; CI fallback) | `.env.local` locally; Environment secret on `release-cargo` if OIDC fails |
 | `TOOL_MAX_WORKERS` | Caps Rayon workers in `drot` defs builds | local / CI env as needed |
 | `DROT_ARTIFACTS_TOKEN` | Download prebuilt `drot` from orchestration | GitHub Environment `staging` |
 
-CI publish auth: try [NuGet](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) / [crates.io](https://crates.io/docs/trusted-publishing) Trusted Publishing (OIDC) first. Already-published versions exit successfully. Other failures fall back to the long-lived API key/token when present. Leave crates.io **Require trusted publishing** unchecked while fallback tokens may still be needed.
+CI publish auth: try [NuGet](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) / [crates.io](https://crates.io/docs/trusted-publishing) Trusted Publishing (OIDC) first. Already-published versions exit successfully. Other failures fall back to the long-lived API key/token when present. Leave crates.io **Require trusted publishing** unchecked while fallback tokens may still be needed. Local DROT publish cannot use OIDC — fill `.env.local`.
 
-Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- config env init`.
+Activation scaffolds missing `dhara.config.toml` / `.env.local` (see DROT [host-config](tooling/drot/docs/host-config.md)).
 
 ---
 
@@ -140,7 +140,7 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 - PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — environment `staging` — [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - CodeQL SAST: [`.github/workflows/codeql.yml`](.github/workflows/codeql.yml) — separate from Pipeline (fmt/clippy/doc stay in quality); no GitHub Environment; see [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
 - Branch / Dependabot: feature → `development` → `main`; version updates target `development` ([`dependabot.yml`](.github/dependabot.yml)), with ensure-branch + squash auto-merge workflows — details in [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md) (**Branch flow and Dependabot**). Never auto-merge PRs into `main`.
-- Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml) (`release-cargo`, OIDC + optional bootstrap token), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) (`release-nuget`, OIDC) — path-filtered; `workflow_dispatch` when automation skips
+- Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml) (`release-cargo` — per-crate jobs via [`publish-cargo-crate`](.github/actions/publish-cargo-crate/action.yml)), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) (`release-nuget` — per-package jobs via [`publish-nuget-package`](.github/actions/publish-nuget-package/action.yml)) — path-filtered; `workflow_dispatch` when automation skips
 - **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN` on `staging`.
 - CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
 - **DROT ↔ core:** `drot_dhara_storage` depends on published **`dhara_storage_core`** (crates.io; no `dhara_storage_dal`). `filedefs.dat` lives only under `core/dhara_storage/resources/` and is resolved at runtime once `-r` points at the storage repo. Storage CI downloads prebuilt `drot` from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); local dev uses [`run-drot`](tooling/scripts/run-drot.ps1).

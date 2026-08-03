@@ -26,7 +26,7 @@ flowchart LR
   VP --> HOSTING[Dhara.Storage.Extensions.Hosting.nupkg]
 ```
 
-Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then packs **`Dhara.Storage`** (`drot package pack`, includes staged natives) and **`Dhara.Storage.Extensions.Hosting`** (`dotnet pack`, managed-only, same product icon). `NuGet verify (linux)` runs `verify package` against `Dhara.Storage` (ConsumerSmoke via `AddDharaStorage` + AOT publish on `linux-x64`).
+Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `drot package pack` (primary `Dhara.Storage` plus `ci.managed_package_projects` such as Hosting). `NuGet verify (linux)` runs `verify package` against the primary package (ConsumerSmoke via `AddDharaStorage` + AOT publish on `linux-x64`).
 **Note:** `dhara-sd` is cross-platform — Windows uses named pipes + `DuplicateHandle`; Linux/macOS use UDS + `SCM_RIGHTS` (see [daemon-transport.md][daemon-transport]).
 
 ## Expected layout

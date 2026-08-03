@@ -11,10 +11,10 @@ Human-readable map of GitHub Actions workflows and where `drot` is used versus d
 | [ensure-development.yml][ensure-development-yml] | `push` to `main` / Monday 04:00 UTC / `workflow_dispatch` | `ensure development exists` | — |
 | [dependabot-auto-merge.yml][dependabot-auto-merge-yml] | `pull_request` (Dependabot → `development` only) | `enable squash auto-merge` | — |
 | [codeql.yml][codeql-yml] | `pull_request` / `push` to `main` / weekly cron | `Analyze (actions\|csharp\|rust)` | — (none; no staging secrets) |
-| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
-| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
-| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
-| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
+| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `publish dhara_storage_core`, `publish dhara_storage` | `release-cargo` (publish jobs) |
+| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | Same | `release-cargo` (publish jobs) |
+| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `prepare`, parallel `publish Dhara.Storage` / `Hosting` | `release-nuget` (publish jobs) |
+| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | Same | `release-nuget` (publish jobs) |
 
 **Concurrency:** PR pipeline and CodeQL runs cancel in-progress; merge publishes do not.
 
@@ -38,8 +38,8 @@ Credentials live on **Environments only** — not repository Actions secrets/var
 | Environment | Used by | Auth / secrets |
 |-------------|---------|----------------|
 | `staging` | PR / `workflow_dispatch` jobs in [pipeline.yml][pipeline-yml] | Secret `DROT_ARTIFACTS_TOKEN` |
-| `release-nuget` | `publish` in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (+ optional `NUGET_SOURCE`); OIDC first, then optional secret `NUGET_API_KEY` fallback |
-| `release-cargo` | `publish` in [publish-crates.yml][publish-crates-yml] | OIDC first, then optional secret `CARGO_REGISTRY_TOKEN` fallback |
+| `release-nuget` | Per-package publish jobs in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (+ optional `NUGET_SOURCE`); OIDC first, then optional secret `NUGET_API_KEY` fallback |
+| `release-cargo` | Per-crate publish jobs in [publish-crates.yml][publish-crates-yml] | OIDC first, then optional secret `CARGO_REGISTRY_TOKEN` fallback |
 
 Workflows with **no** Environment column ([ensure-development.yml][ensure-development-yml], [dependabot-auto-merge.yml][dependabot-auto-merge-yml], [codeql.yml][codeql-yml]) use only the built-in Actions `github.token` — no custom secret or Environment is required.
 
@@ -73,15 +73,20 @@ flowchart TB
 
   subgraph cd_cargo ["publish-crates.yml / release-cargo"]
     FC[cargo_scope filter]
-    CR["cargo release (linux)"]
-    FC --> CR
+    CCORE["publish dhara_storage_core"]
+    CRUN["publish dhara_storage"]
+    FC --> CCORE --> CRUN
   end
 
   subgraph cd_nuget ["publish-nuget.yml / release-nuget"]
     FN[nuget_scope filter]
-    NU["nuget release (linux)"]
-    ART --> NU
-    FN --> NU
+    PREP[prepare artifacts]
+    NS["publish Dhara.Storage"]
+    NH["publish Hosting"]
+    ART --> PREP
+    FN --> PREP
+    PREP --> NS
+    PREP --> NH
   end
 ```
 
@@ -98,10 +103,10 @@ flowchart TB
 | Native staging (Windows) | Downloaded `drot package stage-native --msvc-env` (expects `dhara-sd.exe`) |
 | `drot` binary | [`download-drot`](../.github/actions/download-drot/action.yml) artifact for pinned `tooling/drot` submodule SHA — **not** rebuilt on product-only PRs |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
-| `package pack` | `drot package pack` (`Dhara.Storage`) then `dotnet pack` (`Dhara.Storage.Extensions.Hosting`) on `NuGet package (linux)` with merged `--native-stage` |
+| `package pack` | `drot package pack` on `NuGet package (linux)` — primary + `ci.managed_package_projects` |
 | `verify package` | `drot verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
-| Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
-| NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
+| Cargo CD | Per-crate [`publish-cargo-crate`](../.github/actions/publish-cargo-crate/action.yml) jobs ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
+| NuGet CD | Per-package [`publish-nuget-package`](../.github/actions/publish-nuget-package/action.yml) jobs ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
 
 **Linux GUI rule:** on Linux jobs that **link** `dhara_storage` (clippy/tests with default deps) or **build** `drot`, run [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) first (glib, gtk, pkg-config, wayland). Restoring a cached dist binary alone does not require those packages.
 
@@ -180,9 +185,8 @@ After all platform jobs:
 
 1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
-3. `drot package pack --native-stage target/dist/artifacts/native-stage` (`Dhara.Storage`)
-4. `dotnet pack` `Dhara.Storage.Extensions.Hosting` into the same `target/dist/output/nuget` folder (same workspace version + product icon; `StagedNativeRoot` so the Storage project reference does not run `BuildDaemon`)
-5. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
+3. `drot package pack --native-stage …` — packs `ci.package_project` (`Dhara.Storage`) plus each `ci.managed_package_projects` entry (Hosting) into `target/dist/output/nuget`.
+4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
 
 ### `NuGet verify (linux)`
 
@@ -190,23 +194,19 @@ After `NuGet package (linux)`:
 
 1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download `release-native-stage` artifact.
-3. `drot verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `linux-x64`).
+3. `drot verify package --native-stage …` (ConsumerSmoke + AOT on `linux-x64`).
 
 ## CD: `publish-crates`
 
 1. `detect-changes` — `cargo_scope` filter (or always on `workflow_dispatch`).
-2. `publish` job uses GitHub Environment `release-cargo` with `id-token: write`.
-3. Auth / publish: [`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action) (OIDC, `continue-on-error`) then `cargo release`. Already-live versions exit successfully. Other OIDC failures fall back to `CARGO_REGISTRY_TOKEN` when set. Dry-run skips registry auth.
-4. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) — `cargo release` verifies crate tarballs by building `dhara_storage` (GTK/glib via `file_icon_provider`).
-5. `cargo release --workspace --isolated --allow-branch main --tag-name 'v{{version}}' --no-confirm --execute`. Dry-run uses `--allow-branch '*'` and `--no-verify`.
+2. `publish dhara_storage_core` — [`publish-cargo-crate`](../.github/actions/publish-cargo-crate/action.yml) with `create_tag=true` (`release-cargo`, OIDC then `CARGO_REGISTRY_TOKEN`).
+3. `publish dhara_storage` — same action with `create_tag=false`, `needs` core, `if: always() && should_run`; includes [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml). Job statuses are independent so a runtime failure does not rewrite a successful core publish.
 
 ## CD: `publish-nuget`
 
 1. `detect-changes` — `nuget_scope` filter (or always on `workflow_dispatch`).
-2. `publish` job uses GitHub Environment `release-nuget` with `id-token: write`.
-3. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
-4. Download PR CI artifacts for that commit.
-5. Auth / publish: [`NuGet/login@v1`](https://github.com/NuGet/login) (OIDC, `continue-on-error`) then `dotnet nuget push` for **each** non-symbols `.nupkg` (currently `Dhara.Storage` then `Dhara.Storage.Extensions.Hosting`; no `--skip-duplicate`, so duplicates are detected). Already-live versions exit successfully per package. Other OIDC failures fall back to `NUGET_API_KEY` when set. Source from `vars.NUGET_SOURCE` or `dhara.config.toml`. Dry-run skips push.
+2. `prepare` — resolve PR artifact SHA (`HEAD^2`), download `release-native-stage` + `release-nuget-package`, re-upload as `prepared-nuget-packages`.
+3. Parallel jobs `publish Dhara.Storage` and `publish Dhara.Storage.Extensions.Hosting` — each calls [`publish-nuget-package`](../.github/actions/publish-nuget-package/action.yml) (`release-nuget`, OIDC then `NUGET_API_KEY`). Source from `vars.NUGET_SOURCE` or `dhara.config.toml` `[nuget].source`.
 
 ## Local parity
 
@@ -217,6 +217,7 @@ After `NuGet package (linux)`:
 - [Workspace architecture][architecture] — tool crate DAG
 - [Multi-platform native packaging][native-packaging] — RID staging, artifact SHA pitfalls
 - [Logging conventions][logging] — redirect → DROT operator audit logs
+- [DROT host config][drot-host-config] — shared vs project-file ownership, secrets, activation
 - [DROT docs][drot-docs] — tool architecture, TUI, logging (submodule)
 - [drot README][readme-tool] — full command surface
 - [Docs index][docs-index]
@@ -237,6 +238,7 @@ After `NuGet package (linux)`:
 [ensure-dist-sh]: ../tooling/scripts/ensure-drot-dist.sh
 [logging]: logging.md
 [drot-docs]: ../tooling/drot/docs/README.md
+[drot-host-config]: ../tooling/drot/docs/host-config.md
 [native-packaging]: native-packaging.md
 [architecture]: architecture.md
 [readme-tool]: ../tooling/drot/README.md

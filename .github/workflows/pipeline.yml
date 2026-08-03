@@ -332,25 +332,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Packs primary (Dhara.Storage) + managed_package_projects (Hosting) via drot.
           target/dist/drot -r "$GITHUB_WORKSPACE" --yes package pack \
             --native-stage target/dist/artifacts/native-stage
-
-          # Hosting is managed-only; pack beside Dhara.Storage into the same output folder.
-          # StagedNativeRoot skips Storage's BuildDaemon when the ProjectReference builds.
-          version=$(grep -E '^\s*workspace\s*=' dhara.config.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          native_stage="$(pwd)/target/dist/artifacts/native-stage"
-          nuget_out="$(pwd)/target/dist/output/nuget"
-          dotnet pack \
-            bindings/csharp/Dhara.Storage.Extensions.Hosting/Dhara.Storage.Extensions.Hosting.csproj \
-            --configuration Release \
-            --include-symbols \
-            -p:ContinuousIntegrationBuild=true \
-            -p:Version="${version}" \
-            -p:StagedNativeRoot="${native_stage}" \
-            --output "${nuget_out}"
-
           echo "Packed packages:"
-          ls -la "${nuget_out}"/*.nupkg
+          ls -la target/dist/output/nuget/*.nupkg
 
       - name: Write release metadata
         shell: bash
