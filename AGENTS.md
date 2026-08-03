@@ -104,7 +104,7 @@ Deep reference: [docs/README.md](docs/README.md).
 ## Local commands
 
 - Init submodule: `git submodule update --init --recursive`
-- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (default opens **TUI**; pass `-Cli` / `--cli` for the direct CLI; use `-Force` / `--force-build` to rebuild from submodule)
+- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (default opens **TUI**; pass `-Cli` / `--cli` for the direct CLI; use `-Force` / `--force-build` to rebuild from submodule). Dist is gated by `tooling/drot` git `HEAD` via `target/dist/.drot-git-rev` (not Cargo semver).
 - Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot -Cli --yes quality run`
 - Full repository build (CLI): `./tooling/scripts/run-drot.ps1 -Cli --yes build run` (config → defs → quality → native → verify; skip flags available)
 - Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
