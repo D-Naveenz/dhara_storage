@@ -121,12 +121,13 @@ Shared metadata: [dhara.config.toml](dhara.config.toml). Local secrets in `.env.
 | Variable | Purpose | Where (CI) |
 |----------|---------|------------|
 | `NUGET_USER` | nuget.org profile name for OIDC login | GitHub Environment **variable** on `release-nuget` |
-| `CARGO_REGISTRY_TOKEN` | crates.io publish bootstrap (optional) | GitHub Environment `release-cargo` — only when a crate is not yet on crates.io; omit for OIDC Trusted Publishing |
-| `NUGET_SOURCE` | NuGet feed URL | local / `dhara.config.toml` (push source) |
+| `NUGET_SOURCE` | NuGet push feed URL (optional override) | GitHub Environment **variable** on `release-nuget`; else `dhara.config.toml` |
+| `NUGET_API_KEY` | NuGet.org publish fallback | GitHub Environment `release-nuget` — used only if OIDC publish fails for a non-duplicate reason |
+| `CARGO_REGISTRY_TOKEN` | crates.io publish fallback | GitHub Environment `release-cargo` — used only if OIDC publish fails for a non-duplicate reason |
 | `TOOL_MAX_WORKERS` | Caps Rayon workers in `drot` defs builds | local / CI env as needed |
 | `DROT_ARTIFACTS_TOKEN` | Download prebuilt `drot` from orchestration | GitHub Environment `staging` |
 
-CI publish auth: NuGet uses [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) (`NuGet/login@v1`); Cargo uses [crates.io Trusted Publishing](https://crates.io/docs/trusted-publishing) (`rust-lang/crates-io-auth-action`) when `CARGO_REGISTRY_TOKEN` is unset. After first successful OIDC NuGet publish, remove any leftover `NUGET_API_KEY`. Leave crates.io **Require trusted publishing** unchecked while bootstrap tokens may still be needed.
+CI publish auth: try [NuGet](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) / [crates.io](https://crates.io/docs/trusted-publishing) Trusted Publishing (OIDC) first. Already-published versions exit successfully. Other failures fall back to the long-lived API key/token when present. Leave crates.io **Require trusted publishing** unchecked while fallback tokens may still be needed.
 
 Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- config env init`.
 

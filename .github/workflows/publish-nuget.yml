@@ -148,6 +148,7 @@ jobs:
 
       - name: NuGet login (OIDC)
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
+        continue-on-error: true
         uses: NuGet/login@v1
         id: nuget-login
         with:
@@ -157,14 +158,79 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.dry_run != true
         shell: bash
         env:
-          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          OIDC_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+          FALLBACK_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUPKG_PATH: ${{ steps.nupkg.outputs.path }}
+          NUGET_SOURCE: ${{ vars.NUGET_SOURCE }}
         run: |
           set -euo pipefail
-          source=$(grep -E '^\s*source\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-          dotnet nuget push "${{ steps.nupkg.outputs.path }}" \
-            --api-key "$NUGET_API_KEY" \
-            --source "$source" \
-            --skip-duplicate
+
+          source="${NUGET_SOURCE:-}"
+          if [ -z "$source" ]; then
+            source=$(grep -E '^\s*source\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+          fi
+
+          is_duplicate_output() {
+            grep -qiE \
+              'already exists|conflict \(409\)|409 \(conflict\)|the feed and package already exists|conflict' \
+              <<<"$1"
+          }
+
+          # Returns 0 success, 2 already published, 1 other failure.
+          try_push() {
+            local key="$1"
+            local label="$2"
+            local out code
+            echo "Attempting NuGet push via ${label}..."
+            set +e
+            out=$(dotnet nuget push "$NUPKG_PATH" \
+              --api-key "$key" \
+              --source "$source" \
+              2>&1)
+            code=$?
+            set -e
+            printf '%s\n' "$out"
+            if [ "$code" -eq 0 ]; then
+              echo "::notice::NuGet publish succeeded via ${label}."
+              return 0
+            fi
+            if is_duplicate_output "$out"; then
+              echo "::notice::Package version already live on the feed (${label}). Nothing further to publish."
+              return 2
+            fi
+            echo "::warning::NuGet push via ${label} failed (exit ${code})."
+            return 1
+          }
+
+          if [ -n "${OIDC_API_KEY:-}" ]; then
+            if try_push "$OIDC_API_KEY" "OIDC Trusted Publishing"; then
+              exit 0
+            else
+              rc=$?
+              if [ "$rc" -eq 2 ]; then
+                exit 0
+              fi
+              echo "::warning::OIDC publish failed (Trusted Publishing may be misconfigured). Falling back to API key."
+            fi
+          else
+            echo "::warning::OIDC login did not produce an API key. Falling back to API key."
+          fi
+
+          if [ -z "${FALLBACK_API_KEY:-}" ]; then
+            echo "::error::NUGET_API_KEY is not set on environment release-nuget; cannot fall back from OIDC."
+            exit 1
+          fi
+
+          if try_push "$FALLBACK_API_KEY" "API key"; then
+            exit 0
+          else
+            rc=$?
+            if [ "$rc" -eq 2 ]; then
+              exit 0
+            fi
+            echo "::error::NuGet publish failed via API key."
+            exit 1
+          fi
 
       - name: Dry-run validation
         if: github.event_name == 'workflow_dispatch' && inputs.dry_run == true

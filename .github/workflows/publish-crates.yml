@@ -60,9 +60,6 @@ jobs:
     permissions:
       contents: write
       id-token: write
-    env:
-      # Bootstrap token when set; empty → Trusted Publishing OIDC path.
-      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -90,24 +87,97 @@ jobs:
 
       - name: Authenticate (Trusted Publishing)
         id: crates-auth
-        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) && env.CARGO_REGISTRY_TOKEN == '' }}
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        continue-on-error: true
         uses: rust-lang/crates-io-auth-action@v1
-
-      - name: Use Trusted Publishing token
-        if: ${{ steps.crates-auth.outputs.token != '' }}
-        run: echo "CARGO_REGISTRY_TOKEN=${{ steps.crates-auth.outputs.token }}" >> "$GITHUB_ENV"
 
       - name: Publish crates
         shell: bash
+        env:
+          OIDC_TOKEN: ${{ steps.crates-auth.outputs.token }}
+          FALLBACK_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
           set -euo pipefail
-          args=(
-            release --workspace --isolated
-            --tag-name 'v{{version}}' --no-confirm
-          )
+
+          is_dry_run=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            args+=(--allow-branch '*' --no-verify)
-          else
-            args+=(--allow-branch main --execute)
+            is_dry_run=true
           fi
-          cargo "${args[@]}"
+
+          is_duplicate_output() {
+            grep -qiE \
+              'already exists on|crate .+ already exists|version .+ is already uploaded|already uploaded' \
+              <<<"$1"
+          }
+
+          run_release() {
+            local token="$1"
+            local label="$2"
+            local out code
+            local -a args=(
+              release --workspace --isolated
+              --tag-name 'v{{version}}' --no-confirm
+            )
+            if [ "$is_dry_run" = true ]; then
+              args+=(--allow-branch '*' --no-verify)
+            else
+              args+=(--allow-branch main --execute)
+            fi
+            echo "Attempting cargo release via ${label}..."
+            set +e
+            out=$(CARGO_REGISTRY_TOKEN="$token" cargo "${args[@]}" 2>&1)
+            code=$?
+            set -e
+            printf '%s\n' "$out"
+            if [ "$code" -eq 0 ]; then
+              echo "::notice::Cargo release succeeded via ${label}."
+              return 0
+            fi
+            if is_duplicate_output "$out"; then
+              echo "::notice::Crate version(s) already live on crates.io (${label}). Nothing further to publish."
+              return 2
+            fi
+            echo "::warning::Cargo release via ${label} failed (exit ${code})."
+            return 1
+          }
+
+          if [ "$is_dry_run" = true ]; then
+            # Dry-run does not need registry credentials.
+            args=(
+              release --workspace --isolated
+              --tag-name 'v{{version}}' --no-confirm
+              --allow-branch '*' --no-verify
+            )
+            cargo "${args[@]}"
+            exit 0
+          fi
+
+          if [ -n "${OIDC_TOKEN:-}" ]; then
+            if run_release "$OIDC_TOKEN" "OIDC Trusted Publishing"; then
+              exit 0
+            else
+              rc=$?
+              if [ "$rc" -eq 2 ]; then
+                exit 0
+              fi
+              echo "::warning::OIDC publish failed (Trusted Publishing may be misconfigured). Falling back to API token."
+            fi
+          else
+            echo "::warning::OIDC auth did not produce a token. Falling back to API token."
+          fi
+
+          if [ -z "${FALLBACK_TOKEN:-}" ]; then
+            echo "::error::CARGO_REGISTRY_TOKEN is not set on environment release-cargo; cannot fall back from OIDC."
+            exit 1
+          fi
+
+          if run_release "$FALLBACK_TOKEN" "API token"; then
+            exit 0
+          else
+            rc=$?
+            if [ "$rc" -eq 2 ]; then
+              exit 0
+            fi
+            echo "::error::Cargo release failed via API token."
+            exit 1
+          fi

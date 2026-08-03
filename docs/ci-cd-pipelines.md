@@ -22,10 +22,12 @@ Separate environments keep Cargo and NuGet deployment history independent and sc
 | Environment | Used by | Auth / secrets |
 |-------------|---------|----------------|
 | `staging` | PR / `workflow_dispatch` jobs in [pipeline.yml][pipeline-yml] | Secret `DROT_ARTIFACTS_TOKEN` |
-| `release-nuget` | `publish` in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (nuget.org profile name); OIDC via [Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) — no long-lived `NUGET_API_KEY` |
-| `release-cargo` | `publish` in [publish-crates.yml][publish-crates-yml] | OIDC via [crates.io Trusted Publishing](https://crates.io/docs/trusted-publishing); optional secret `CARGO_REGISTRY_TOKEN` only to bootstrap a crate not yet on crates.io |
+| `release-nuget` | `publish` in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (+ optional `NUGET_SOURCE`); OIDC first, then optional secret `NUGET_API_KEY` fallback |
+| `release-cargo` | `publish` in [publish-crates.yml][publish-crates-yml] | OIDC first, then optional secret `CARGO_REGISTRY_TOKEN` fallback |
 
-Create these under **Settings → Environments**. Restrict `release-*` to `main`; do not add required reviewers on `staging` (that would block every PR). Leave crates.io **Require trusted publishing for all new versions** unchecked while you still need API-token bootstrap for new crates.
+Create these under **Settings → Environments**. Restrict `release-*` to `main`; do not add required reviewers on `staging` (that would block every PR). Leave crates.io **Require trusted publishing for all new versions** unchecked while API-token fallback is still needed.
+
+**Publish auth flow (NuGet + Cargo):** try Trusted Publishing (OIDC) first. If the version is already live, log that and exit successfully (no fallback). Any other failure treats Trusted Publishing as misconfigured and falls back to the long-lived API key/token when present; missing fallback credentials fail the job.
 
 ## Architecture
 
@@ -156,7 +158,7 @@ After `NuGet package (linux)`:
 
 1. `detect-changes` — `cargo_scope` filter (or always on `workflow_dispatch`).
 2. `publish` job uses GitHub Environment `release-cargo` with `id-token: write`.
-3. Auth: if `CARGO_REGISTRY_TOKEN` secret is empty, [`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action) exchanges OIDC for a short-lived token; otherwise the long-lived secret is used (bootstrap for crates not yet on crates.io). Dry-run skips OIDC.
+3. Auth / publish: [`rust-lang/crates-io-auth-action`](https://github.com/rust-lang/crates-io-auth-action) (OIDC, `continue-on-error`) then `cargo release`. Already-live versions exit successfully. Other OIDC failures fall back to `CARGO_REGISTRY_TOKEN` when set. Dry-run skips registry auth.
 4. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) — `cargo release` verifies crate tarballs by building `dhara_storage` (GTK/glib via `file_icon_provider`).
 5. `cargo release --workspace --isolated --allow-branch main --tag-name 'v{{version}}' --no-confirm --execute`. Dry-run uses `--allow-branch '*'` and `--no-verify`.
 
@@ -166,8 +168,7 @@ After `NuGet package (linux)`:
 2. `publish` job uses GitHub Environment `release-nuget` with `id-token: write`.
 3. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
 4. Download PR CI artifacts for that commit.
-5. [`NuGet/login@v1`](https://github.com/NuGet/login) exchanges OIDC for a short-lived API key (`user` = `vars.NUGET_USER`). Skipped on dry-run.
-6. `dotnet nuget push` with that temp key and source from `dhara.config.toml`.
+5. Auth / publish: [`NuGet/login@v1`](https://github.com/NuGet/login) (OIDC, `continue-on-error`) then `dotnet nuget push` (no `--skip-duplicate`, so duplicates are detected). Already-live versions exit successfully. Other OIDC failures fall back to `NUGET_API_KEY` when set. Source from `vars.NUGET_SOURCE` or `dhara.config.toml`. Dry-run skips push.
 
 ## Local parity
 
