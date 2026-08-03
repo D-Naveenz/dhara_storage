@@ -1,29 +1,29 @@
 [versions]
-workspace = "0.9.6"
+workspace = "0.9.22"
 
 [nuget]
 package_id = "Dhara.Storage"
 source = "https://api.nuget.org/v3/index.json"
 authors = ["Naveen Dharmathunga"]
-description = "High-level .NET bindings for the native Dhara Storage Rust runtime."
+description = ".NET bindings for Dhara Storage: content-based file intelligence, file and directory handles, transfers, watching, and metadata via the bundled sidecar daemon."
 tags = [
     "storage",
-    "ffi",
+    "grpc",
     "rust",
     "analysis",
     "file-handling",
     "directory-management",
     "watching",
 ]
-readme = "src/bindings/csharp/Dhara.Storage/README.md"
-icon = "src/bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png"
+readme = "bindings/csharp/Dhara.Storage/README.md"
+icon = "bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png"
 repository_url = "https://github.com/D-Naveenz/dhara_storage"
 project_url = "https://github.com/D-Naveenz/dhara_storage"
 
 [ci]
-smoke_project = "src/bindings/csharp/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj"
-package_project = "src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj"
-tests_project = "src/bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
+smoke_project = "bindings/csharp/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj"
+package_project = "bindings/csharp/Dhara.Storage/Dhara.Storage.csproj"
+tests_project = "bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
 native_runtimes = [
     "win-x64",
     "win-arm64",
@@ -31,6 +31,7 @@ native_runtimes = [
     "linux-arm64",
     "osx-arm64",
 ]
+# Daemon transport is cross-platform (named pipes on Windows, UDS on Linux/macOS).
 host_runtime_smoke = "linux-x64"
 aot_runtime_smoke = "linux-x64"
 

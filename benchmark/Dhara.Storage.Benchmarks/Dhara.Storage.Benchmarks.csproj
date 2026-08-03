@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Dhara.Storage.Benchmarks</RootNamespace>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..'))\</RepoRoot>
+    <NativeConfiguration Condition="'$(Configuration)' == 'Release'">release</NativeConfiguration>
+    <NativeConfiguration Condition="'$(NativeConfiguration)' == ''">debug</NativeConfiguration>
+    <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
+    <DaemonExeName>dhara-sd.exe</DaemonExeName>
+    <DaemonExePath>$(CargoTargetDir)\$(NativeConfiguration)\$(DaemonExeName)</DaemonExePath>
+    <NativeLibFileName>dharastorage.dll</NativeLibFileName>
+    <NativeLibPath>$(CargoTargetDir)\$(NativeConfiguration)\$(NativeLibFileName)</NativeLibPath>
+    <AssemblyTitle>Dhara Storage Benchmark Tool</AssemblyTitle>
+    <Product>Dhara Storage</Product>
+    <Authors>Naveen Dharmathunga</Authors>
+    <Version>0.9.22</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
+    <!-- <PackageReference Include="Microsoft.VisualStudio.DiagnosticsHub.BenchmarkDotNetDiagnosers" Version="18.7.37220.1" /> -->
+    <PackageReference Include="Google.Protobuf" Version="3.35.1" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.80.0" />
+  </ItemGroup>
+
+  <!-- B2 uses product NuGet (daemon types). B1 uses dharastorage.dll via bench-only P/Invoke. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\bindings\csharp\Dhara.Storage\Dhara.Storage.csproj" />
+  </ItemGroup>
+
+  <Target Name="BuildBenchNative" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <_CargoArgs Condition="'$(Configuration)' == 'Release'">--release</_CargoArgs>
+    </PropertyGroup>
+    <Exec Command="cargo build -p dharastorage-ffi $(_CargoArgs)" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+    <Exec Command="cargo build -p dhara-sd $(_CargoArgs)" WorkingDirectory="$(RepoRoot)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+  </Target>
+
+  <Target Name="CopyBenchNativeAssets" AfterTargets="Build">
+    <Copy SourceFiles="$(NativeLibPath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(DaemonExePath)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

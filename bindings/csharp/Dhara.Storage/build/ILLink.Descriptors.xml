@@ -1,0 +1,6 @@
+<linker>
+  <!-- gRPC/protobuf generated from dhara_sd.proto; parsers use reflection at runtime. -->
+  <assembly fullname="Dhara.Storage">
+    <namespace fullname="Dhara.Storage.Sd.V1" preserve="all" />
+  </assembly>
+</linker>

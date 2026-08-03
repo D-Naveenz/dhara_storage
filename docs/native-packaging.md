@@ -1,8 +1,8 @@
 # Multi-platform native packaging
 
-This document explains how Dhara Storage ships `dharastorage` native libraries inside the [Dhara.Storage][readme-nuget] NuGet package across five 64-bit runtime identifiers (RIDs). It covers per-host staging rules, CI artifact merge, MSBuild packing, and common failure modes discovered during the 0.8.0 pipeline rollout.
+This document explains how Dhara Storage ships the **`dhara-sd` sidecar** inside the [Dhara.Storage][readme-nuget] NuGet package across five 64-bit runtime identifiers (RIDs). It covers per-host staging rules, CI artifact merge, MSBuild packing, and common failure modes.
 
-For job names and workflow triggers, see [CI/CD pipelines][ci-cd]. For operator commands, see [drot README][readme-tool].
+For job names and workflow triggers, see [CI/CD pipelines][ci-cd]. For operator commands, see [drot README][readme-tool]. Transport design: [daemon-transport.md][daemon-transport]. Signing: [windows-code-signing.md][windows-signing].
 
 ## End-to-end flow
 
@@ -25,7 +25,9 @@ flowchart LR
   VP --> NUPKG[Dhara.Storage.nupkg]
 ```
 
-Each platform job stages native assets (tool with `--msvc-env` on Windows; direct `cargo build` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke + AOT on `linux-x64`).
+Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke via `AddDharaStorage` + AOT publish on `linux-x64`).
+
+**Note:** `dhara-sd` is cross-platform — Windows uses named pipes + `DuplicateHandle`; Linux/macOS use UDS + `SCM_RIGHTS` (see [daemon-transport.md][daemon-transport]).
 
 ## Expected layout
 
@@ -33,14 +35,16 @@ After merge, `target/dist/artifacts/native-stage` (dist `tool_root`) must contai
 
 ```text
 runtimes/
-  win-x64/native/dharastorage.dll
-  win-arm64/native/dharastorage.dll
-  linux-x64/native/libdharastorage.so
-  linux-arm64/native/libdharastorage.so
-  osx-arm64/native/libdharastorage.dylib
+  win-x64/native/dhara-sd.exe
+  win-arm64/native/dhara-sd.exe
+  linux-x64/native/dhara-sd
+  linux-arm64/native/dhara-sd
+  osx-arm64/native/dhara-sd
 ```
 
 `drot` validates this layout before `dotnet pack` ([`validate_staged_native_assets`][nuget-rs]) and again after pack by inspecting the `.nupkg` entry list ([`inspect_package_contents`][nuget-rs]).
+
+The FFI cdylib (`dharastorage.dll` / `libdharastorage.*`) is **not** packed into NuGet; it remains for the [binding benchmarks][binding-benchmarks] harness only.
 
 ## Which RIDs build on which host
 
@@ -56,7 +60,7 @@ runtimes/
 
 ### Why Linux ARM64 needs its own CI job
 
-`dharastorage` depends on `file_icon_provider`, which pulls GTK/glib through `pkg-config`. Cross-compiling `aarch64-unknown-linux-gnu` from `ubuntu-latest` fails when `glib-sys` cannot find a cross sysroot — even with `gcc-aarch64-linux-gnu` installed.
+`dhara_storage` (linked by `dhara-sd`) depends on `file_icon_provider`, which pulls GTK/glib through `pkg-config`. Cross-compiling `aarch64-unknown-linux-gnu` from `ubuntu-latest` fails when `glib-sys` cannot find a cross sysroot — even with `gcc-aarch64-linux-gnu` installed.
 
 **Lesson:** treat `linux-arm64` like a separate platform job on `ubuntu-24.04-arm`, not as a cross-target from the x64 Linux job. The [pipeline][pipeline-yml] defines `platform-linux` (x64) and `platform-linux-arm64` (arm64) accordingly.
 
@@ -77,9 +81,9 @@ drot verify package
 
 Repeat `--input` once per downloaded artifact directory (each must contain a `runtimes/` folder). When the dist binary lives in `target/dist/`, `verify package` picks up `{tool_root}/artifacts/native-stage` by default — no `--native-stage` needed after merge.
 
-## Packing staged natives into the NuGet
+## Packing staged sidecars into the NuGet
 
-When `StagedNativeRoot` is set, [Dhara.Storage.csproj][csproj] skips local `cargo build` and injects prebuilt libraries during `Pack` via the `IncludeStagedNativeRuntimes` target (`BeforeTargets="_GetPackageFiles"`).
+When `StagedNativeRoot` is set, [Dhara.Storage.csproj][csproj] skips local `cargo build` and injects prebuilt `dhara-sd` binaries during `Pack` via the `IncludeStagedDaemonBinaries` target (`BeforeTargets="_GetPackageFiles"`).
 
 ### Pass an absolute repository-root path
 
@@ -93,12 +97,12 @@ Staged natives must be added in a `Pack` target as `_PackageFiles` with an expli
 
 ```powershell
 $stage = (Resolve-Path target/dist/artifacts/native-stage).Path
-dotnet pack src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj `
+dotnet pack bindings/csharp/Dhara.Storage/Dhara.Storage.csproj `
   -c Release -p:StagedNativeRoot=$stage `
   --output target/dist/output/test-nuget
 ```
 
-Inspect the nupkg for `runtimes/win-x64/native/dharastorage.dll` (and the other four RIDs). Packed release artifacts land in `target/dist/output/nuget/` when using the dist binary.
+Inspect the nupkg for `runtimes/win-x64/native/dhara-sd.exe` (and the other four RIDs). Packed release artifacts land in `target/dist/output/nuget/` when using the dist binary.
 
 ## Platform quirks (runtime and tests)
 
@@ -112,29 +116,35 @@ Directory watch integration tests should **poll for the created file path** afte
 
 | Symptom | Likely cause | Check |
 |---------|--------------|-------|
-| `staged native asset missing before pack` | Merge produced empty `native-stage` | Verify `native merge` inputs include `runtimes/` |
+| `staged native asset missing before pack` | Merge produced empty `native-stage` | Verify `native merge` inputs include `runtimes/` with `dhara-sd` |
 | Tool cache miss on Linux | `drot` built without GUI deps | Ensure `setup-linux-tool-deps` runs before any Linux `cargo build --manifest-path tooling/drot/Cargo.toml -p drot` in CI |
 | NuGet CD missing artifacts | `NuGet package (linux)` did not run on merged PR tip | Use merge commits; confirm `release-native-stage` / `release-nuget-package` artifacts exist for `HEAD^2` |
 | `glib-sys` / `pkg-config` cross error on Linux | Trying to build `linux-arm64` on x64 | Separate `platform-linux-arm64` job; see [native-rids.rs][native-rids-rs] |
 | `No PR CI artifacts found for commit` on `main` release | Artifact SHA mismatch on merge commit | Merge commit (not squash); `publish-readiness` green on branch tip |
 | macOS `directory_watch_reports_created_files` flake | Directory event before file event | Poll for file path; canonicalize after write |
-| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p drot` |
+| `cargo fmt` failure on PR | Unformatted Rust in touched crates | `cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p dhara-sd -p drot` |
 
 ## Related docs
 
 - [CI/CD pipelines][ci-cd] — workflow jobs, artifact names, CD reuse of PR artifacts
-- [Logging conventions][logging] — `package.stage-native` and `verify.package` audit lines
+- [Daemon transport][daemon-transport] — named pipes / UDS, handle transfer
+- [Binding benchmarks][binding-benchmarks] — FFI vs daemon evidence harness
+- [Windows code signing][windows-signing] — VERSIONINFO vs Authenticode / SAC
+- [Logging conventions][logging] — redirect → DROT audit lines for stage/verify
 - [dhara.config.toml][dhara-config] — `ci.native_runtimes` and rust target mappings
 
-[readme-nuget]: ../src/bindings/csharp/Dhara.Storage/README.md
+[readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
 [ci-cd]: ci-cd-pipelines.md
 [readme-tool]: ../tooling/drot/README.md
 [tooling-scripts]: ../tooling/scripts/
-[nuget-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/nuget.rs
-[native-rids-rs]: ../tooling/drot/src/drot_dhara_storage/src/ops/native_rids.rs
+[nuget-rs]: ../tooling/drot/crates/drot_dhara_storage/src/ops/nuget.rs
+[native-rids-rs]: ../tooling/drot/crates/drot_dhara_storage/src/ops/native_rids.rs
 [pipeline-yml]: ../.github/workflows/pipeline.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
-[csproj]: ../src/bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
-[watch-rs]: ../src/core/dhara_storage/src/watch.rs
+[csproj]: ../bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
+[watch-rs]: ../core/dhara_storage/src/watch.rs
 [logging]: logging.md
 [dhara-config]: ../dhara.config.toml
+[daemon-transport]: daemon-transport.md
+[binding-benchmarks]: binding-benchmarks.md
+[windows-signing]: windows-code-signing.md

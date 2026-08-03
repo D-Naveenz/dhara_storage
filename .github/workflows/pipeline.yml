@@ -42,11 +42,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi --check
+          cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p dhara-sd --check
           cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
-          cargo clippy -p dhara_storage_core -p dharastorage-ffi --all-targets -- -D warnings
+          cargo clippy -p dhara_storage_core -p dharastorage-ffi -p dhara-sd --all-targets -- -D warnings
           cargo doc -p dhara_storage --no-deps --all-features
-          cargo doc --no-deps -p dhara_storage_core -p dharastorage-ffi
+          cargo doc --no-deps -p dhara_storage_core -p dharastorage-ffi -p dhara-sd
 
   platform-windows:
     name: platform (windows)
@@ -69,7 +69,7 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Download DROT CLI
+      - name: Download DROT
         uses: ./.github/actions/download-drot
         with:
           artifact_name: drot-windows-x64
@@ -122,15 +122,14 @@ jobs:
           cargo test -p dhara_storage --all-features
           cargo test -p dhara_storage_core
           cargo test -p dharastorage-ffi
+          cargo build -p dhara-sd --release
 
       - name: .NET tests
         shell: bash
         run: |
           set -euo pipefail
           tests_project=$(grep -E '^\s*tests_project\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
-          # GTK shell icons need a display; runners are headless without Xvfb.
-          xvfb-run --auto-servernum --server-args='-screen 0 1024x768x24' \
-            dotnet test "$tests_project"
+          xvfb-run -a dotnet test "$tests_project" -c Release
 
       - name: Stage native assets
         shell: bash
@@ -139,11 +138,11 @@ jobs:
           stage_root="target/dist/artifacts/native-stage"
           rid=linux-x64
           target=x86_64-unknown-linux-gnu
-          lib=libdharastorage.so
-          cargo build -p dharastorage-ffi --release --target "$target"
-          dest="$stage_root/runtimes/$rid/native/$lib"
+          bin=dhara-sd
+          cargo build -p dhara-sd --release --target "$target"
+          dest="$stage_root/runtimes/$rid/native/$bin"
           mkdir -p "$(dirname "$dest")"
-          cp "target/$target/release/$lib" "$dest"
+          cp "target/$target/release/$bin" "$dest"
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -181,11 +180,11 @@ jobs:
           stage_root="target/dist/artifacts/native-stage"
           rid=linux-arm64
           target=aarch64-unknown-linux-gnu
-          lib=libdharastorage.so
-          cargo build -p dharastorage-ffi --release --target "$target"
-          dest="$stage_root/runtimes/$rid/native/$lib"
+          bin=dhara-sd
+          cargo build -p dhara-sd --release --target "$target"
+          dest="$stage_root/runtimes/$rid/native/$bin"
           mkdir -p "$(dirname "$dest")"
-          cp "target/$target/release/$lib" "$dest"
+          cp "target/$target/release/$bin" "$dest"
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -220,11 +219,11 @@ jobs:
           stage_root="target/dist/artifacts/native-stage"
           rid=osx-arm64
           target=aarch64-apple-darwin
-          lib=libdharastorage.dylib
-          cargo build -p dharastorage-ffi --release --target "$target"
-          dest="$stage_root/runtimes/$rid/native/$lib"
+          bin=dhara-sd
+          cargo build -p dhara-sd --release --target "$target"
+          dest="$stage_root/runtimes/$rid/native/$bin"
           mkdir -p "$(dirname "$dest")"
-          cp "target/$target/release/$lib" "$dest"
+          cp "target/$target/release/$bin" "$dest"
 
       - name: Upload native stage
         uses: actions/upload-artifact@v7
@@ -257,7 +256,10 @@ jobs:
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Download DROT CLI
+      - name: Setup Linux GUI dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
+      - name: Download DROT
         uses: ./.github/actions/download-drot
         with:
           artifact_name: drot-linux-x64
@@ -355,17 +357,10 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Install NativeAOT build dependencies
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y clang zlib1g-dev
-
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
 
-      - name: Download DROT CLI
+      - name: Download DROT
         uses: ./.github/actions/download-drot
         with:
           artifact_name: drot-linux-x64

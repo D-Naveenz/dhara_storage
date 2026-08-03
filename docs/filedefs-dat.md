@@ -2,7 +2,7 @@
 
 This document describes the on-disk **Dhara Storage File Definition (DSFD)** package
 used for content-based file-type identification. The canonical runtime artifact is
-`src/core/dhara_storage/resources/filedefs.dat`. It is built by `drot`, embedded into
+`core/dhara_storage/resources/filedefs.dat`. It is built by `drot`, embedded into
 `dhara_storage` at compile time, and decoded with `dhara_storage_core`.
 
 ## Overview
@@ -51,13 +51,13 @@ file magic.
 Version 1 (duplicate `DSFD` markers inside the payload and at EOF) is not supported.
 
 Constants and encode/decode logic live in
-[`src/core/dhara_storage_core/src/definitions/format/container.rs`](../src/core/dhara_storage_core/src/definitions/format/container.rs)
-and [`model`](../src/core/dhara_storage_core/src/definitions/model/mod.rs).
+[`core/dhara_storage_core/src/definitions/format/container.rs`](../core/dhara_storage_core/src/definitions/format/container.rs)
+and [`model`](../core/dhara_storage_core/src/definitions/model/mod.rs).
 
 ## FlatBuffers payload
 
 Schema:
-[`src/core/dhara_storage_core/schema/filedefs.fbs`](../src/core/dhara_storage_core/schema/filedefs.fbs)
+[`core/dhara_storage_core/schema/filedefs.fbs`](../core/dhara_storage_core/schema/filedefs.fbs)
 
 Root table: `DefinitionPackage`
 
@@ -91,7 +91,7 @@ are defined entirely by `payload_length` in the file header.
 Regenerate Rust accessors after editing the schema:
 
 ```powershell
-flatc --rust -o src/core/dhara_storage_core/src/definitions/generated src/core/dhara_storage_core/schema/filedefs.fbs
+flatc --rust -o core/dhara_storage_core/src/definitions/generated core/dhara_storage_core/schema/filedefs.fbs
 ```
 
 ## XML metadata footer
@@ -106,10 +106,10 @@ Example shape:
 ### Schema (XSD)
 
 Machine-readable schema:
-[`src/core/dhara_storage_core/schema/dsfd-metadata.xsd`](../src/core/dhara_storage_core/schema/dsfd-metadata.xsd)
+[`core/dhara_storage_core/schema/dsfd-metadata.xsd`](../core/dhara_storage_core/schema/dsfd-metadata.xsd)
 
 The `xmlns` attribute on the root `dsfd` element must match `DSFD_METADATA_XMLNS` in
-[`model`](../src/core/dhara_storage_core/src/definitions/model/mod.rs). That constant is a raw
+[`model`](../core/dhara_storage_core/src/definitions/model/mod.rs). That constant is a raw
 GitHub URL to the XSD on the default branch. Local tools validate against the
 checked-in XSD file; the URL is for external consumers once the file is published.
 
@@ -161,21 +161,24 @@ future builder features.
 | `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
 | `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
 | `{tool_root}/package/` | Runtime default for TrID input (copied beside binary at build) |
-| `src/core/dhara_storage/resources/filedefs.dat` | Embedded runtime package (published with crate) |
+| `core/dhara_storage/resources/filedefs.dat` | Embedded runtime package (published with crate) |
 | `dhara_storage` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
 | `tooling/drot/src/drot_dhara_storage/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
-Typical operator commands:
+Typical operator commands (via [`run-drot`](../tooling/scripts/run-drot.ps1); `-Cli` for the direct CLI — default with no args opens the TUI):
 
 ```powershell
-# Build from the default TrID archive into src/core/dhara_storage/resources/filedefs.dat
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs build-trid-xml -v
+# Build from the default TrID archive into core/dhara_storage/resources/filedefs.dat
+./tooling/scripts/run-drot.ps1 -Cli --yes defs build-trid-xml
 
 # Inspect the current package
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs inspect
+./tooling/scripts/run-drot.ps1 -Cli --yes defs inspect
 
 # Re-copy / rebuild the embedded runtime artifact when needed
-cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- defs sync-embedded
+./tooling/scripts/run-drot.ps1 -Cli --yes defs sync-embedded
+
+# Full repository build (config → defs → quality → native → verify)
+./tooling/scripts/run-drot.ps1 -Cli --yes build run
 ```
 
 The sidecar TOML uses the source stem (`triddefs_xml.source.toml` beside
@@ -216,14 +219,14 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 ## Related docs
 
-- [Logging conventions][logging] — audit log format for `drot` builds
+- [Logging conventions][logging] — redirect → DROT audit log format
 - [dhara_storage_core README][readme-core] — crate-local quick reference
 - [drot package/ notes][package-readme] — shipped TrID build inputs
 - [CI/CD pipelines][ci-cd] — defs build in release flow
 - [Docs index][docs-index]
 
 [logging]: logging.md
-[readme-core]: ../src/core/dhara_storage_core/README.md
-[package-readme]: ../tooling/drot/src/drot_dhara_storage/package/README.md
+[readme-core]: ../core/dhara_storage_core/README.md
+[package-readme]: ../tooling/drot/crates/drot_dhara_storage/package/README.md
 [ci-cd]: ci-cd-pipelines.md
 [docs-index]: README.md

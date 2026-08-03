@@ -41,8 +41,9 @@ jobs:
         with:
           filters: |
             nuget_scope:
-              - 'src/core/**'
-              - 'src/bindings/**'
+              - 'core/**'
+              - 'interop/**'
+              - 'bindings/**'
               - 'dhara.config.toml'
               - 'Cargo.toml'
               - 'Cargo.lock'

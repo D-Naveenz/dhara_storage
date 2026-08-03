@@ -1,4 +1,4 @@
-# Ensures target/dist/drot matches tooling/drot/Cargo.toml workspace.package.version.
+# Ensures target/dist/drot (+ drot_tui) match tooling/drot/Cargo.toml workspace.package.version.
 # Tool version lives only in the DROT submodule (https://github.com/D-Naveenz/dhara_repo_orchestration).
 param(
     [switch] $Force
@@ -19,16 +19,17 @@ if ($manifestContent -notmatch '(?ms)\[workspace\.package\][^\[]*?version\s*=\s*
 }
 $expectedVersion = $Matches[1]
 
-$bin = Join-Path $repoRoot "target\dist\drot.exe"
+$cliBin = Join-Path $repoRoot "target\dist\drot.exe"
+$tuiBin = Join-Path $repoRoot "target\dist\drot_tui.exe"
 $needBuild = [bool]$Force
 
 if (-not $needBuild) {
-    if (-not (Test-Path $bin)) {
-        Write-Host "build: dist missing (manifest v$expectedVersion)"
+    if (-not (Test-Path $cliBin) -or -not (Test-Path $tuiBin)) {
+        Write-Host "build: dist missing CLI and/or TUI (manifest v$expectedVersion)"
         $needBuild = $true
     }
     else {
-        $builtVersion = (& $bin --version).Trim()
+        $builtVersion = (& $cliBin --version).Trim()
         if ($builtVersion -ne $expectedVersion) {
             Write-Host "build: dist v$builtVersion != manifest v$expectedVersion"
             $needBuild = $true
@@ -44,16 +45,21 @@ else {
 
 if ($needBuild) {
     $env:CARGO_TARGET_DIR = Join-Path $repoRoot "target"
-    cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
+    cargo build --manifest-path tooling/drot/Cargo.toml -p drot -p drot_tui --profile dist
     if ($LASTEXITCODE -ne 0) {
         exit $LASTEXITCODE
     }
 
-    $builtVersion = (& $bin --version).Trim()
+    if (-not (Test-Path $tuiBin)) {
+        Write-Error "smoke failed: drot_tui missing at $tuiBin after dist build"
+        exit 1
+    }
+
+    $builtVersion = (& $cliBin --version).Trim()
     if ($builtVersion -ne $expectedVersion) {
         Write-Error "smoke failed: dist reports v$builtVersion, expected v$expectedVersion"
         exit 1
     }
 
-    Write-Host "built: dist v$expectedVersion"
+    Write-Host "built: dist v$expectedVersion (drot + drot_tui)"
 }

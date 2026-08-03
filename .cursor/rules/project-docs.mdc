@@ -10,6 +10,19 @@ When creating or editing README / AGENTS / `docs/` in this repo, **read and foll
 
 Source **documentation comments**, file headers, and why-comments → global skill **`inline-code-docs`** (not this rule).
 
+## DROT ownership (do not duplicate)
+
+Operator tool docs, AGENTS, and Cursor rules live in the **`tooling/drot` submodule**:
+
+| Surface | Location |
+|---------|----------|
+| DROT AGENTS | [`tooling/drot/AGENTS.md`](../../tooling/drot/AGENTS.md) |
+| DROT docs | [`tooling/drot/docs/`](../../tooling/drot/docs/) |
+| DROT project-docs rule | [`tooling/drot/.cursor/rules/project-docs.mdc`](../../tooling/drot/.cursor/rules/project-docs.mdc) |
+| DROT logging rule | [`tooling/drot/.cursor/rules/logging.mdc`](../../tooling/drot/.cursor/rules/logging.mdc) |
+
+When editing DROT behavior or operator logging/TUI docs, change files **under `tooling/drot/`**. Storage `docs/` may keep short redirect stubs only.
+
 ## Product intent
 
 Pitch, exclusions, and design lineage: **[AGENTS.md → Product intent](../../AGENTS.md)**. Do not invent a new product story. Do not put Windows.Storage name-drops or war stories in READMEs.
@@ -19,10 +32,11 @@ Pitch, exclusions, and design lineage: **[AGENTS.md → Product intent](../../AG
 | README | Audience / surface |
 |--------|-------------------|
 | [`README.md`](../../README.md) | GitHub — product overview, package routing |
-| [`src/core/dhara_storage/README.md`](../../src/core/dhara_storage/README.md) | crates.io — Rust runtime |
-| [`src/core/dhara_storage_core/README.md`](../../src/core/dhara_storage_core/README.md) | crates.io — framework |
-| [`src/bindings/dharastorage-ffi/README.md`](../../src/bindings/dharastorage-ffi/README.md) | Native C ABI (NuGet asset) |
-| [`src/bindings/csharp/Dhara.Storage/README.md`](../../src/bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
+| [`core/dhara_storage/README.md`](../../core/dhara_storage/README.md) | crates.io — Rust runtime |
+| [`core/dhara_storage_core/README.md`](../../core/dhara_storage_core/README.md) | crates.io — framework |
+| [`interop/dharastorage-ffi/README.md`](../../interop/dharastorage-ffi/README.md) | Native C ABI (benchmarks / non-.NET hosts) |
+| [`interop/dhara-sd`](../../interop/dhara-sd) | Sidecar daemon packaged with NuGet |
+| [`bindings/csharp/Dhara.Storage/README.md`](../../bindings/csharp/Dhara.Storage/README.md) | NuGet — .NET |
 | [`tooling/drot/README.md`](../../tooling/drot/README.md) | DROT submodule — operators |
 
 No folder-container READMEs. Submodule project READMEs follow the same convention.
@@ -34,9 +48,9 @@ No folder-container READMEs. Submodule project READMEs follow the same conventio
 | `dhara_storage`, `dhara_storage_core` | Rust |
 | `Dhara.Storage` | .NET (native = speed/packaging fact, not a Rust tutorial) |
 | `dharastorage-ffi` | FFI integrators; steer .NET users to NuGet |
-| `drot` | Operators |
+| `drot` | Operators (docs owned in submodule) |
 
 ## Exceptions
 
-- `tooling/drot/src/drot_dhara_storage/package/README.md` — internal operator notes; keep short; not the publish layout.
+- `tooling/drot/crates/drot_dhara_storage/package/README.md` — internal operator notes; keep short; not the publish layout.
 - Do not rewrite `docs/**` as product marketing unless asked.

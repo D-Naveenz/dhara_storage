@@ -1,0 +1,107 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    This project is part of the Dhara.Storage repository and provides .NET bindings for the
+    Dhara Storage Rust runtime. It talks to the bundled `dhara-sd` sidecar daemon over gRPC
+    (named pipe control plane) and uses OS handle transfer for the file I/O data plane.
+    -->
+  <PropertyGroup>
+    <AssemblyTitle>Dhara Storage Runtime Library</AssemblyTitle>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+    <!-- Instruct NuGet to pack the staged dhara-sd sidecar binaries from the runtimes folder -->
+    <RuntimeIdentifiers>win-x64;win-arm64;linux-x64;linux-arm64;osx-arm64</RuntimeIdentifiers>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\..'))\</RepoRoot>
+    <StagedNativeRoot Condition="'$(StagedNativeRoot)' == ''" />
+    <NativeConfiguration Condition="'$(Configuration)' == 'Release'">release</NativeConfiguration>
+    <NativeConfiguration Condition="'$(NativeConfiguration)' == ''">debug</NativeConfiguration>
+    <NativeCargoArgs Condition="'$(Configuration)' == 'Release'">--release</NativeCargoArgs>
+    <DaemonExeFileName Condition="$([MSBuild]::IsOSPlatform('Windows'))">dhara-sd.exe</DaemonExeFileName>
+    <DaemonExeFileName Condition="'$(DaemonExeFileName)' == ''">dhara-sd</DaemonExeFileName>
+    <CargoTargetDir>$(RepoRoot)target</CargoTargetDir>
+    <DaemonExePath>$(CargoTargetDir)\$(NativeConfiguration)\$(DaemonExeFileName)</DaemonExePath>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <!-- Package metadata -->
+  <PropertyGroup>
+    <PackageId>Dhara.Storage</PackageId>
+    <Product>Dhara Storage</Product>
+    <Version>0.9.22</Version>
+    <Description>.NET bindings for Dhara Storage: content-based file intelligence, file and directory handles, transfers, watching, and metadata via the bundled sidecar daemon.</Description>
+    <Authors>Naveen Dharmathunga</Authors>
+    <PackageTags>storage;grpc;rust;analysis;file-handling;directory-management;watching</PackageTags>
+    <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <Copyright>© 2026 Naveen Dharmathunga and contributors</Copyright>
+    <RepositoryUrl>https://github.com/D-Naveenz/dhara_storage</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/D-Naveenz/dhara_storage</PackageProjectUrl>
+  </PropertyGroup>
+  <ItemGroup>
+    <None PackagePath="build\" Include="build\Dhara.Storage.targets" Pack="True" />
+    <None PackagePath="build\" Include="build\ILLink.Descriptors.xml" Pack="True" />
+  </ItemGroup>
+  <!-- Dependencies -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
+    <PackageReference Include="Google.Protobuf" Version="3.35.1" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.80.0" />
+    <PackageReference Include="Grpc.Tools" Version="2.83.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+  <!-- gRPC contract shared with the dhara-sd sidecar (client stub only; the daemon hosts the server) -->
+  <ItemGroup>
+    <Protobuf Include="..\..\..\interop\proto\dhara_sd.proto" GrpcServices="Client" ProtoRoot="..\..\..\interop\proto" />
+  </ItemGroup>
+  <!-- Enforce 64-bit building during compilation -->
+  <Target Name="DharaStorageEnforce64BitArchitecture" BeforeTargets="BeforeBuild;CoreCompile">
+    <Error Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-x86')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-x86-')))" Text="Dhara.Storage does not support 32-bit runtime identifier '$(RuntimeIdentifier)'. Use an x64 or arm64 runtime." />
+    <Error Condition="'$(RuntimeIdentifier)' != '' and ($([System.String]::Copy('$(RuntimeIdentifier)').EndsWith('-arm')) or $([System.String]::Copy('$(RuntimeIdentifier)').Contains('-arm-')))" Text="Dhara.Storage does not support 32-bit ARM runtime identifier '$(RuntimeIdentifier)'. Use an arm64 runtime." />
+    <Error Text="Dhara.Storage does not support 32-bit x86 processes. Target x64 or arm64." Condition="'$(Platform)' == 'x86' or '$(PlatformTarget)' == 'x86'" />
+    <Error Text="Dhara.Storage does not support 32-bit ARM processes. Target arm64." Condition="'$(Platform)' == 'arm' or '$(PlatformTarget)' == 'arm'" />
+    <Error Text="Dhara.Storage requires a 64-bit process. Disable Prefer 32-bit or target x64/arm64." Condition="'$(Prefer32Bit)' == 'true' and '$(PlatformTarget)' != 'x64' and '$(PlatformTarget)' != 'ARM64'" />
+  </Target>
+  <Target Name="IncludeStagedDaemonBinaries" BeforeTargets="_GetPackageFiles" Condition="'$(StagedNativeRoot)' != ''">
+    <PropertyGroup>
+      <_StagedNativeFullPath>$([System.IO.Path]::GetFullPath('$(StagedNativeRoot)'))</_StagedNativeFullPath>
+      <!-- Path.Combine keeps Linux pack globs valid; trailing PackagePath slash keeps extensionless dhara-sd a file. -->
+      <_StagedRuntimesRoot>$([System.IO.Path]::Combine('$(_StagedNativeFullPath)', 'runtimes'))</_StagedRuntimesRoot>
+    </PropertyGroup>
+    <ItemGroup>
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/win-x64/native/dhara-sd.exe" PackagePath="runtimes/win-x64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/win-arm64/native/dhara-sd.exe" PackagePath="runtimes/win-arm64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/linux-x64/native/dhara-sd" PackagePath="runtimes/linux-x64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/linux-arm64/native/dhara-sd" PackagePath="runtimes/linux-arm64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/osx-arm64/native/dhara-sd" PackagePath="runtimes/osx-arm64/native/" />
+      <_PackageFiles Include="@(_StagedRuntimeFile)" Condition="Exists('%(Identity)')">
+        <PackagePath>%(PackagePath)</PackagePath>
+      </_PackageFiles>
+    </ItemGroup>
+  </Target>
+  <!-- Build the dhara-sd sidecar for local development so tests and consumers can start it -->
+  <Target BeforeTargets="BeforeBuild" Condition="'$(StagedNativeRoot)' == ''" Name="BuildDaemon">
+    <Exec WorkingDirectory="$(RepoRoot)" Command="cargo build -p dhara-sd $(NativeCargoArgs)" EnvironmentVariables="CARGO_TARGET_DIR=$(CargoTargetDir)" />
+  </Target>
+  <Target Condition="'$(StagedNativeRoot)' == ''" BeforeTargets="Pack" Name="ValidatePackDaemonAssets">
+    <Error Text="Packing Dhara.Storage requires staged dhara-sd binaries for all supported 64-bit runtimes. Use the repo packaging flow." />
+  </Target>
+  <!-- Local dev: flow dhara-sd to referencing app build/publish output. Packed NuGet uses runtimes/ assets. -->
+  <ItemGroup Condition="'$(StagedNativeRoot)' == '' and Exists('$(DaemonExePath)')">
+    <Content Include="$(DaemonExePath)">
+      <Link>$(DaemonExeFileName)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <None Pack="true" PackagePath="\" Include="README.md" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Pack="true" Include="assets\dhara-logo-colored_sm.png" PackagePath="\" />
+  </ItemGroup>
+</Project>
