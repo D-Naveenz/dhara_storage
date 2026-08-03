@@ -33,13 +33,15 @@ Integration path: **feature → `development` → `main`**. Squash vs merge is a
 
 ### GitHub Environments
 
-Separate environments keep Cargo and NuGet deployment history independent and scope credentials per ecosystem.
+Credentials live on **Environments only** — not repository Actions secrets/variables. Separate environments keep Cargo and NuGet deployment history independent and scope credentials per ecosystem.
 
 | Environment | Used by | Auth / secrets |
 |-------------|---------|----------------|
 | `staging` | PR / `workflow_dispatch` jobs in [pipeline.yml][pipeline-yml] | Secret `DROT_ARTIFACTS_TOKEN` |
 | `release-nuget` | `publish` in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (+ optional `NUGET_SOURCE`); OIDC first, then optional secret `NUGET_API_KEY` fallback |
 | `release-cargo` | `publish` in [publish-crates.yml][publish-crates-yml] | OIDC first, then optional secret `CARGO_REGISTRY_TOKEN` fallback |
+
+Workflows with **no** Environment column ([ensure-development.yml][ensure-development-yml], [dependabot-auto-merge.yml][dependabot-auto-merge-yml], [codeql.yml][codeql-yml]) use only the built-in Actions `github.token` — no custom secret or Environment is required.
 
 Create these under **Settings → Environments**. Restrict `release-*` to `main`; do not add required reviewers on `staging` (that would block every PR). Leave crates.io **Require trusted publishing for all new versions** unchecked while API-token fallback is still needed.
 

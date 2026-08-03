@@ -20,7 +20,7 @@ jobs:
     steps:
       - name: Create development from main if missing
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if gh api "repos/${GITHUB_REPOSITORY}/branches/development" --silent >/dev/null 2>&1; then

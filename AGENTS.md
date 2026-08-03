@@ -118,6 +118,8 @@ Deep reference: [docs/README.md](docs/README.md).
 
 Shared metadata: [dhara.config.toml](dhara.config.toml). Local secrets in `.env.local` (from `.env.example`), not git.
 
+CI credentials live on **GitHub Environments** (`staging`, `release-nuget`, `release-cargo`) — not repository Actions secrets/variables. Ensure-branch / Dependabot auto-merge / CodeQL use only the built-in Actions `github.token` (no Environment).
+
 | Variable | Purpose | Where (CI) |
 |----------|---------|------------|
 | `NUGET_USER` | nuget.org profile name for OIDC login | GitHub Environment **variable** on `release-nuget` |
