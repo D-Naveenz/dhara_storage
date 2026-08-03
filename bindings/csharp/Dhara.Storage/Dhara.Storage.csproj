@@ -69,13 +69,17 @@
   <Target Name="IncludeStagedDaemonBinaries" BeforeTargets="_GetPackageFiles" Condition="'$(StagedNativeRoot)' != ''">
     <PropertyGroup>
       <_StagedNativeFullPath>$([System.IO.Path]::GetFullPath('$(StagedNativeRoot)'))</_StagedNativeFullPath>
-      <_StagedRuntimesRoot>$(_StagedNativeFullPath)\runtimes</_StagedRuntimesRoot>
+      <!-- Path.Combine keeps Linux pack globs valid; trailing PackagePath slash keeps extensionless dhara-sd a file. -->
+      <_StagedRuntimesRoot>$([System.IO.Path]::Combine('$(_StagedNativeFullPath)', 'runtimes'))</_StagedRuntimesRoot>
     </PropertyGroup>
     <ItemGroup>
-      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)\**\native\dhara-sd.exe" />
-      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)\**\native\dhara-sd" />
-      <_PackageFiles Include="@(_StagedRuntimeFile)">
-        <PackagePath>runtimes/$([MSBuild]::MakeRelative('$(_StagedRuntimesRoot)\', '%(FullPath)').Replace('\', '/'))</PackagePath>
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/win-x64/native/dhara-sd.exe" PackagePath="runtimes/win-x64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/win-arm64/native/dhara-sd.exe" PackagePath="runtimes/win-arm64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/linux-x64/native/dhara-sd" PackagePath="runtimes/linux-x64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/linux-arm64/native/dhara-sd" PackagePath="runtimes/linux-arm64/native/" />
+      <_StagedRuntimeFile Include="$(_StagedRuntimesRoot)/osx-arm64/native/dhara-sd" PackagePath="runtimes/osx-arm64/native/" />
+      <_PackageFiles Include="@(_StagedRuntimeFile)" Condition="Exists('%(Identity)')">
+        <PackagePath>%(PackagePath)</PackagePath>
       </_PackageFiles>
     </ItemGroup>
   </Target>
