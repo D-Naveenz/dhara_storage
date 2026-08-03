@@ -6,8 +6,10 @@ Human-readable map of GitHub Actions workflows and where `drot` is used versus d
 
 | Workflow | Event | Jobs | GitHub Environment |
 |----------|-------|------|--------------------|
-| [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` | `staging` |
-| [pipeline.yml][pipeline-yml] | `workflow_dispatch` (`force_tool_rebuild`) | Same jobs | `staging` |
+| [pipeline.yml][pipeline-yml] | `pull_request` (skips Dependabot → `development`) | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` | `staging` |
+| [pipeline.yml][pipeline-yml] | `workflow_dispatch` | Same jobs | `staging` |
+| [ensure-development.yml][ensure-development-yml] | `push` to `main` / Monday 04:00 UTC / `workflow_dispatch` | `ensure development exists` | — |
+| [dependabot-auto-merge.yml][dependabot-auto-merge-yml] | `pull_request` (Dependabot → `development` only) | `enable squash auto-merge` | — |
 | [codeql.yml][codeql-yml] | `pull_request` / `push` to `main` / weekly cron | `Analyze (actions\|csharp\|rust)` | — (none; no staging secrets) |
 | [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
 | [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` | `release-cargo` (publish job only) |
@@ -15,6 +17,19 @@ Human-readable map of GitHub Actions workflows and where `drot` is used versus d
 | [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `nuget release (linux)` | `release-nuget` (publish job only) |
 
 **Concurrency:** PR pipeline and CodeQL runs cancel in-progress; merge publishes do not.
+
+### Branch flow and Dependabot
+
+Integration path: **feature → `development` → `main`**. Squash vs merge is a per-PR choice (feature → `development` is usually squash; `development` → `main` is always human-reviewed — never auto-merged).
+
+| Concern | Behavior |
+|---------|----------|
+| Dependabot version updates | [`dependabot.yml`][dependabot-yml] `target-branch: development`; weekly Monday 06:00 UTC; Cargo and Actions updates are **grouped** |
+| Missing `development` | [ensure-development.yml][ensure-development-yml] creates it from `main` if absent; never resets an existing branch |
+| Dependabot auto-merge | [dependabot-auto-merge.yml][dependabot-auto-merge-yml] enables **squash** auto-merge for patch/minor PRs into `development` only |
+| PRs into `main` | No workflow enables auto-merge (including `development` → `main` and Dependabot **security** updates, which always target the default branch) |
+| Pipeline cost | Full [pipeline.yml][pipeline-yml] is **skipped** when the PR author is `dependabot[bot]` and the base is `development`; security PRs to `main` still run Pipeline |
+| Feature → `development` | Prefer squash; enable GitHub UI auto-merge yourself (no bot auto-approves every human PR — `development` has no required checks, so a bot would race ahead of CI) |
 
 ### GitHub Environments
 
@@ -204,6 +219,9 @@ After `NuGet package (linux)`:
 - [Docs index][docs-index]
 
 [pipeline-yml]: ../.github/workflows/pipeline.yml
+[ensure-development-yml]: ../.github/workflows/ensure-development.yml
+[dependabot-auto-merge-yml]: ../.github/workflows/dependabot-auto-merge.yml
+[dependabot-yml]: ../.github/dependabot.yml
 [codeql-yml]: ../.github/workflows/codeql.yml
 [publish-crates-yml]: ../.github/workflows/publish-crates.yml
 [publish-nuget-yml]: ../.github/workflows/publish-nuget.yml
