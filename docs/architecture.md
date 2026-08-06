@@ -67,14 +67,16 @@ Storage still owns **host** concerns: how CI downloads DROT artifacts, `run-drot
 
 ## Publish pipelines (host ↔ DROT)
 
-Release logic in `drot_dhara_storage::ops::release` splits cleanly for CI:
+Merge CD uses **composite Actions** (not `drot release run`):
 
-| Workflow | Ops entry | Flags |
-|----------|-----------|-------|
-| `publish-crates.yml` | `release run` | `--skip-nuget` |
-| `publish-nuget.yml` | `release run` | `--skip-cargo --prepacked-nuget <path>` |
+| Workflow | Jobs | Action |
+|----------|------|--------|
+| `publish-crates.yml` | `dhara_storage_core` then `dhara_storage` (`needs` core; tag on core only) | [`publish-cargo-crate`](../.github/actions/publish-cargo-crate/action.yml) |
+| `publish-nuget.yml` | prepare once → parallel `Dhara.Storage` / Hosting | [`publish-nuget-package`](../.github/actions/publish-nuget-package/action.yml) |
 
-PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-package` artifacts; merge publishes download them at `HEAD^2` (merge second parent).
+Local operator publish still uses DROT (`package publish` / `release run`) with `.env.local` (`NUGET_API_KEY` / `CARGO_REGISTRY_TOKEN`). Config ownership: [DROT host-config](../tooling/drot/docs/host-config.md).
+
+PR CI (`pipeline.yml`) produces `release-native-stage` and `release-nuget-package` (primary + `ci.managed_package_projects`); merge NuGet CD downloads them at `HEAD^2` (merge second parent).
 
 ## Tool ↔ core coupling
 

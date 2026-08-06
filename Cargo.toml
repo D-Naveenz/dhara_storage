@@ -13,6 +13,7 @@ edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/D-Naveenz/dhara_storage"
 homepage = "https://github.com/D-Naveenz/dhara_storage"
+authors = ["Naveen Dharmathunga"]
 
 [workspace.dependencies]
 dhara_storage_core = { version = "0.9.22", path = "core/dhara_storage_core" }

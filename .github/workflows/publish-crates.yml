@@ -41,6 +41,7 @@ jobs:
               - 'Cargo.toml'
               - 'Cargo.lock'
               - '.github/workflows/publish-crates.yml'
+              - '.github/actions/publish-cargo-crate/**'
       - name: Resolve scope
         id: check
         shell: bash
@@ -51,11 +52,64 @@ jobs:
             echo "should_run=${{ steps.filter.outputs.cargo_scope }}" >> "$GITHUB_OUTPUT"
           fi
 
-  publish:
-    name: cargo release (linux)
+  publish-dhara-storage-core:
+    name: publish dhara_storage_core
     needs: [detect-changes]
     if: needs.detect-changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    environment: release-cargo
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          lfs: true
+          persist-credentials: true
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install cargo-release
+        run: cargo install cargo-release --version 1.1.2 --locked
+
+      - name: Configure git author
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Authenticate (Trusted Publishing)
+        id: crates-auth
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish dhara_storage_core
+        uses: ./.github/actions/publish-cargo-crate
+        with:
+          package: dhara_storage_core
+          create_tag: "true"
+          dry_run: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || 'false' }}
+          oidc_token: ${{ steps.crates-auth.outputs.token }}
+          fallback_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  publish-dhara-storage:
+    name: publish dhara_storage
+    needs: [detect-changes, publish-dhara-storage-core]
+    if: |
+      always()
+      && needs.detect-changes.outputs.should_run == 'true'
+      && needs.detect-changes.result == 'success'
+    runs-on: ubuntu-latest
+    environment: release-cargo
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -81,19 +135,17 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Publish crates
-        shell: bash
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        run: |
-          set -euo pipefail
-          args=(
-            release --workspace --isolated
-            --tag-name 'v{{version}}' --no-confirm
-          )
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            args+=(--allow-branch '*' --no-verify)
-          else
-            args+=(--allow-branch main --execute)
-          fi
-          cargo "${args[@]}"
+      - name: Authenticate (Trusted Publishing)
+        id: crates-auth
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        continue-on-error: true
+        uses: rust-lang/crates-io-auth-action@v1
+
+      - name: Publish dhara_storage
+        uses: ./.github/actions/publish-cargo-crate
+        with:
+          package: dhara_storage
+          create_tag: "false"
+          dry_run: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) && 'true' || 'false' }}
+          oidc_token: ${{ steps.crates-auth.outputs.token }}
+          fallback_token: ${{ secrets.CARGO_REGISTRY_TOKEN }}

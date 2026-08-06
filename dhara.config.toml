@@ -1,28 +1,21 @@
 [versions]
 workspace = "0.9.22"
 
-[nuget]
-package_id = "Dhara.Storage"
-source = "https://api.nuget.org/v3/index.json"
+[product]
 authors = ["Naveen Dharmathunga"]
-description = ".NET bindings for Dhara Storage: content-based file intelligence, file and directory handles, transfers, watching, and metadata via the bundled sidecar daemon."
-tags = [
-    "storage",
-    "grpc",
-    "rust",
-    "analysis",
-    "file-handling",
-    "directory-management",
-    "watching",
-]
-readme = "bindings/csharp/Dhara.Storage/README.md"
-icon = "bindings/csharp/Dhara.Storage/assets/dhara-logo-colored_sm.png"
 repository_url = "https://github.com/D-Naveenz/dhara_storage"
 project_url = "https://github.com/D-Naveenz/dhara_storage"
+license = "Apache-2.0"
+
+[nuget]
+source = "https://api.nuget.org/v3/index.json"
 
 [ci]
 smoke_project = "bindings/csharp/Dhara.Storage.ConsumerSmoke/Dhara.Storage.ConsumerSmoke.csproj"
 package_project = "bindings/csharp/Dhara.Storage/Dhara.Storage.csproj"
+managed_package_projects = [
+    "bindings/csharp/Dhara.Storage.Extensions.Hosting/Dhara.Storage.Extensions.Hosting.csproj",
+]
 tests_project = "bindings/csharp/Dhara.Storage.Tests/Dhara.Storage.Tests.csproj"
 native_runtimes = [
     "win-x64",
@@ -34,10 +27,6 @@ native_runtimes = [
 # Daemon transport is cross-platform (named pipes on Windows, UDS on Linux/macOS).
 host_runtime_smoke = "linux-x64"
 aot_runtime_smoke = "linux-x64"
-
-[publish]
-environment = "nuget-production"
-api_key_env = "NUGET_API_KEY"
 
 [targets.rust_targets]
 linux-arm64 = "aarch64-unknown-linux-gnu"

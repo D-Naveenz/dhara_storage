@@ -14,7 +14,7 @@
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
   </ItemGroup>
 
-  <!-- Hosting stays a project reference: only Dhara.Storage is packed/published by drot today. -->
+  <!-- Hosting stays a project reference in smoke: verify restores packed Dhara.Storage from the local feed; Hosting is still packed/published by CI beside it. -->
   <ItemGroup>
     <ProjectReference Include="..\Dhara.Storage.Extensions.Hosting\Dhara.Storage.Extensions.Hosting.csproj" />
   </ItemGroup>

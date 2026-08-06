@@ -30,7 +30,8 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [dhara_storage][readme-dhara-storage] | crates.io |
 | [dhara_storage_core][readme-core] | crates.io |
 | [dharastorage][readme-dharastorage] | Native ABI (NuGet asset) |
-| [Dhara.Storage][readme-nuget] | NuGet.org package readme |
+| [Dhara.Storage][readme-nuget] | NuGet.org — primary package |
+| [Dhara.Storage.Extensions.Hosting][readme-hosting] | NuGet.org — Generic Host extension |
 | [drot][readme-tool] | Operator CLI/TUI (submodule) |
 
 ## Conventions
@@ -44,7 +45,8 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 
 - [AGENTS.md][agents] — storage agent router and local commands
 - [DROT AGENTS.md][drot-agents] — tool agent router
-- [dhara.config.toml][dhara-config] — shared version and publish metadata
+- [dhara.config.toml][dhara-config] — shared version, `[product]`, NuGet feed, `[ci]` pack paths
+- [DROT host config][drot-host-config] — config vs csproj ownership, secrets, activation
 - [pipeline workflow][pipeline-yml] — canonical CI/CD definition
 
 [root-readme]: ../README.md
@@ -52,6 +54,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [readme-core]: ../core/dhara_storage_core/README.md
 [readme-dharastorage]: ../interop/dharastorage-ffi/README.md
 [readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
+[readme-hosting]: ../bindings/csharp/Dhara.Storage.Extensions.Hosting/README.md
 [readme-tool]: ../tooling/drot/README.md
 [logging]: logging.md
 [tui-progress]: tui-progress.md
@@ -66,4 +69,5 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [agents]: ../AGENTS.md
 [drot-agents]: ../tooling/drot/AGENTS.md
 [dhara-config]: ../dhara.config.toml
+[drot-host-config]: ../tooling/drot/docs/host-config.md
 [pipeline-yml]: ../.github/workflows/pipeline.yml

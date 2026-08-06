@@ -1,0 +1,150 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Publish NuGet package
+description: Push one pre-packed .nupkg with OIDC Trusted Publishing, falling back to an API key
+
+inputs:
+  package_id:
+    description: NuGet PackageId (matches {package_id}.*.nupkg basename prefix)
+    required: true
+  nupkg_dir:
+    description: Directory containing pre-packed nupkg files
+    required: false
+    default: target/dist/output/nuget
+  dry_run:
+    description: When true, only assert the nupkg exists
+    required: false
+    default: "false"
+  nuget_user:
+    description: nuget.org profile name for NuGet/login OIDC
+    required: false
+    default: ""
+  nuget_source:
+    description: Push feed URL (empty = read from dhara.config.toml [nuget].source)
+    required: false
+    default: ""
+  fallback_api_key:
+    description: Long-lived NuGet API key used when OIDC fails
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve nupkg path
+      id: resolve
+      shell: bash
+      env:
+        PACKAGE_ID: ${{ inputs.package_id }}
+        NUPKG_DIR: ${{ inputs.nupkg_dir }}
+      run: |
+        set -euo pipefail
+        shopt -s nullglob
+        matches=()
+        for p in "${NUPKG_DIR}/${PACKAGE_ID}."*.nupkg; do
+          case "$p" in
+            *.symbols.nupkg) continue ;;
+            *) matches+=("$p") ;;
+          esac
+        done
+        if [ "${#matches[@]}" -eq 0 ]; then
+          echo "::error::No nupkg found for PackageId '${PACKAGE_ID}' under ${NUPKG_DIR}"
+          ls -la "${NUPKG_DIR}" || true
+          exit 1
+        fi
+        if [ "${#matches[@]}" -gt 1 ]; then
+          echo "::warning::Multiple nupkgs matched ${PACKAGE_ID}; using ${matches[0]}"
+        fi
+        echo "path=${matches[0]}" >> "${GITHUB_OUTPUT}"
+        echo "Resolved ${matches[0]}"
+
+    - name: Dry-run validation
+      if: inputs.dry_run == 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Dry run: validated ${{ steps.resolve.outputs.path }}"
+
+    - name: NuGet login (OIDC)
+      if: inputs.dry_run != 'true'
+      continue-on-error: true
+      uses: NuGet/login@v1
+      id: nuget-login
+      with:
+        user: ${{ inputs.nuget_user }}
+
+    - name: Publish NuGet package
+      if: inputs.dry_run != 'true'
+      shell: bash
+      env:
+        OIDC_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        FALLBACK_API_KEY: ${{ inputs.fallback_api_key }}
+        NUPKG_PATH: ${{ steps.resolve.outputs.path }}
+        NUGET_SOURCE: ${{ inputs.nuget_source }}
+      run: |
+        set -euo pipefail
+
+        source="${NUGET_SOURCE:-}"
+        if [ -z "$source" ]; then
+          source=$(grep -E '^\s*source\s*=' dhara.config.toml | head -1 | sed -E 's/.*=\s*"([^"]+)".*/\1/')
+        fi
+
+        is_duplicate_output() {
+          grep -qiE \
+            'already exists|conflict \(409\)|409 \(conflict\)|the feed and package already exists|conflict' \
+            <<<"$1"
+        }
+
+        try_push() {
+          local key="$1"
+          local label="$2"
+          local out code
+          echo "Attempting NuGet push of $(basename "$NUPKG_PATH") via ${label}..."
+          set +e
+          out=$(dotnet nuget push "$NUPKG_PATH" \
+            --api-key "$key" \
+            --source "$source" \
+            2>&1)
+          code=$?
+          set -e
+          printf '%s\n' "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "::notice::NuGet publish of $(basename "$NUPKG_PATH") succeeded via ${label}."
+            return 0
+          fi
+          if is_duplicate_output "$out"; then
+            echo "::notice::$(basename "$NUPKG_PATH") already live on the feed (${label})."
+            return 2
+          fi
+          echo "::warning::NuGet push of $(basename "$NUPKG_PATH") via ${label} failed (exit ${code})."
+          return 1
+        }
+
+        if [ -n "${OIDC_API_KEY:-}" ]; then
+          if try_push "$OIDC_API_KEY" "OIDC Trusted Publishing"; then
+            exit 0
+          else
+            rc=$?
+            if [ "$rc" -eq 2 ]; then
+              exit 0
+            fi
+            echo "::warning::OIDC publish failed (Trusted Publishing may be misconfigured). Falling back to API key."
+          fi
+        else
+          echo "::warning::OIDC login did not produce an API key. Falling back to API key."
+        fi
+
+        if [ -z "${FALLBACK_API_KEY:-}" ]; then
+          echo "::error::NUGET_API_KEY is not set on environment release-nuget; cannot fall back from OIDC."
+          exit 1
+        fi
+
+        if try_push "$FALLBACK_API_KEY" "API key"; then
+          exit 0
+        else
+          rc=$?
+          if [ "$rc" -eq 2 ]; then
+            exit 0
+          fi
+          echo "::error::NuGet publish of $(basename "$NUPKG_PATH") failed via API key."
+          exit 1
+        fi

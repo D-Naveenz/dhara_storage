@@ -1,0 +1,35 @@
+# Create `development` from `main` when the branch is missing.
+# Does not reset or force-update an existing `development` branch.
+name: Ensure development branch
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # Monday 04:00 UTC — before Dependabot weekly (Monday 06:00 UTC)
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ensure:
+    name: ensure development exists
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create development from main if missing
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if gh api "repos/${GITHUB_REPOSITORY}/branches/development" --silent >/dev/null 2>&1; then
+            echo "development branch already exists — no-op"
+            exit 0
+          fi
+          echo "development missing; creating from main"
+          sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f ref="refs/heads/development" \
+            -f sha="${sha}"
+          echo "Created refs/heads/development at ${sha}"
