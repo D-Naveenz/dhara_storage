@@ -130,7 +130,7 @@ Directory watch integration tests should **poll for the created file path** afte
 - [Daemon transport][daemon-transport] — named pipes / UDS, handle transfer
 - [Binding benchmarks][binding-benchmarks] — FFI vs daemon evidence harness
 - [Windows code signing][windows-signing] — VERSIONINFO vs Authenticode / SAC
-- [Logging conventions][logging] — redirect → DROT audit lines for stage/verify
+- [Logging conventions][logging] — DROT audit lines for stage/verify
 - [dhara.config.toml][dhara-config] — `ci.native_runtimes` and rust target mappings
 
 [readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
@@ -143,7 +143,7 @@ Directory watch integration tests should **poll for the created file path** afte
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
 [csproj]: ../bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
 [watch-rs]: ../core/dhara_storage/src/watch.rs
-[logging]: logging.md
+[logging]: ../tooling/drot/docs/logging.md
 [dhara-config]: ../dhara.config.toml
 [daemon-transport]: daemon-transport.md
 [binding-benchmarks]: binding-benchmarks.md

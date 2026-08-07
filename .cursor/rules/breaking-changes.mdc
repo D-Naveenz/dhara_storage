@@ -1,20 +1,19 @@
 ---
-description: Breaking changes are acceptable pre-1.0; no legacy paths, deprecations, or parallel V1/V2 APIs
+description: Clean-cut breaking changes; decide in plan, follow plan, or ask when unclear
 alwaysApply: false
 ---
 
-# Breaking changes are acceptable
+# Breaking changes
 
-Dhara Storage is **pre-1.0** and published, but the maintainer has **one primary consumer** (a C# MCP project). Adapting to new APIs is cheap. Do **not** default to backward-compatibility theater.
+Prefer the better design. Happy to break and rebuild. One canonical API per concern — no parallel Old/New surfaces, no indefinite `#[deprecated]` shims, no soft half-migrations. Git history is the safety net (revert), not compatibility wrappers.
 
-**When it breaks, it should be broken.** One canonical API per concern — no half-migrations left in the tree.
+## Decision procedure
 
-## Default stance
-
-- **Prefer the better design** even when it breaks Rust public API, C ABI, or C# bindings.
-- **Suggest breaking changes** when they simplify architecture, remove dead paths, or fix wrong abstractions — a little caution is fine; **avoiding** breakage by default is not.
-- You may change **APIs, dependencies, key types, FFI shapes, and critical functions** without asking first when the tradeoff is clear.
-- If the new code is clearly better, **replace the old code directly** in the same change (Rust, FFI, C#, tests, docs).
+| Mode | Behavior |
+|------|----------|
+| Planning | Choose a clean break in the plan **or** ask when blast radius / product intent is unclear |
+| Development **with** an approved plan | Follow the plan; do not re-litigate breakage mid-implementation |
+| Development **without** a plan | Clear local tradeoff → clean cut; unclear / high blast radius → ask |
 
 ## No legacy surface (this repo)
 
@@ -26,14 +25,6 @@ Do **not** add or retain:
 - Version suffixes on the **current** canonical shape (e.g. rename `NativeFileInformationV2` → `NativeFileInformation` once V1 is gone)
 
 Keep old code **only** when it contains reusable logic not yet ported — then move that logic into the new path and **delete** the old path. Do not leave both entry points.
-
-## When to ask
-
-Pause when blast radius is **high** and unclear:
-
-- Removing public surface with no obvious replacement
-- Large dependency or native-OS requirement changes
-- CI/release changes you cannot fix in the same pass
 
 ## Do not
 

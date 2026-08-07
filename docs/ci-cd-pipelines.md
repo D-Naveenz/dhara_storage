@@ -216,7 +216,7 @@ After `NuGet package (linux)`:
 
 - [Workspace architecture][architecture] — tool crate DAG
 - [Multi-platform native packaging][native-packaging] — RID staging, artifact SHA pitfalls
-- [Logging conventions][logging] — redirect → DROT operator audit logs
+- [Logging conventions][logging] — DROT operator audit logs
 - [DROT host config][drot-host-config] — shared vs project-file ownership, secrets, activation
 - [DROT docs][drot-docs] — tool architecture, TUI, logging (submodule)
 - [drot README][readme-tool] — full command surface
@@ -236,7 +236,7 @@ After `NuGet package (linux)`:
 [run-drot-sh]: ../tooling/scripts/run-drot.sh
 [ensure-dist-ps1]: ../tooling/scripts/ensure-drot-dist.ps1
 [ensure-dist-sh]: ../tooling/scripts/ensure-drot-dist.sh
-[logging]: logging.md
+[logging]: ../tooling/drot/docs/logging.md
 [drot-docs]: ../tooling/drot/docs/README.md
 [drot-host-config]: ../tooling/drot/docs/host-config.md
 [native-packaging]: native-packaging.md
