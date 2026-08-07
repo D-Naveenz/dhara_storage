@@ -1,11 +1,12 @@
+using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Running;
+using Dhara.Storage.Benchmarks.Reporting;
 
 namespace Dhara.Storage.Benchmarks;
 
 /// <summary>
-/// Entry point: BenchmarkDotNet only (plus daemon/fixture helpers).
+/// Entry point: BenchmarkDotNet harness with custom HTML + JSON evidence reports.
 /// </summary>
 internal static class Program
 {
@@ -22,13 +23,17 @@ internal static class Program
             .Where(static a => a is not ("--smoke" or "--smoke-bdn"))
             .ToArray();
 
-        var artifacts = Path.Combine(DaemonHost.FindRepoRoot(), "target", "bench-pilot", "bdn");
+        var artifacts = Path.Combine(DaemonHost.FindRepoRoot(), "target", "benchmarks", "bdn");
         Directory.CreateDirectory(artifacts);
 
+        // Minimum-viable config avoids DefaultConfig CSV/HTML/Markdown sprawl.
+        // Plots (RPlotExporter) are not enabled; add here later if needed.
         var config = ManualConfig
-            .Create(DefaultConfig.Instance)
+            .CreateMinimumViable()
             .WithArtifactsPath(artifacts)
-            .AddExporter(JsonExporter.Full)
+            .HideColumns(Column.Median, Column.Ratio, Column.RatioSD)
+            .AddExporter(new EvidenceHtmlExporter(artifacts))
+            .AddExporter(new ResultsJsonExporter(artifacts))
             .WithOptions(ConfigOptions.DisableOptimizationsValidator);
 
         if (smoke)
@@ -44,6 +49,8 @@ internal static class Program
         }
 
         Console.WriteLine($"Artifacts: {artifacts}");
+        Console.WriteLine($"  Human:   {Path.Combine(artifacts, "report.html")}");
+        Console.WriteLine($"  Machine: {Path.Combine(artifacts, "results.json")}");
         return 0;
     }
 }

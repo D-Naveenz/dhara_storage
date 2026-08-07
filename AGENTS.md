@@ -95,7 +95,7 @@ Agents editing READMEs must **not** add:
 - `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
-- Current product line: **0.9.22** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule (**0.9.14** in `tooling/drot/Cargo.toml`).
+- Current product line: **0.9.22** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule (**0.9.15** in `tooling/drot/Cargo.toml`).
 
 Deep reference: [docs/README.md](docs/README.md).
 
@@ -111,6 +111,8 @@ Deep reference: [docs/README.md](docs/README.md).
 - Active DROT development: work in the orchestration repo (or `tooling/drot` submodule); follow [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md). Build with `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
 - Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)
 - **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. Workspace/NuGet manifest drift reconciles on the next `drot` run (confirm activation, or `--yes` in CI/scripts).
+
+**DROT source vs artifacts (agents):** edit sources under [`tooling/drot`](tooling/drot); run via `./tooling/scripts/run-drot.ps1` (sets `CARGO_TARGET_DIR` to this repo’s `target/`). Binaries and `.drot-git-rev` live at **`target/dist/`** on the host — not inside the submodule. When spawning subagents for DROT work, pass both paths so they do not hunt for `drot.exe` under `tooling/drot`. DROT links one compile-time **extension** (`drot_dhara_storage` by default); see [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md).
 
 **DROT rollout (orchestration repo):** commit submodule changes (core dep, `build run`, dependabot), merge on `dhara_repo_orchestration`, wait for `pack-windows` / `pack-linux` artifacts, then bump the storage `tooling/drot` gitlink to that SHA. Publish `dhara_storage_core` **0.9.22** to crates.io before pinning DROT to semver `0.9.22` if desired.
 

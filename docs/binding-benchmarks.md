@@ -8,9 +8,11 @@ Not CI/CD. Windows-first.
 
 | Rung | Audience | Comparison | Status |
 |------|----------|------------|--------|
-| **1** | “Why drop FFI from NuGet?” | `dharastorage-ffi` (bench harness) vs `dhara-sd` + handle-dup | **Current suite** |
+| **1** | “Why drop FFI from NuGet?” | `dharastorage-ffi` (bench harness) vs `dhara-sd` + handle-dup | **Current suite** (decision archived; suite kept for regression) |
 | **2** | Developers | Daemon RPC delay vs in-process `dhara_storage` (Criterion) | Planned |
-| **3** | Users | `Dhara.Storage` vs language-native I/O (e.g. `File.Copy`) | Planned |
+| **3** | Users | `Dhara.Storage` / daemon vs a **C# approximation** of Dhara features (progress, cancellation, etc.—what managed code can fairly recreate; not bare BCL one-liners) | Planned |
+
+Rung 1 answered the NuGet packaging question. Future **user-facing** evidence is rung 3: show why the product path is worth adopting versus building a partial managed equivalent yourself—not versus `File.Copy` alone (Dhara does more than a thin copy).
 
 ## Layout
 
@@ -21,7 +23,18 @@ Not CI/CD. Windows-first.
 | [`interop/dharastorage-ffi/`](../interop/dharastorage-ffi/) | FFI cdylib for rung 1 only |
 | [`benchmark/Dhara.Storage.Benchmarks/`](../benchmark/Dhara.Storage.Benchmarks/) | BenchmarkDotNet harness |
 
-Outputs: `target/bench-pilot/bdn/` (gitignored; path may rename later).
+Outputs (gitignored): `target/benchmarks/` — fixtures under `fixtures/`, BenchmarkDotNet artifacts under `bdn/`.
+
+## Reports
+
+After a run, open these under `target/benchmarks/bdn/`:
+
+| File | Audience | Contents |
+|------|----------|----------|
+| `report.html` | Humans | Styled evidence report: purpose, how we measure / host specs, findings + B1/B2 comparison, detailed table, footer |
+| `results.json` | Machines / agents | Raw per-method stats plus comparison verdicts (`dhara.benchmarks.results/v1`) |
+
+Default BenchmarkDotNet CSV/HTML/Markdown sprawl is disabled. Paste findings from `report.html` into **Showcase** below when you want docs to carry a snapshot.
 
 ## Baselines (rung 1)
 
@@ -50,7 +63,9 @@ dotnet run --project benchmark/Dhara.Storage.Benchmarks/Dhara.Storage.Benchmarks
 | Read ≥1MB (handle dup) | — | Throughput / mean competitive with B1 |
 | Copy 1MB | ≤ +10% | — |
 
-**Product lean:** NuGet uses `dhara-sd`; keep FFI only until rung-1 evidence is archived.
+The HTML report applies these budgets to paired scenarios (Pass / Watch / Fail). Unpaired B2-only methods appear without ratios.
+
+**Product lean:** NuGet uses `dhara-sd`; FFI remains bench-only for rung-1 regression.
 
 ## Stability notes
 
@@ -63,4 +78,4 @@ Transport design: [daemon-transport.md](daemon-transport.md). Signing: [windows-
 
 ## Showcase (last full Release run)
 
-Re-run the suite after significant transport or packaging changes and refresh this section with current numbers.
+Re-run the suite after significant transport or packaging changes and refresh this section from `report.html` findings.
