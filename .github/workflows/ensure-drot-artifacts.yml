@@ -1,0 +1,79 @@
+# Probe for DROT pack artifacts for the pinned submodule SHA; dispatch DROT
+# Package Pipeline when missing (token must allow workflow_dispatch on the
+# orchestration repo). Falls back to manual instructions on auth failure.
+name: Ensure DROT Artifacts
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ensure:
+    name: ensure drot artifacts
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: true
+
+      - name: Resolve DROT submodule SHA
+        id: drot-sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="$(git rev-parse HEAD:tooling/drot)"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+          echo "DROT submodule SHA: ${sha}"
+
+      - name: Probe for existing drot-linux-x64 artifact
+        id: probe
+        continue-on-error: true
+        uses: dawidd6/action-download-artifact@v21
+        with:
+          github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
+          repo: D-Naveenz/dhara_repo_orchestration
+          commit: ${{ steps.drot-sha.outputs.sha }}
+          workflow: package-pipeline.yml
+          workflow_conclusion: success
+          name: drot-linux-x64
+          path: target/dist-probe
+
+      - name: Already packed
+        if: steps.probe.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "DROT artifacts already exist for ${{ steps.drot-sha.outputs.sha }} — nothing to do."
+
+      - name: Dispatch DROT Package Pipeline
+        id: dispatch
+        if: steps.probe.outcome != 'success'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
+          CHECKOUT_SHA: ${{ steps.drot-sha.outputs.sha }}
+        run: |
+          set -euo pipefail
+          echo "No successful package-pipeline artifact for ${CHECKOUT_SHA}; dispatching DROT Package Pipeline…"
+          # Prefer --ref <SHA> so the run (and artifacts) associate with the pin.
+          # Fallback: dispatch on main with checkout_sha input (build that commit).
+          if gh workflow run package-pipeline.yml \
+            -R D-Naveenz/dhara_repo_orchestration \
+            --ref "${CHECKOUT_SHA}"; then
+            echo "Dispatched Package Pipeline at ref ${CHECKOUT_SHA}."
+          elif gh workflow run package-pipeline.yml \
+            -R D-Naveenz/dhara_repo_orchestration \
+            --ref main \
+            -f "checkout_sha=${CHECKOUT_SHA}"; then
+            echo "Dispatched Package Pipeline on main with checkout_sha=${CHECKOUT_SHA}."
+          else
+            echo "::error::Failed to dispatch DROT Package Pipeline (token may lack actions:write / workflow scope)."
+            echo "::error::Manual fallback: open https://github.com/D-Naveenz/dhara_repo_orchestration/actions/workflows/package-pipeline.yml"
+            echo "::error::Run workflow → Use workflow from branch/tag matching the pin, or set checkout_sha=${CHECKOUT_SHA} → Run."
+            exit 1
+          fi
+          echo "Watch: https://github.com/D-Naveenz/dhara_repo_orchestration/actions/workflows/package-pipeline.yml"

@@ -45,7 +45,9 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 - [DROT AGENTS.md][drot-agents] — tool agent router
 - [dhara.config.toml][dhara-config] — shared version, `[product]`, NuGet feed, `[ci]` pack paths
 - [DROT host config][drot-host-config] — config vs csproj ownership, secrets, activation
-- [pipeline workflow][pipeline-yml] — canonical CI/CD definition
+- [quality workflow][quality-yml] — feature → `development` checks
+- [package pipeline][pipeline-yml] — `development` → `main` native + NuGet pack
+- [CI/CD pipelines][ci-cd] — full workflow map
 
 [root-readme]: ../README.md
 [readme-dhara-storage]: ../core/dhara_storage/README.md
@@ -66,4 +68,5 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [drot-agents]: ../tooling/drot/AGENTS.md
 [dhara-config]: ../dhara.config.toml
 [drot-host-config]: ../tooling/drot/docs/host-config.md
-[pipeline-yml]: ../.github/workflows/pipeline.yml
+[pipeline-yml]: ../.github/workflows/package-pipeline.yml
+[quality-yml]: ../.github/workflows/quality.yml

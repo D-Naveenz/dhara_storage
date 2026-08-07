@@ -28,7 +28,7 @@ runs:
         github_token: ${{ inputs.github_token }}
         repo: D-Naveenz/dhara_repo_orchestration
         commit: ${{ steps.drot-sha.outputs.sha }}
-        workflow: pipeline.yml
+        workflow: package-pipeline.yml
         workflow_conclusion: success
         name: ${{ inputs.artifact_name }}
         path: target/dist

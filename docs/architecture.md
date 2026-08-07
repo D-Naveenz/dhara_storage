@@ -67,7 +67,7 @@ Merge CD uses **composite Actions** (not `drot release run`):
 
 Local operator publish still uses DROT (`package publish` / `release run`) with `.env.local` (`NUGET_API_KEY` / `CARGO_REGISTRY_TOKEN`). Config ownership: [DROT host-config](../tooling/drot/docs/host-config.md).
 
-PR CI (`pipeline.yml`) produces `release-native-stage` and `release-nuget-package` (primary + `ci.managed_package_projects`); merge NuGet CD downloads them at `HEAD^2` (merge second parent).
+Package Pipeline (`package-pipeline.yml`, `development` → `main`) produces `release-native-stage` and `release-nuget-package` (primary + `ci.managed_package_projects`); merge NuGet CD downloads them at `HEAD^2` (merge second parent). Feature → `development` runs Quality only.
 
 ## Tool ↔ core coupling
 
@@ -83,11 +83,11 @@ PR CI (`pipeline.yml`) produces `release-native-stage` and `release-nuget-packag
 | `drot` | `tooling/drot/Cargo.toml` only | Independent tool releases via submodule pin |
 | Tool codec dep | crates.io `dhara_storage_core` | Optional `[patch.crates-io]` in storage root for co-dev |
 
-CI `pipeline.yml` downloads DROT artifacts for the pinned submodule SHA (or builds from source when developing the tool).
+CI Package Pipeline downloads DROT artifacts for the pinned submodule SHA (or builds from source when developing the tool). Use Ensure DROT Artifacts when the pin lacks a successful pack.
 
 ## Related docs
 
-- [CI/CD pipelines][ci-cd] — four-workflow map and path filters
+- [CI/CD pipelines][ci-cd] — workflow map and path filters
 - [filedefs.dat format][filedefs-dat]
 - [Typed C-compatible ABI][typed-abi]
 - [Native packaging][native-packaging]

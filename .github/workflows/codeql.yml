@@ -71,7 +71,7 @@ jobs:
     # - name: Setup runtime (example)
     #   uses: actions/setup-example@v1
 
-    # .NET SDK for the C# manual build (matches Pipeline's 10.0.x).
+    # .NET SDK for the C# manual build (matches Package Pipeline's 10.0.x).
     - name: Setup .NET
       if: matrix.language == 'csharp'
       uses: actions/setup-dotnet@v6

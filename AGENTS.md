@@ -114,7 +114,7 @@ Deep reference: [docs/README.md](docs/README.md).
 
 ### Release / env / CI
 
-Shared metadata and secrets: [dhara.config.toml](dhara.config.toml), [`.env.example`](.env.example), and DROT [host-config](tooling/drot/docs/host-config.md). Pipeline map, Environments, Dependabot, and publish jobs: [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md). Workflows: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml), [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml). Local DROT: [`run-drot`](tooling/scripts/run-drot.ps1); CI downloads prebuilt `drot` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)).
+Shared metadata and secrets: [dhara.config.toml](dhara.config.toml), [`.env.example`](.env.example), and DROT [host-config](tooling/drot/docs/host-config.md). Pipeline map, Environments, Dependabot, and publish jobs: [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md). Workflows: [`.github/workflows/quality.yml`](.github/workflows/quality.yml), [`.github/workflows/package-pipeline.yml`](.github/workflows/package-pipeline.yml), [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml). Local DROT: [`run-drot`](tooling/scripts/run-drot.ps1); CI downloads prebuilt `drot` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)).
 
 ---
 

@@ -1,7 +1,8 @@
-name: Pipeline
+name: Package Pipeline
 
 on:
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -12,18 +13,16 @@ permissions:
   contents: write
 
 concurrency:
-  group: pipeline-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
+  group: package-pipeline-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   quality:
     name: code quality (linux)
-    # Skip Dependabot version-update PRs into development (land via auto-merge; full CI on development → main).
+    # Only development → main (or manual). Feature PRs use quality.yml.
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     runs-on: ubuntu-latest
     environment: staging
     steps:
@@ -57,10 +56,8 @@ jobs:
   platform-windows:
     name: platform (windows)
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     needs: quality
     runs-on: windows-latest
     environment: staging
@@ -101,10 +98,8 @@ jobs:
   platform-linux:
     name: platform (linux)
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     needs: quality
     runs-on: ubuntu-latest
     environment: staging
@@ -169,10 +164,8 @@ jobs:
   platform-linux-arm64:
     name: platform (linux arm64)
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     needs: quality
     runs-on: ubuntu-24.04-arm
     environment: staging
@@ -216,10 +209,8 @@ jobs:
   platform-macos:
     name: platform (macos)
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     needs: quality
     runs-on: macos-14
     environment: staging
@@ -260,10 +251,8 @@ jobs:
   nuget-package:
     name: NuGet package (linux)
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     needs: [platform-windows, platform-linux, platform-linux-arm64, platform-macos]
     runs-on: ubuntu-latest
     environment: staging
@@ -372,10 +361,8 @@ jobs:
   nuget-verify:
     name: NuGet verify (linux)
     if: >
-      (github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'pull_request'
-          && !(github.event.pull_request.user.login == 'dependabot[bot]'
-               && github.base_ref == 'development')))
+      github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'pull_request' && github.head_ref == 'development')
     needs: nuget-package
     runs-on: ubuntu-latest
     environment: staging

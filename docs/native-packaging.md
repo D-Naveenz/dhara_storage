@@ -62,7 +62,7 @@ The FFI cdylib (`dharastorage.dll` / `libdharastorage.*`) is **not** packed into
 
 `dhara_storage` (linked by `dhara-sd`) depends on `file_icon_provider`, which pulls GTK/glib through `pkg-config`. Cross-compiling `aarch64-unknown-linux-gnu` from `ubuntu-latest` fails when `glib-sys` cannot find a cross sysroot — even with `gcc-aarch64-linux-gnu` installed.
 
-**Lesson:** treat `linux-arm64` like a separate platform job on `ubuntu-24.04-arm`, not as a cross-target from the x64 Linux job. The [pipeline][pipeline-yml] defines `platform-linux` (x64) and `platform-linux-arm64` (arm64) accordingly.
+**Lesson:** treat `linux-arm64` like a separate platform job on `ubuntu-24.04-arm`, not as a cross-target from the x64 Linux job. The [package pipeline][pipeline-yml] defines `platform-linux` (x64) and `platform-linux-arm64` (arm64) accordingly.
 
 ## Merging native artifacts
 
@@ -139,7 +139,7 @@ Directory watch integration tests should **poll for the created file path** afte
 [tooling-scripts]: ../tooling/scripts/
 [nuget-rs]: ../tooling/drot/crates/drot_dhara_storage/src/ops/nuget.rs
 [native-rids-rs]: ../tooling/drot/crates/drot_dhara_storage/src/ops/native_rids.rs
-[pipeline-yml]: ../.github/workflows/pipeline.yml
+[pipeline-yml]: ../.github/workflows/package-pipeline.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
 [csproj]: ../bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
 [watch-rs]: ../core/dhara_storage/src/watch.rs
