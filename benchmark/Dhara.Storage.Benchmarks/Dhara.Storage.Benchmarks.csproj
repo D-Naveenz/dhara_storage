@@ -21,11 +21,18 @@
     <Version>0.9.22</Version>
   </PropertyGroup>
 
+  <!-- BenchmarkDotNet rejects attached debuggers; Release is the supported configuration. -->
+  <Target Name="WarnNonReleaseBench" BeforeTargets="Build">
+    <Warning
+      Condition="'$(Configuration)' != 'Release'"
+      Text="Dhara.Storage.Benchmarks should be built and run with -c Release. Debug / attached debugger yields invalid timing and may fail." />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" Version="0.15.8" />
     <!-- <PackageReference Include="Microsoft.VisualStudio.DiagnosticsHub.BenchmarkDotNetDiagnosers" Version="18.7.37220.1" /> -->
     <PackageReference Include="Google.Protobuf" Version="3.35.1" />
-    <PackageReference Include="Grpc.Net.Client" Version="2.80.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.83.0" />
   </ItemGroup>
 
   <!-- B2 uses product NuGet (daemon types). B1 uses dharastorage.dll via bench-only P/Invoke. -->

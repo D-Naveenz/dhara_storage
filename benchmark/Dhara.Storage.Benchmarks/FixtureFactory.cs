@@ -3,11 +3,11 @@ using System.Security.Cryptography;
 namespace Dhara.Storage.Benchmarks;
 
 /// <summary>
-/// Creates reproducible fixture trees under <c>target/bench-pilot/fixtures</c>.
+/// Creates reproducible fixture trees under <c>target/benchmarks/fixtures</c>.
 /// </summary>
 internal static class FixtureFactory
 {
-    public static string Root { get; } = Path.Combine(DaemonHost.FindRepoRoot(), "target", "bench-pilot", "fixtures");
+    public static string Root { get; } = Path.Combine(DaemonHost.FindRepoRoot(), "target", "benchmarks", "fixtures");
 
     public static string EnsureSizedFile(string name, long sizeBytes)
     {
