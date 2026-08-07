@@ -9,10 +9,8 @@ Not CI/CD. Windows-first.
 | Rung | Audience | Comparison | Status |
 |------|----------|------------|--------|
 | **1** | “Why drop FFI from NuGet?” | `dharastorage-ffi` (bench harness) vs `dhara-sd` + handle-dup | **Current suite** (decision archived; suite kept for regression) |
-| **2** | Developers | Daemon RPC delay vs in-process `dhara_storage` (Criterion) | Planned |
-| **3** | Users | `Dhara.Storage` / daemon vs a **C# approximation** of Dhara features (progress, cancellation, etc.—what managed code can fairly recreate; not bare BCL one-liners) | Planned |
 
-Rung 1 answered the NuGet packaging question. Future **user-facing** evidence is rung 3: show why the product path is worth adopting versus building a partial managed equivalent yourself—not versus `File.Copy` alone (Dhara does more than a thin copy).
+Rung 1 answered the NuGet packaging question.
 
 ## Layout
 
@@ -36,7 +34,7 @@ After a run, open session-stamped files under `target/benchmarks/bdn/results/` (
 
 Each run keeps its own pair; nothing is overwritten by the next session.
 
-Default BenchmarkDotNet CSV/HTML/Markdown sprawl is disabled. Paste findings from `report.html` into **Showcase** below when you want docs to carry a snapshot.
+Default BenchmarkDotNet CSV/HTML/Markdown sprawl is disabled. Use `report.html` findings when you need a human-readable snapshot.
 
 ## Baselines (rung 1)
 
@@ -77,7 +75,3 @@ The HTML report applies these budgets to paired scenarios (Pass / Watch / Fail).
 4. `CPUUsageDiagnoser` may be commented when DiagnosticsHub ETW is exhausted.
 
 Transport design: [daemon-transport.md](daemon-transport.md). Signing: [windows-code-signing.md](windows-code-signing.md).
-
-## Showcase (last full Release run)
-
-Re-run the suite after significant transport or packaging changes and refresh this section from `report.html` findings.
