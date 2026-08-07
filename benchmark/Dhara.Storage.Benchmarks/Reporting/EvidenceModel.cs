@@ -169,14 +169,57 @@ internal static class EvidenceModel
         }
 
         return new HostSnapshot(
-            Os: os,
+            Os: ShortenOs(os),
             Processor: cpu,
             Cores: "—",
-            Runtime: host.RuntimeVersion ?? "—",
+            Runtime: ShortenRuntime(host.RuntimeVersion ?? "—"),
             DotNetSdk: sdk,
             BenchmarkDotNet: host.BenchmarkDotNetVersion ?? "—",
             Architecture: host.Architecture ?? "—",
             Configuration: host.Configuration ?? "—");
+    }
+
+    /// <summary>
+    /// Trims Windows marketing suffixes (e.g. <c>/25H2/2025Update/…</c>) that break card layout.
+    /// </summary>
+    public static string ShortenOs(string os)
+    {
+        if (string.IsNullOrWhiteSpace(os) || os == "—")
+        {
+            return "—";
+        }
+
+        // "Windows 11 (10.0.26200.8973/25H2/…)" → "Windows 11 (10.0.26200.8973)"
+        var slash = os.IndexOf('/');
+        if (slash > 0 && os.Contains('(', StringComparison.Ordinal))
+        {
+            return os[..slash].TrimEnd() + ")";
+        }
+
+        return os;
+    }
+
+    /// <summary>Drops redundant build metadata from runtime strings when present.</summary>
+    public static string ShortenRuntime(string runtime)
+    {
+        if (string.IsNullOrWhiteSpace(runtime) || runtime == "—")
+        {
+            return "—";
+        }
+
+        // ".NET 10.0.10 (10.0.10, 10.0.1026.32716)" → ".NET 10.0.10"
+        var open = runtime.IndexOf(" (", StringComparison.Ordinal);
+        return open > 0 ? runtime[..open] : runtime;
+    }
+
+    /// <summary>Compact job line for the host card (warmup / iterations / runtime).</summary>
+    public static string FormatJobSummary(BenchmarkDotNet.Running.BenchmarkCase benchmarkCase)
+    {
+        var job = benchmarkCase.Job;
+        var runtime = job.Environment.Runtime?.Name ?? ".NET";
+        var warmups = job.Run.WarmupCount;
+        var iterations = job.Run.IterationCount;
+        return $"{runtime}, warmup {warmups}, iterations {iterations}";
     }
 
     public static string FormatTime(double nanoseconds) =>

@@ -89,14 +89,12 @@ internal sealed class EvidenceHtmlExporter : IExporter
         AppendSpec(sb, "Runtime", host.Runtime);
         AppendSpec(sb, ".NET SDK", host.DotNetSdk);
         AppendSpec(sb, "Architecture", host.Architecture);
-        AppendSpec(sb, "Configuration", host.Configuration);
-        sb.AppendLine("</dl>");
         if (summary.BenchmarksCases.Length > 0)
         {
-            var job = summary.BenchmarksCases[0].Job;
-            sb.AppendLine("<p class=\"note\">Job: " + Escape(job.DisplayInfo) + "</p>");
+            AppendSpec(sb, "Job", EvidenceModel.FormatJobSummary(summary.BenchmarksCases[0]));
         }
 
+        sb.AppendLine("</dl>");
         sb.AppendLine("</div>");
         sb.AppendLine("</div>");
         sb.AppendLine("</section>");
@@ -104,6 +102,15 @@ internal sealed class EvidenceHtmlExporter : IExporter
         // 3) Results
         sb.AppendLine("<section>");
         sb.AppendLine("<h2>📊 Results</h2>");
+
+        sb.AppendLine("<h3>Verdict guide</h3>");
+        sb.AppendLine("<ul class=\"legend\">");
+        sb.AppendLine("<li><span class=\"badge pass\">✅ Pass</span> Candidate mean is within the scenario budget vs B1 (see <code>docs/binding-benchmarks.md</code>).</li>");
+        sb.AppendLine("<li><span class=\"badge watch\">⚠️ Watch</span> Over budget, but within 1.5× the allowed overhead — worth a closer look.</li>");
+        sb.AppendLine("<li><span class=\"badge fail\">❌ Fail</span> Clearly over the decision threshold for this scenario.</li>");
+        sb.AppendLine("<li><span class=\"badge informational\">ℹ️ Informational</span> No pass/fail budget configured; ratio shown for context only.</li>");
+        sb.AppendLine("<li><span class=\"badge missing\">❔ Missing</span> Baseline or candidate was not in this run (filter / smoke suite).</li>");
+        sb.AppendLine("</ul>");
 
         sb.AppendLine("<h3>Findings</h3>");
         sb.AppendLine("<ul class=\"findings\">");
@@ -116,8 +123,11 @@ internal sealed class EvidenceHtmlExporter : IExporter
                 : $"ratio {EvidenceModel.FormatRatio(row.Ratio)}"
                   + (row.Pair.MaxMeanOverhead is { } max
                       ? $" (budget ≤ +{max:P0})"
-                      : " (informational)");
-            sb.AppendLine($"<li><span class=\"badge {row.Verdict.ToString().ToLowerInvariant()}\">{emoji} {label}</span> <strong>{Escape(row.Pair.DisplayName)}</strong> — {Escape(detail)}</li>");
+                      : " (no budget)");
+            sb.AppendLine("<li class=\"finding\">");
+            sb.AppendLine($"<span class=\"badge {row.Verdict.ToString().ToLowerInvariant()}\">{emoji} {label}</span>");
+            sb.AppendLine($"<span class=\"finding-body\"><strong>{Escape(row.Pair.DisplayName)}</strong><span class=\"finding-detail\">{Escape(detail)}</span></span>");
+            sb.AppendLine("</li>");
         }
 
         sb.AppendLine("</ul>");
@@ -125,7 +135,14 @@ internal sealed class EvidenceHtmlExporter : IExporter
         sb.AppendLine("<h3>Comparison (B1 vs B2)</h3>");
         sb.AppendLine("<div class=\"table-wrap\">");
         sb.AppendLine("<table>");
-        sb.AppendLine("<thead><tr><th>Scenario</th><th>Baseline (B1)</th><th>Candidate (B2)</th><th>Ratio</th><th>Allocated Δ</th><th>Verdict</th></tr></thead>");
+        sb.AppendLine("<thead><tr>");
+        sb.AppendLine("<th class=\"text\">Scenario</th>");
+        sb.AppendLine("<th class=\"num\">Baseline (B1)</th>");
+        sb.AppendLine("<th class=\"num\">Candidate (B2)</th>");
+        sb.AppendLine("<th class=\"num\">Ratio</th>");
+        sb.AppendLine("<th class=\"num\">Alloc. change</th>");
+        sb.AppendLine("<th class=\"verdict\">Verdict</th>");
+        sb.AppendLine("</tr></thead>");
         sb.AppendLine("<tbody>");
         foreach (var row in comparisons)
         {
@@ -135,24 +152,25 @@ internal sealed class EvidenceHtmlExporter : IExporter
                 ? "—"
                 : EvidenceModel.FormatSignedBytes(row.AllocatedDelta);
             sb.AppendLine("<tr>");
-            sb.AppendLine($"<td>{Escape(row.Pair.DisplayName)}</td>");
+            sb.AppendLine($"<td class=\"text\">{Escape(row.Pair.DisplayName)}</td>");
             sb.AppendLine($"<td class=\"num\">{Escape(b1)}</td>");
             sb.AppendLine($"<td class=\"num\">{Escape(b2)}</td>");
             sb.AppendLine($"<td class=\"num\">{Escape(EvidenceModel.FormatRatio(row.Ratio))}</td>");
             sb.AppendLine($"<td class=\"num\">{Escape(delta)}</td>");
-            sb.AppendLine($"<td><span class=\"badge {row.Verdict.ToString().ToLowerInvariant()}\">{VerdictEmoji(row.Verdict)} {row.Verdict}</span></td>");
+            sb.AppendLine($"<td class=\"verdict\"><span class=\"badge {row.Verdict.ToString().ToLowerInvariant()}\">{VerdictEmoji(row.Verdict)} {row.Verdict}</span></td>");
             sb.AppendLine("</tr>");
         }
 
         sb.AppendLine("</tbody></table>");
         sb.AppendLine("</div>");
+        sb.AppendLine("<p class=\"note\">Alloc. change is managed memory B2 − B1 per operation (positive means B2 allocated more).</p>");
 
         if (candidateOnly.Count > 0)
         {
             sb.AppendLine("<h3>Candidate-only (no FFI peer)</h3>");
             sb.AppendLine("<div class=\"table-wrap\">");
             sb.AppendLine("<table>");
-            sb.AppendLine("<thead><tr><th>Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th></tr></thead>");
+            sb.AppendLine("<thead><tr><th class=\"text\">Method</th><th class=\"num\">Mean</th><th class=\"num\">Error</th><th class=\"num\">StdDev</th><th class=\"num\">Allocated</th></tr></thead>");
             sb.AppendLine("<tbody>");
             foreach (var m in candidateOnly)
             {
@@ -167,7 +185,7 @@ internal sealed class EvidenceHtmlExporter : IExporter
         sb.AppendLine("<p class=\"note\">Same run as above — curated columns for drill-down.</p>");
         sb.AppendLine("<div class=\"table-wrap\">");
         sb.AppendLine("<table>");
-        sb.AppendLine("<thead><tr><th>Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Allocated</th></tr></thead>");
+        sb.AppendLine("<thead><tr><th class=\"text\">Method</th><th class=\"num\">Mean</th><th class=\"num\">Error</th><th class=\"num\">StdDev</th><th class=\"num\">Allocated</th></tr></thead>");
         sb.AppendLine("<tbody>");
         foreach (var m in allMethods)
         {
@@ -193,7 +211,7 @@ internal sealed class EvidenceHtmlExporter : IExporter
     private static void AppendDetailRow(StringBuilder sb, MethodStats m)
     {
         sb.AppendLine("<tr>");
-        sb.AppendLine($"<td>{Escape(m.Title)}</td>");
+        sb.AppendLine($"<td class=\"text\">{Escape(m.Title)}</td>");
         sb.AppendLine($"<td class=\"num\">{Escape(EvidenceModel.FormatTime(m.MeanNs))}</td>");
         sb.AppendLine($"<td class=\"num\">{Escape(EvidenceModel.FormatTime(m.ErrorNs))}</td>");
         sb.AppendLine($"<td class=\"num\">{Escape(EvidenceModel.FormatTime(m.StdDevNs))}</td>");
@@ -242,6 +260,7 @@ internal sealed class EvidenceHtmlExporter : IExporter
   --missing-bg: #f2f4f7;
   --shadow: 0 10px 30px rgba(26, 35, 50, 0.08);
   --radius: 14px;
+  --pad: 1.1rem;
   font-family: "Segoe UI", "Helvetica Neue", ui-sans-serif, system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
@@ -259,7 +278,7 @@ body {
   background: linear-gradient(135deg, #0b6e4f 0%, #0f766e 45%, #1d4ed8 120%);
   color: #fff;
   border-radius: calc(var(--radius) + 4px);
-  padding: 1.75rem 1.75rem 1.5rem;
+  padding: var(--pad);
   box-shadow: var(--shadow);
   margin-bottom: 1.75rem;
 }
@@ -284,6 +303,8 @@ body {
   border-radius: 999px;
   padding: 0.28rem 0.7rem;
   font-size: 0.82rem;
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 section { margin-bottom: 1.75rem; }
 h2 { margin: 0 0 0.85rem; font-size: 1.35rem; }
@@ -292,6 +313,7 @@ h3 { margin: 1.25rem 0 0.65rem; font-size: 1.05rem; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
+  align-items: stretch;
 }
 @media (max-width: 800px) {
   .grid.two { grid-template-columns: 1fr; }
@@ -300,21 +322,67 @@ h3 { margin: 1.25rem 0 0.65rem; font-size: 1.05rem; }
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 1rem 1.1rem;
+  padding: var(--pad);
   box-shadow: var(--shadow);
+  min-width: 0;
+  overflow: hidden;
 }
-.card ul { margin: 0.4rem 0 0.6rem; padding-left: 1.15rem; }
+.card > h3:first-child { margin: 0 0 0.75rem; }
+.card ul { margin: 0 0 0.75rem; padding-left: 1.15rem; }
+.card .note { margin: 0; }
 .note { color: var(--muted); font-size: 0.92rem; margin: 0.55rem 0 0; }
-.specs { display: grid; grid-template-columns: 7.5rem 1fr; gap: 0.35rem 0.75rem; margin: 0; }
-.specs dt { color: var(--muted); font-weight: 600; }
-.specs dd { margin: 0; }
-.findings { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.45rem; }
-.findings li {
+.specs {
+  display: grid;
+  grid-template-columns: 7.5rem minmax(0, 1fr);
+  gap: 0.45rem 0.85rem;
+  margin: 0;
+  align-items: start;
+}
+.specs dt { color: var(--muted); font-weight: 600; padding-top: 0.1rem; }
+.specs dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.legend {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1rem;
+  display: grid;
+  gap: 0.5rem;
+}
+.legend li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
-  padding: 0.55rem 0.75rem;
+  padding: 0.75rem var(--pad);
+  font-size: 0.92rem;
+  color: var(--muted);
 }
+.legend .badge { flex: 0 0 auto; margin-top: 0.05rem; }
+.findings { list-style: none; padding: 0; margin: 0; display: grid; gap: 0.45rem; }
+.finding {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 0.75rem var(--pad);
+  min-width: 0;
+}
+.finding-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.55rem;
+  min-width: 0;
+}
+.finding-detail { color: var(--muted); font-weight: 400; }
 .table-wrap {
   overflow-x: auto;
   background: var(--surface);
@@ -322,26 +390,46 @@ h3 { margin: 1.25rem 0 0.65rem; font-size: 1.05rem; }
   border-radius: var(--radius);
   box-shadow: var(--shadow);
 }
-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-th, td { padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--line); text-align: left; }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+  margin: 0;
+  table-layout: auto;
+}
+th, td {
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
 th {
   background: var(--accent-soft);
   color: var(--accent);
   font-size: 0.78rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
+th.text, td.text { text-align: left; }
+th.num, td.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+th.verdict, td.verdict { text-align: left; white-space: nowrap; }
 tbody tr:nth-child(even) { background: #fafbfc; }
 tbody tr:hover { background: #eef8f3; }
-.num { font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+tbody tr:last-child td { border-bottom: none; }
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
   border-radius: 999px;
-  padding: 0.15rem 0.55rem;
+  padding: 0.2rem 0.6rem;
   font-size: 0.78rem;
   font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
 }
 .badge.pass { color: var(--pass); background: var(--pass-bg); }
 .badge.watch { color: var(--watch); background: var(--watch-bg); }
