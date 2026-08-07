@@ -7,7 +7,8 @@ using BenchmarkDotNet.Reports;
 namespace Dhara.Storage.Benchmarks.Reporting;
 
 /// <summary>
-/// Writes machine-oriented raw stats to a stable <c>results.json</c> path.
+/// Writes machine-oriented raw stats under BDN's results directory,
+/// session-stamped like the BDN log (e.g. <c>…-20260807-145440-results.json</c>).
 /// </summary>
 internal sealed class ResultsJsonExporter : IExporter
 {
@@ -18,11 +19,6 @@ internal sealed class ResultsJsonExporter : IExporter
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
     };
 
-    private readonly string _artifactsRoot;
-
-    public ResultsJsonExporter(string artifactsRoot) =>
-        _artifactsRoot = artifactsRoot;
-
     public string Name => nameof(ResultsJsonExporter);
 
     public void ExportToLog(Summary summary, ILogger logger)
@@ -31,8 +27,8 @@ internal sealed class ResultsJsonExporter : IExporter
 
     public IEnumerable<string> ExportToFiles(Summary summary, ILogger consoleLogger)
     {
-        Directory.CreateDirectory(_artifactsRoot);
-        var path = Path.Combine(_artifactsRoot, "results.json");
+        Directory.CreateDirectory(summary.ResultsDirectoryPath);
+        var path = EvidenceModel.SessionJsonPath(summary);
         var document = BuildDocument(summary);
         File.WriteAllText(path, JsonSerializer.Serialize(document, JsonOptions));
         consoleLogger.WriteLineInfo($"Evidence JSON: {path}");

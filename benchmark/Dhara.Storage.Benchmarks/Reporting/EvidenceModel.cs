@@ -213,6 +213,30 @@ internal static class EvidenceModel
         return sign + FormatBytes(delta);
     }
 
+    /// <summary>
+    /// Session-stamped base name aligned with BDN log files (e.g. <c>…BindingBenchmarks-20260807-145440</c>).
+    /// </summary>
+    public static string SessionFileStem(Summary summary)
+    {
+        var stem = summary.Title;
+        if (string.IsNullOrWhiteSpace(stem))
+        {
+            stem = "benchmark-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+        }
+
+        foreach (var c in Path.GetInvalidFileNameChars())
+        {
+            stem = stem.Replace(c, '_');
+        }
+
+        return stem;
+    }
+
+    public static string SessionHtmlPath(Summary summary) =>
+        Path.Combine(summary.ResultsDirectoryPath, SessionFileStem(summary) + "-report.html");
+
+    public static string SessionJsonPath(Summary summary) =>
+        Path.Combine(summary.ResultsDirectoryPath, SessionFileStem(summary) + "-results.json");
 }
 
 /// <summary>Host environment strings for reports.</summary>

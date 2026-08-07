@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Reports;
 using BenchmarkDotNet.Running;
 using Dhara.Storage.Benchmarks.Reporting;
 
@@ -32,25 +33,26 @@ internal static class Program
             .CreateMinimumViable()
             .WithArtifactsPath(artifacts)
             .HideColumns(Column.Median, Column.Ratio, Column.RatioSD)
-            .AddExporter(new EvidenceHtmlExporter(artifacts))
-            .AddExporter(new ResultsJsonExporter(artifacts))
+            .AddExporter(new EvidenceHtmlExporter())
+            .AddExporter(new ResultsJsonExporter())
             .WithOptions(ConfigOptions.DisableOptimizationsValidator);
 
+        Summary summary;
         if (smoke)
         {
             Console.WriteLine("Running BindingSmokeBenchmarks via BenchmarkDotNet.");
-            _ = BenchmarkRunner.Run<BindingSmokeBenchmarks>(config, bdnArgs);
+            summary = BenchmarkRunner.Run<BindingSmokeBenchmarks>(config, bdnArgs);
         }
         else
         {
             Console.WriteLine("Running BindingBenchmarks via BenchmarkDotNet.");
             Console.WriteLine("Tip: --smoke for a short suite; --filter *Copy* to select methods.");
-            _ = BenchmarkRunner.Run<BindingBenchmarks>(config, bdnArgs);
+            summary = BenchmarkRunner.Run<BindingBenchmarks>(config, bdnArgs);
         }
 
         Console.WriteLine($"Artifacts: {artifacts}");
-        Console.WriteLine($"  Human:   {Path.Combine(artifacts, "report.html")}");
-        Console.WriteLine($"  Machine: {Path.Combine(artifacts, "results.json")}");
+        Console.WriteLine($"  Human:   {EvidenceModel.SessionHtmlPath(summary)}");
+        Console.WriteLine($"  Machine: {EvidenceModel.SessionJsonPath(summary)}");
         return 0;
     }
 }

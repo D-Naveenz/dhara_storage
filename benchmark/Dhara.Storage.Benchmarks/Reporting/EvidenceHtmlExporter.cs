@@ -7,15 +7,11 @@ using BenchmarkDotNet.Reports;
 namespace Dhara.Storage.Benchmarks.Reporting;
 
 /// <summary>
-/// Writes a self-contained human evidence report (<c>report.html</c>) under the artifacts root.
+/// Writes a self-contained human evidence report into BDN's results directory,
+/// session-stamped like the BDN log (e.g. <c>…-20260807-145440-report.html</c>).
 /// </summary>
 internal sealed class EvidenceHtmlExporter : IExporter
 {
-    private readonly string _artifactsRoot;
-
-    public EvidenceHtmlExporter(string artifactsRoot) =>
-        _artifactsRoot = artifactsRoot;
-
     public string Name => nameof(EvidenceHtmlExporter);
 
     public void ExportToLog(Summary summary, ILogger logger)
@@ -25,15 +21,15 @@ internal sealed class EvidenceHtmlExporter : IExporter
 
     public IEnumerable<string> ExportToFiles(Summary summary, ILogger consoleLogger)
     {
-        Directory.CreateDirectory(_artifactsRoot);
-        var path = Path.Combine(_artifactsRoot, "report.html");
-        var html = BuildHtml(summary);
+        Directory.CreateDirectory(summary.ResultsDirectoryPath);
+        var path = EvidenceModel.SessionHtmlPath(summary);
+        var html = BuildHtml(summary, Path.GetFileName(path), Path.GetFileName(EvidenceModel.SessionJsonPath(summary)));
         File.WriteAllText(path, html, Encoding.UTF8);
         consoleLogger.WriteLineInfo($"Evidence HTML: {path}");
         yield return path;
     }
 
-    private static string BuildHtml(Summary summary)
+    private static string BuildHtml(Summary summary, string htmlFileName, string jsonFileName)
     {
         var comparisons = EvidenceModel.BuildComparisons(summary);
         var candidateOnly = EvidenceModel.BuildCandidateOnly(summary);
@@ -185,7 +181,7 @@ internal sealed class EvidenceHtmlExporter : IExporter
         // 4) Footer
         sb.AppendLine("<footer>");
         sb.AppendLine("<p>🛠 Manual harness — not part of CI/CD. Numbers are machine-specific; re-run after transport or packaging changes.</p>");
-        sb.AppendLine("<p>Artifacts: <code>report.html</code> (this file) · <code>results.json</code> (machine). Ladder &amp; thresholds: <code>docs/binding-benchmarks.md</code>.</p>");
+        sb.AppendLine($"<p>Artifacts: <code>{Escape(htmlFileName)}</code> (this file) · <code>{Escape(jsonFileName)}</code> (machine). Ladder &amp; thresholds: <code>docs/binding-benchmarks.md</code>.</p>");
         sb.AppendLine("<p class=\"muted\">Future user-facing evidence will compare the daemon path to a C# approximation of Dhara features — not bare BCL one-liners.</p>");
         sb.AppendLine("</footer>");
 

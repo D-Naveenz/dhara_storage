@@ -27,12 +27,14 @@ Outputs (gitignored): `target/benchmarks/` — fixtures under `fixtures/`, Bench
 
 ## Reports
 
-After a run, open these under `target/benchmarks/bdn/`:
+After a run, open session-stamped files under `target/benchmarks/bdn/results/` (same timestamp stem as the BDN `.log` in `bdn/`):
 
-| File | Audience | Contents |
-|------|----------|----------|
-| `report.html` | Humans | Styled evidence report: purpose, how we measure / host specs, findings + B1/B2 comparison, detailed table, footer |
-| `results.json` | Machines / agents | Raw per-method stats plus comparison verdicts (`dhara.benchmarks.results/v1`) |
+| Pattern | Audience | Contents |
+|---------|----------|----------|
+| `{suite}-{yyyyMMdd-HHmmss}-report.html` | Humans | Styled evidence report: purpose, how we measure / host specs, findings + B1/B2 comparison, detailed table, footer |
+| `{suite}-{yyyyMMdd-HHmmss}-results.json` | Machines / agents | Raw per-method stats plus comparison verdicts (`dhara.benchmarks.results/v1`) |
+
+Each run keeps its own pair; nothing is overwritten by the next session.
 
 Default BenchmarkDotNet CSV/HTML/Markdown sprawl is disabled. Paste findings from `report.html` into **Showcase** below when you want docs to carry a snapshot.
 
