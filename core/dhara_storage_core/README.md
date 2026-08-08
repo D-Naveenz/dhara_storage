@@ -22,7 +22,7 @@ Most applications depend on the runtime. Use this crate when you need framework 
 
 ```toml
 [dependencies]
-dhara_storage_core = "0.9.22"
+dhara_storage_core = "0.9.23"
 ```
 
 ## Usage

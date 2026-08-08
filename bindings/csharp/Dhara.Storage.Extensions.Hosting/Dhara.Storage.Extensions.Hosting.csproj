@@ -10,7 +10,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
     <PackageId>Dhara.Storage.Extensions.Hosting</PackageId>
-    <Version>0.9.22</Version>
+    <Version>0.9.23</Version>
     <Description>Generic Host integration that starts and stops the Dhara Storage sidecar daemon with the application lifetime.</Description>
     <PackageIcon>dhara-logo-colored_sm.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
