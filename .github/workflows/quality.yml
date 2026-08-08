@@ -1,0 +1,46 @@
+name: Quality
+
+on:
+  pull_request:
+    branches: [development]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: code quality (linux)
+    # Dependabot → development lands via auto-merge; full pack on development → main.
+    if: github.event.pull_request.user.login != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+          submodules: true
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Linux GUI dependencies
+        uses: ./.github/actions/setup-linux-tool-deps
+
+      - name: Quality checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo fmt -p dhara_storage_core -p dhara_storage -p dharastorage-ffi -p dhara-sd --check
+          cargo clippy -p dhara_storage --all-targets --all-features -- -D warnings
+          cargo clippy -p dhara_storage_core -p dharastorage-ffi -p dhara-sd --all-targets -- -D warnings
+          cargo doc -p dhara_storage --no-deps --all-features
+          cargo doc --no-deps -p dhara_storage_core -p dharastorage-ffi -p dhara-sd

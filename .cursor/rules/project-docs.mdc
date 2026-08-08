@@ -21,7 +21,7 @@ Operator tool docs, AGENTS, and Cursor rules live in the **`tooling/drot` submod
 | DROT project-docs rule | [`tooling/drot/.cursor/rules/project-docs.mdc`](../../tooling/drot/.cursor/rules/project-docs.mdc) |
 | DROT logging rule | [`tooling/drot/.cursor/rules/logging.mdc`](../../tooling/drot/.cursor/rules/logging.mdc) |
 
-When editing DROT behavior or operator logging/TUI docs, change files **under `tooling/drot/`**. Storage `docs/` may keep short redirect stubs only.
+When editing DROT behavior or operator logging/TUI docs, change files **under `tooling/drot/`**. Link the real submodule paths — do not add redirect stubs under storage `docs/`. Product / NuGet versions: [`dhara.config.toml`](../../dhara.config.toml) `[versions]`. DROT tool version: [`tooling/drot/Cargo.toml`](../../tooling/drot/Cargo.toml).
 
 ## Product intent
 

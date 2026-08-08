@@ -4,22 +4,62 @@ Human-readable map of GitHub Actions workflows and where `drot` is used versus d
 
 ## Triggers
 
-| Workflow | Event | Jobs |
-|----------|-------|------|
-| [pipeline.yml][pipeline-yml] | `pull_request` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` |
-| [pipeline.yml][pipeline-yml] | `workflow_dispatch` (`force_tool_rebuild`) | Same jobs |
-| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `cargo release (linux)` |
-| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | `detect-changes`, `cargo release (linux)` |
-| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `nuget release (linux)` |
-| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | `detect-changes`, `nuget release (linux)` |
+| Workflow | Event | Jobs | GitHub Environment |
+|----------|-------|------|--------------------|
+| [quality.yml][quality-yml] | `pull_request` into `development` (skips Dependabot) | `code quality (linux)` | — |
+| [package-pipeline.yml][package-pipeline-yml] | `pull_request` `development` → `main` | `code quality (linux)`, `platform (*)`, `NuGet package (linux)`, `NuGet verify (linux)` | `staging` |
+| [package-pipeline.yml][package-pipeline-yml] | `workflow_dispatch` | Same jobs | `staging` |
+| [ensure-drot-artifacts.yml][ensure-drot-artifacts-yml] | `workflow_dispatch` | Probe submodule SHA artifacts; dispatch DROT pack if missing | `staging` |
+| [ensure-development.yml][ensure-development-yml] | `push` to `main` / Monday 04:00 UTC / `workflow_dispatch` | `ensure development exists` | — |
+| [dependabot-auto-merge.yml][dependabot-auto-merge-yml] | `pull_request` (Dependabot → `development` only) | `enable squash auto-merge` | — |
+| [codeql.yml][codeql-yml] | `pull_request` / `push` to `main` / weekly cron | `Analyze (actions\|csharp\|rust)` | — (none; no staging secrets) |
+| [publish-crates.yml][publish-crates-yml] | `push` to `main` (cargo scope) | `detect-changes`, `publish dhara_storage_core`, `publish dhara_storage` | `release-cargo` (publish jobs) |
+| [publish-crates.yml][publish-crates-yml] | `workflow_dispatch` | Same | `release-cargo` (publish jobs) |
+| [publish-nuget.yml][publish-nuget-yml] | `push` to `main` (nuget scope) | `detect-changes`, `prepare`, parallel `publish Dhara.Storage` / `Hosting` | `release-nuget` (publish jobs) |
+| [publish-nuget.yml][publish-nuget-yml] | `workflow_dispatch` | Same | `release-nuget` (publish jobs) |
 
-**Concurrency:** PR pipeline runs cancel in-progress; merge publishes do not.
+**Concurrency:** Quality, Package Pipeline (PR), and CodeQL runs cancel in-progress; merge publishes do not.
+
+### Branch flow and Dependabot
+
+Integration path: **feature → `development` → `main`**. Squash vs merge is a per-PR choice (feature → `development` is usually squash; `development` → `main` is always human-reviewed — never auto-merged).
+
+| Concern | Behavior |
+|---------|----------|
+| Dependabot version updates | [`dependabot.yml`][dependabot-yml] `target-branch: development`; weekly Monday 06:00 UTC; Cargo and Actions updates are **grouped** |
+| Missing `development` | [ensure-development.yml][ensure-development-yml] creates it from `main` if absent; never resets an existing branch |
+| Dependabot auto-merge | [dependabot-auto-merge.yml][dependabot-auto-merge-yml] enables **squash** auto-merge for patch/minor PRs into `development` only |
+| PRs into `main` | No workflow enables auto-merge (including `development` → `main` and Dependabot **security** updates, which always target the default branch) |
+| Feature → `development` | [quality.yml][quality-yml] only (fmt/clippy/doc); Prefer squash; enable GitHub UI auto-merge yourself (`development` has no required pack checks) |
+| Dependabot → `development` | Skips Quality and Package Pipeline (auto-merge path) |
+| `development` → `main` | Full [package-pipeline.yml][package-pipeline-yml] (native stage + NuGet pack/verify) |
+| Missing DROT pack for pin | [ensure-drot-artifacts.yml][ensure-drot-artifacts-yml] probes then dispatches DROT Package Pipeline (manual fallback if token cannot dispatch) |
+
+### GitHub Environments
+
+Credentials live on **Environments only** — not repository Actions secrets/variables. Separate environments keep Cargo and NuGet deployment history independent and scope credentials per ecosystem.
+
+| Environment | Used by | Auth / secrets |
+|-------------|---------|----------------|
+| `staging` | Package Pipeline + Ensure DROT Artifacts (`workflow_dispatch` / `development` → `main`) | Secret `DROT_ARTIFACTS_TOKEN` |
+| `release-nuget` | Per-package publish jobs in [publish-nuget.yml][publish-nuget-yml] | Variable `NUGET_USER` (+ optional `NUGET_SOURCE`); OIDC first, then optional secret `NUGET_API_KEY` fallback |
+| `release-cargo` | Per-crate publish jobs in [publish-crates.yml][publish-crates-yml] | OIDC first, then optional secret `CARGO_REGISTRY_TOKEN` fallback |
+
+Workflows with **no** Environment column ([quality.yml][quality-yml], [ensure-development.yml][ensure-development-yml], [dependabot-auto-merge.yml][dependabot-auto-merge-yml], [codeql.yml][codeql-yml]) use only the built-in Actions `github.token` — no custom secret or Environment is required.
+
+Create these under **Settings → Environments**. Restrict `release-*` to `main`; do not add required reviewers on `staging` (that would block every PR). Leave crates.io **Require trusted publishing for all new versions** unchecked while API-token fallback is still needed.
+
+**Publish auth flow (NuGet + Cargo):** try Trusted Publishing (OIDC) first. If the version is already live, log that and exit successfully (no fallback). Any other failure treats Trusted Publishing as misconfigured and falls back to the long-lived API key/token when present; missing fallback credentials fail the job.
 
 ## Architecture
 
 ```mermaid
 flowchart TB
-  subgraph pr ["pipeline.yml pull_request"]
+  subgraph qualityFlow ["quality.yml / feature → development"]
+    QLite["code quality (linux)"]
+  end
+
+  subgraph pack ["package-pipeline.yml / development → main / staging"]
     Q["code quality (linux)"]
     PW["platform (windows)"]
     PL["platform (linux)"]
@@ -33,17 +73,28 @@ flowchart TB
     PACK --> ART[release artifacts]
   end
 
-  subgraph cd_cargo ["publish-crates.yml"]
-    FC[cargo_scope filter]
-    CR["cargo release (linux)"]
-    FC --> CR
+  subgraph sast ["codeql.yml / no environment"]
+    CA["Analyze actions"]
+    CC["Analyze csharp"]
+    CRU["Analyze rust"]
   end
 
-  subgraph cd_nuget ["publish-nuget.yml"]
+  subgraph cd_cargo ["publish-crates.yml / release-cargo"]
+    FC[cargo_scope filter]
+    CCORE["publish dhara_storage_core"]
+    CRUN["publish dhara_storage"]
+    FC --> CCORE --> CRUN
+  end
+
+  subgraph cd_nuget ["publish-nuget.yml / release-nuget"]
     FN[nuget_scope filter]
-    NU["nuget release (linux)"]
-    ART --> NU
-    FN --> NU
+    PREP[prepare artifacts]
+    NS["publish Dhara.Storage"]
+    NH["publish Hosting"]
+    ART --> PREP
+    FN --> PREP
+    PREP --> NS
+    PREP --> NH
   end
 ```
 
@@ -51,18 +102,19 @@ flowchart TB
 
 | Work | CI implementation |
 |------|-------------------|
-| `fmt` / `clippy` / `doc` (core + FFI) | Direct `cargo` on `ubuntu-latest` — **no tool**; [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib (`dhara_storage` / `file_icon_provider`) |
-| `fmt` on `drot` | Direct `cargo fmt` only (no clippy/doc for tool in CI) |
+| CodeQL SAST (`actions`, `csharp`, `rust`) | Dedicated [`codeql.yml`][codeql-yml] — not folded into Package Pipeline; C# uses `build-mode: manual` + `dotnet build` with `StagedNativeRoot` so `BuildDaemon` is skipped; rust/actions use `none` |
+| `fmt` / `clippy` / `doc` (core + FFI) | Direct `cargo` on `ubuntu-latest` — **no tool**; [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib (`dhara_storage` / `file_icon_provider`) — [quality.yml][quality-yml] and Package Pipeline quality job |
+| `fmt` on `drot` | Direct `cargo fmt` only (no clippy/doc for tool in host CI) |
 | `cargo test` (core crates) | Direct `cargo test` on `platform (linux)` only |
 | `dotnet test` | Direct `dotnet test` on `platform (linux)` only |
 | Native staging (Linux/macOS) | Direct `cargo build -p dhara-sd --release --target …` + copy into `runtimes/` |
 | Native staging (Windows) | Downloaded `drot package stage-native --msvc-env` (expects `dhara-sd.exe`) |
 | `drot` binary | [`download-drot`](../.github/actions/download-drot/action.yml) artifact for pinned `tooling/drot` submodule SHA — **not** rebuilt on product-only PRs |
 | Native merge | Inline shell copy of `runtimes/` trees (no tool) |
-| `package pack` | `drot package pack` on `NuGet package (linux)` with merged `--native-stage` |
+| `package pack` | `drot package pack` on `NuGet package (linux)` — primary + `ci.managed_package_projects` |
 | `verify package` | `drot verify package` on `NuGet verify (linux)` — ConsumerSmoke + AOT on `linux-x64` (`ci.host_runtime_smoke` / `ci.aot_runtime_smoke`) |
-| Cargo CD | Direct `cargo release …` ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
-| NuGet CD | Direct `dotnet nuget push` ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
+| Cargo CD | Per-crate [`publish-cargo-crate`](../.github/actions/publish-cargo-crate/action.yml) jobs ([`publish-crates.yml`](../.github/workflows/publish-crates.yml)) |
+| NuGet CD | Per-package [`publish-nuget-package`](../.github/actions/publish-nuget-package/action.yml) jobs ([`publish-nuget.yml`](../.github/workflows/publish-nuget.yml)) |
 
 **Linux GUI rule:** on Linux jobs that **link** `dhara_storage` (clippy/tests with default deps) or **build** `drot`, run [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) first (glib, gtk, pkg-config, wayland). Restoring a cached dist binary alone does not require those packages.
 
@@ -70,10 +122,20 @@ flowchart TB
 
 ## Tool acquisition
 
-- **CI:** [`download-drot`](../.github/actions/download-drot/action.yml) fetches `drot-windows-x64` or `drot-linux-x64` from `dhara_repo_orchestration` for `git rev-parse HEAD:tooling/drot` (secret `DROT_ARTIFACTS_TOKEN`). Product-only PRs skip rebuilding the tool when the submodule gitlink is unchanged.
-- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) version-gates `target/dist/drot` + `drot_tui` against `tooling/drot/Cargo.toml`, builds from the submodule only when missing or stale (`--force-build`). With **no args**, opens the **TUI**. Agents and scripts pass `-Cli` / `--cli` (or any command tokens) to run the direct CLI with `-r` defaulting to the storage repo root.
-- **Full local build:** `run-drot -Cli --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
-- **Binary path:** `target/dist/drot` (`.exe` on Windows). `[profile.dist]` lives in [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
+- **CI:** [`download-drot`](../.github/actions/download-drot/action.yml) fetches `drot-windows-x64` or `drot-linux-x64` from `dhara_repo_orchestration` `package-pipeline.yml` for `git rev-parse HEAD:tooling/drot` (secret `DROT_ARTIFACTS_TOKEN`). Product-only PRs skip rebuilding the tool when the submodule gitlink is unchanged.
+- **Missing pack:** run [ensure-drot-artifacts.yml][ensure-drot-artifacts-yml] (`workflow_dispatch`) to probe and remotely dispatch DROT Package Pipeline for the pin.
+- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) git-stamp `target/dist/drot` against `tooling/drot` `HEAD` (`.drot-git-rev`; rebuilds when the submodule is dirty, the stamp mismatches, or the binary is missing; `--force-build` / `-Force` always rebuilds). With **no subcommand**, opens the **TUI**. Agents and scripts pass a subcommand or `--help` for the Direct CLI (`-r` defaults to the storage repo root).
+- **Full local build:** `run-drot --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
+- **Binary path:** `target/dist/drot` (`.exe` on Windows) from host `ensure-drot-dist` (`--profile dist`, thin LTO). DROT Package Pipeline ships fat-LTO `--release` artifacts into `drot-*-x64`; download still lands under `target/dist/`. Profile definitions: [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
+
+### DROT orchestration CI (submodule repo)
+
+| Workflow | Event | Jobs |
+|----------|-------|------|
+| `quality.yml` | `pull_request` (skips Dependabot → `development`) | fmt / clippy / test |
+| `package-pipeline.yml` | `push` to `main` + `workflow_dispatch` (optional `checkout_sha`) | `pack-windows`, `pack-linux` |
+
+Hosts download by **submodule SHA**. Packing runs once per cycle on push to DROT `main` (after `development` → `main`); storage can dispatch a pack when the pin has no artifacts.
 
 ## Path-scoped merge publishes
 
@@ -86,9 +148,21 @@ flowchart TB
 
 NuGet CD still **requires PR artifacts** from `NuGet package (linux)` at merge second parent (`HEAD^2`).
 
+## CodeQL (`codeql.yml`)
+
+Separate from Package Pipeline: security/SAST only (fmt/clippy stay in `code quality`). No GitHub Environment — does not need `DROT_ARTIFACTS_TOKEN`.
+
+| Language | Build mode | Notes |
+|----------|------------|-------|
+| `actions` | `none` | Workflow YAML |
+| `rust` | `none` | Default for Rust |
+| `csharp` | `manual` | `setup-dotnet` 10.0.x; build `Dhara.Storage` + `Dhara.Storage.Extensions.Hosting` with a dummy `StagedNativeRoot` so packing’s sidecar `BuildDaemon` does not run |
+
+Triggers: PR and push to `main`, plus weekly cron. Alerts appear under the repo **Security → Code scanning** tab.
+
 ## PR jobs
 
-### `code quality (linux)`
+### `code quality (linux)` ([quality.yml][quality-yml] + Package Pipeline)
 
 Direct commands (no `drot`); [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) for GTK/glib:
 
@@ -98,7 +172,7 @@ Direct commands (no `drot`); [`setup-linux-tool-deps`](../.github/actions/setup-
 
 ### `platform (windows)`
 
-After `code quality (linux)` — **native staging only**:
+After `code quality (linux)` on Package Pipeline — **native staging only**:
 
 1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-windows-x64`).
 2. `drot package stage-native --msvc-env` (stages `dhara-sd.exe`).
@@ -129,7 +203,7 @@ After all platform jobs:
 
 1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download four native-stage artifacts; merge `runtimes/` inline.
-3. `drot package pack --native-stage target/dist/artifacts/native-stage`
+3. `drot package pack --native-stage …` — packs `ci.package_project` (`Dhara.Storage`) plus each `ci.managed_package_projects` entry (Hosting) into `target/dist/output/nuget`.
 4. Upload `release-native-stage`, `release-nuget-package`, `release-metadata` (90-day retention).
 
 ### `NuGet verify (linux)`
@@ -138,35 +212,41 @@ After `NuGet package (linux)`:
 
 1. [`download-drot`](../.github/actions/download-drot/action.yml) (`drot-linux-x64`).
 2. Download `release-native-stage` artifact.
-3. `drot verify package --native-stage target/dist/artifacts/native-stage` (ConsumerSmoke + AOT on `linux-x64`).
+3. `drot verify package --native-stage …` (ConsumerSmoke + AOT on `linux-x64`).
 
 ## CD: `publish-crates`
 
 1. `detect-changes` — `cargo_scope` filter (or always on `workflow_dispatch`).
-2. [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml) — `cargo release` verifies crate tarballs by building `dhara_storage` (GTK/glib via `file_icon_provider`).
-3. `cargo release --workspace --isolated --allow-branch main --tag-name 'v{{version}}' --no-confirm --execute` (`CARGO_REGISTRY_TOKEN`). Dry-run uses `--allow-branch '*'` and `--no-verify`.
+2. `publish dhara_storage_core` — [`publish-cargo-crate`](../.github/actions/publish-cargo-crate/action.yml) with `create_tag=true` (`release-cargo`, OIDC then `CARGO_REGISTRY_TOKEN`).
+3. `publish dhara_storage` — same action with `create_tag=false`, `needs` core, `if: always() && should_run`; includes [`setup-linux-tool-deps`](../.github/actions/setup-linux-tool-deps/action.yml). Job statuses are independent so a runtime failure does not rewrite a successful core publish.
 
 ## CD: `publish-nuget`
 
 1. `detect-changes` — `nuget_scope` filter (or always on `workflow_dispatch`).
-2. Resolve artifact commit (`HEAD^2` for merge commits) — see [native packaging][native-packaging].
-3. Download PR CI artifacts for that commit.
-4. `dotnet nuget push` with `NUGET_API_KEY` and source from `dhara.config.toml`.
+2. `prepare` — resolve PR artifact SHA (`HEAD^2`), download `release-native-stage` + `release-nuget-package` from Package Pipeline, re-upload as `prepared-nuget-packages`.
+3. Parallel jobs `publish Dhara.Storage` and `publish Dhara.Storage.Extensions.Hosting` — each calls [`publish-nuget-package`](../.github/actions/publish-nuget-package/action.yml) (`release-nuget`, OIDC then `NUGET_API_KEY`). Source from `vars.NUGET_SOURCE` or `dhara.config.toml` `[nuget].source`.
 
 ## Local parity
 
-[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] version-gate the dist binaries (default TUI; `-Cli` / `--cli` for scripted CLI). [`verify-local.ps1`][verify-local-ps1] runs `run-drot -Cli --yes quality run` — stricter than PR CI.
+[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] git-stamp the dist binary against `tooling/drot` (no subcommand → TUI; subcommand / `--help` → Direct CLI). [`verify-local.ps1`][verify-local-ps1] runs `run-drot --yes quality run` — stricter than PR CI.
 
 ## Related docs
 
 - [Workspace architecture][architecture] — tool crate DAG
 - [Multi-platform native packaging][native-packaging] — RID staging, artifact SHA pitfalls
-- [Logging conventions][logging] — redirect → DROT operator audit logs
+- [Logging conventions][logging] — DROT operator audit logs
+- [DROT host config][drot-host-config] — shared vs project-file ownership, secrets, activation
 - [DROT docs][drot-docs] — tool architecture, TUI, logging (submodule)
 - [drot README][readme-tool] — full command surface
 - [Docs index][docs-index]
 
-[pipeline-yml]: ../.github/workflows/pipeline.yml
+[quality-yml]: ../.github/workflows/quality.yml
+[package-pipeline-yml]: ../.github/workflows/package-pipeline.yml
+[ensure-drot-artifacts-yml]: ../.github/workflows/ensure-drot-artifacts.yml
+[ensure-development-yml]: ../.github/workflows/ensure-development.yml
+[dependabot-auto-merge-yml]: ../.github/workflows/dependabot-auto-merge.yml
+[dependabot-yml]: ../.github/dependabot.yml
+[codeql-yml]: ../.github/workflows/codeql.yml
 [publish-crates-yml]: ../.github/workflows/publish-crates.yml
 [publish-nuget-yml]: ../.github/workflows/publish-nuget.yml
 [workspace-cargo]: ../Cargo.toml
@@ -176,8 +256,9 @@ After `NuGet package (linux)`:
 [run-drot-sh]: ../tooling/scripts/run-drot.sh
 [ensure-dist-ps1]: ../tooling/scripts/ensure-drot-dist.ps1
 [ensure-dist-sh]: ../tooling/scripts/ensure-drot-dist.sh
-[logging]: logging.md
+[logging]: ../tooling/drot/docs/logging.md
 [drot-docs]: ../tooling/drot/docs/README.md
+[drot-host-config]: ../tooling/drot/docs/host-config.md
 [native-packaging]: native-packaging.md
 [architecture]: architecture.md
 [readme-tool]: ../tooling/drot/README.md

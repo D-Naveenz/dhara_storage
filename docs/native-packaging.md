@@ -23,10 +23,10 @@ flowchart LR
 
   W & L & LA & M --> DL --> MG --> VP
   VP --> NUPKG[Dhara.Storage.nupkg]
+  VP --> HOSTING[Dhara.Storage.Extensions.Hosting.nupkg]
 ```
 
-Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `package pack`. `NuGet verify (linux)` runs `verify package` (ConsumerSmoke via `AddDharaStorage` + AOT publish on `linux-x64`).
-
+Each platform job stages `dhara-sd` binaries (tool with `--msvc-env` on Windows; direct `cargo build -p dhara-sd` elsewhere), uploads a `native-stage-{os}` artifact, and exits. `NuGet package (linux)` downloads all four artifacts, merges `runtimes/` inline, then `drot package pack` (primary `Dhara.Storage` plus `ci.managed_package_projects` such as Hosting). `NuGet verify (linux)` runs `verify package` against the primary package (ConsumerSmoke via `AddDharaStorage` + AOT publish on `linux-x64`).
 **Note:** `dhara-sd` is cross-platform — Windows uses named pipes + `DuplicateHandle`; Linux/macOS use UDS + `SCM_RIGHTS` (see [daemon-transport.md][daemon-transport]).
 
 ## Expected layout
@@ -62,7 +62,7 @@ The FFI cdylib (`dharastorage.dll` / `libdharastorage.*`) is **not** packed into
 
 `dhara_storage` (linked by `dhara-sd`) depends on `file_icon_provider`, which pulls GTK/glib through `pkg-config`. Cross-compiling `aarch64-unknown-linux-gnu` from `ubuntu-latest` fails when `glib-sys` cannot find a cross sysroot — even with `gcc-aarch64-linux-gnu` installed.
 
-**Lesson:** treat `linux-arm64` like a separate platform job on `ubuntu-24.04-arm`, not as a cross-target from the x64 Linux job. The [pipeline][pipeline-yml] defines `platform-linux` (x64) and `platform-linux-arm64` (arm64) accordingly.
+**Lesson:** treat `linux-arm64` like a separate platform job on `ubuntu-24.04-arm`, not as a cross-target from the x64 Linux job. The [package pipeline][pipeline-yml] defines `platform-linux` (x64) and `platform-linux-arm64` (arm64) accordingly.
 
 ## Merging native artifacts
 
@@ -130,7 +130,7 @@ Directory watch integration tests should **poll for the created file path** afte
 - [Daemon transport][daemon-transport] — named pipes / UDS, handle transfer
 - [Binding benchmarks][binding-benchmarks] — FFI vs daemon evidence harness
 - [Windows code signing][windows-signing] — VERSIONINFO vs Authenticode / SAC
-- [Logging conventions][logging] — redirect → DROT audit lines for stage/verify
+- [Logging conventions][logging] — DROT audit lines for stage/verify
 - [dhara.config.toml][dhara-config] — `ci.native_runtimes` and rust target mappings
 
 [readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
@@ -139,11 +139,11 @@ Directory watch integration tests should **poll for the created file path** afte
 [tooling-scripts]: ../tooling/scripts/
 [nuget-rs]: ../tooling/drot/crates/drot_dhara_storage/src/ops/nuget.rs
 [native-rids-rs]: ../tooling/drot/crates/drot_dhara_storage/src/ops/native_rids.rs
-[pipeline-yml]: ../.github/workflows/pipeline.yml
+[pipeline-yml]: ../.github/workflows/package-pipeline.yml
 [verify-local-sh]: ../tooling/scripts/verify-local.sh
 [csproj]: ../bindings/csharp/Dhara.Storage/Dhara.Storage.csproj
 [watch-rs]: ../core/dhara_storage/src/watch.rs
-[logging]: logging.md
+[logging]: ../tooling/drot/docs/logging.md
 [dhara-config]: ../dhara.config.toml
 [daemon-transport]: daemon-transport.md
 [binding-benchmarks]: binding-benchmarks.md

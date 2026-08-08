@@ -1,0 +1,123 @@
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Publish Cargo crate
+description: Publish one workspace crate with cargo-release (OIDC then CARGO_REGISTRY_TOKEN fallback)
+
+inputs:
+  package:
+    description: Cargo package name (-p)
+    required: true
+  dry_run:
+    description: When true, run cargo-release without --execute
+    required: false
+    default: "false"
+  create_tag:
+    description: When true, pass --tag-name v{{version}}; otherwise --no-tag
+    required: false
+    default: "false"
+  oidc_token:
+    description: Token from rust-lang/crates-io-auth-action (empty skips OIDC)
+    required: false
+    default: ""
+  fallback_token:
+    description: Long-lived CARGO_REGISTRY_TOKEN fallback
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Publish crate
+      shell: bash
+      env:
+        PACKAGE: ${{ inputs.package }}
+        DRY_RUN: ${{ inputs.dry_run }}
+        CREATE_TAG: ${{ inputs.create_tag }}
+        OIDC_TOKEN: ${{ inputs.oidc_token }}
+        FALLBACK_TOKEN: ${{ inputs.fallback_token }}
+      run: |
+        set -euo pipefail
+
+        is_duplicate_output() {
+          grep -qiE \
+            'already exists on|crate .+ already exists|version .+ is already uploaded|already uploaded' \
+            <<<"$1"
+        }
+
+        run_release() {
+          local token="$1"
+          local label="$2"
+          local out code
+          local -a args=(
+            release -p "$PACKAGE" --isolated --no-confirm
+          )
+          if [ "$CREATE_TAG" = "true" ]; then
+            args+=(--tag-name 'v{{version}}')
+          else
+            args+=(--no-tag)
+          fi
+          if [ "$DRY_RUN" = "true" ]; then
+            args+=(--allow-branch '*' --no-verify)
+          else
+            args+=(--allow-branch main --execute)
+          fi
+          echo "Attempting cargo release -p ${PACKAGE} via ${label}..."
+          set +e
+          out=$(CARGO_REGISTRY_TOKEN="$token" cargo "${args[@]}" 2>&1)
+          code=$?
+          set -e
+          printf '%s\n' "$out"
+          if [ "$code" -eq 0 ]; then
+            echo "::notice::Cargo release of ${PACKAGE} succeeded via ${label}."
+            return 0
+          fi
+          if is_duplicate_output "$out"; then
+            echo "::notice::${PACKAGE} version already live on crates.io (${label})."
+            return 2
+          fi
+          echo "::warning::Cargo release of ${PACKAGE} via ${label} failed (exit ${code})."
+          return 1
+        }
+
+        if [ "$DRY_RUN" = "true" ]; then
+          args=(
+            release -p "$PACKAGE" --isolated --no-confirm
+            --allow-branch '*' --no-verify
+          )
+          if [ "$CREATE_TAG" = "true" ]; then
+            args+=(--tag-name 'v{{version}}')
+          else
+            args+=(--no-tag)
+          fi
+          cargo "${args[@]}"
+          exit 0
+        fi
+
+        if [ -n "${OIDC_TOKEN:-}" ]; then
+          if run_release "$OIDC_TOKEN" "OIDC Trusted Publishing"; then
+            exit 0
+          else
+            rc=$?
+            if [ "$rc" -eq 2 ]; then
+              exit 0
+            fi
+            echo "::warning::OIDC publish failed (Trusted Publishing may be misconfigured). Falling back to API token."
+          fi
+        else
+          echo "::warning::OIDC auth did not produce a token. Falling back to API token."
+        fi
+
+        if [ -z "${FALLBACK_TOKEN:-}" ]; then
+          echo "::error::CARGO_REGISTRY_TOKEN is not set on environment release-cargo; cannot fall back from OIDC."
+          exit 1
+        fi
+
+        if run_release "$FALLBACK_TOKEN" "API token"; then
+          exit 0
+        else
+          rc=$?
+          if [ "$rc" -eq 2 ]; then
+            exit 0
+          fi
+          echo "::error::Cargo release of ${PACKAGE} failed via API token."
+          exit 1
+        fi

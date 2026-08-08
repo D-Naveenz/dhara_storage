@@ -1,9 +1,9 @@
 # Dhara Storage — technical reference
 
-This directory holds versioned technical reference for the **Dhara Storage** product.
+This directory holds technical reference for the **Dhara Storage** product.
 Read these docs for ABI contracts, binary formats, CI/CD maps, and native packaging — depth that READMEs intentionally omit.
 
-**Operator tool (DROT)** docs live in the submodule: [`tooling/drot/docs/`](../tooling/drot/docs/README.md) and [`tooling/drot/AGENTS.md`](../tooling/drot/AGENTS.md). Stubs below redirect for old links.
+**Operator tool (DROT)** docs live in the submodule: [`tooling/drot/docs/`](../tooling/drot/docs/README.md) and [`tooling/drot/AGENTS.md`](../tooling/drot/AGENTS.md).
 
 For onboarding, install steps, and package overviews, start at the [workspace README][root-readme] and per-package READMEs linked below.
 
@@ -19,8 +19,6 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Binding benchmarks][binding-benchmarks] | Implementers | FFI vs daemon ladder, BenchmarkDotNet harness |
 | [Windows code signing][windows-signing] | Release engineers | winresource vs Authenticode / SAC |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
-| [Logging (redirect)][logging] | Operators, agents | → DROT `docs/logging.md` |
-| [TUI progress (redirect)][tui-progress] | Operators, agents | → DROT `docs/tui-progress.md` |
 
 ## Package READMEs (publish surfaces)
 
@@ -30,7 +28,8 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [dhara_storage][readme-dhara-storage] | crates.io |
 | [dhara_storage_core][readme-core] | crates.io |
 | [dharastorage][readme-dharastorage] | Native ABI (NuGet asset) |
-| [Dhara.Storage][readme-nuget] | NuGet.org package readme |
+| [Dhara.Storage][readme-nuget] | NuGet.org — primary package |
+| [Dhara.Storage.Extensions.Hosting][readme-hosting] | NuGet.org — Generic Host extension |
 | [drot][readme-tool] | Operator CLI/TUI (submodule) |
 
 ## Conventions
@@ -38,23 +37,25 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 - **README vs docs** — READMEs onboard humans on each publish surface; `docs/` explains how things work in depth.
 - **DROT ownership** — TUI, operator logging, and tool crate architecture are maintained under `tooling/drot/`, not duplicated here.
 - **Evidence first** — treat manifests, workflows, and source as authoritative over stale prose.
-- **MindVault** — private workspace memory and durable cross-repo lessons stay outside this repository.
+- **Versions** — product/tool semver lives in `dhara.config.toml` / DROT `Cargo.toml`; do not hardcode them in narrative docs unless illustrating a format contract.
 
 ## Related
 
 - [AGENTS.md][agents] — storage agent router and local commands
 - [DROT AGENTS.md][drot-agents] — tool agent router
-- [dhara.config.toml][dhara-config] — shared version and publish metadata
-- [pipeline workflow][pipeline-yml] — canonical CI/CD definition
+- [dhara.config.toml][dhara-config] — shared version, `[product]`, NuGet feed, `[ci]` pack paths
+- [DROT host config][drot-host-config] — config vs csproj ownership, secrets, activation
+- [quality workflow][quality-yml] — feature → `development` checks
+- [package pipeline][pipeline-yml] — `development` → `main` native + NuGet pack
+- [CI/CD pipelines][ci-cd] — full workflow map
 
 [root-readme]: ../README.md
 [readme-dhara-storage]: ../core/dhara_storage/README.md
 [readme-core]: ../core/dhara_storage_core/README.md
 [readme-dharastorage]: ../interop/dharastorage-ffi/README.md
 [readme-nuget]: ../bindings/csharp/Dhara.Storage/README.md
+[readme-hosting]: ../bindings/csharp/Dhara.Storage.Extensions.Hosting/README.md
 [readme-tool]: ../tooling/drot/README.md
-[logging]: logging.md
-[tui-progress]: tui-progress.md
 [filedefs-dat]: filedefs-dat.md
 [typed-abi]: typed-c-compatible-abi.md
 [ci-cd]: ci-cd-pipelines.md
@@ -66,4 +67,6 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [agents]: ../AGENTS.md
 [drot-agents]: ../tooling/drot/AGENTS.md
 [dhara-config]: ../dhara.config.toml
-[pipeline-yml]: ../.github/workflows/pipeline.yml
+[drot-host-config]: ../tooling/drot/docs/host-config.md
+[pipeline-yml]: ../.github/workflows/package-pipeline.yml
+[quality-yml]: ../.github/workflows/quality.yml

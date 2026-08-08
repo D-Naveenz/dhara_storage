@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$repo_root"
 
-args=(--cli --yes quality run)
+args=(--yes quality run)
 for arg in "$@"; do
   case "$arg" in
     --skip-docs) args+=(--skip-docs) ;;

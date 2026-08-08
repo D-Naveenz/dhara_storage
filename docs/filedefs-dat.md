@@ -100,8 +100,10 @@ The footer is a single-line XML document prefixed by a standard XML declaration.
 Example shape:
 
 ```xml
-<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/src/core/dhara_storage_core/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>0.8.0</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
+<?xml version="1.0" encoding="UTF-8"?><dsfd xmlns="https://raw.githubusercontent.com/D-Naveenz/dhara_storage/main/core/dhara_storage_core/schema/dsfd-metadata.xsd"><signature>Dhara Storage File Definition package - DSFD</signature><packageVersion>EXAMPLE</packageVersion><definitionsRelease>2026-06-24</definitionsRelease><packageRevision>1</packageRevision><tags>48</tags><definitionCount>5500</definitionCount></dsfd>
 ```
+
+`packageVersion` in real packages is the linked codec crate version (not a docs-maintained literal).
 
 ### Schema (XSD)
 
@@ -115,7 +117,7 @@ checked-in XSD file; the URL is for external consumers once the file is publishe
 
 ### Semantic cross-checks
 
-When decoding, the DAL verifies that XML metadata is consistent with the FlatBuffers
+When decoding, `dhara_storage_core` verifies that XML metadata is consistent with the FlatBuffers
 payload:
 
 - `packageRevision` matches `package_revision` in the payload.
@@ -141,12 +143,12 @@ counter. `drot` assigns it when building from TrID sources.
 embedded payload is stale — `defs sync-embedded` compares definition content and
 `definitionsRelease`, not version strings.
 
-Example: three rebuilds at DAL `0.6.0` produce revisions `1`, `2`, `3`. After a DAL
-version bump to `0.8.0`, the next build starts again at `1`.
+Example: three rebuilds at the same core package version produce revisions `1`, `2`, `3`. After the
+linked core package version changes, the next build starts again at `1`.
 
 At startup, `drot` reads the canonical output path, caches revision and version
 for logging and the GUI workspace snapshot, and updates the cache after each successful write.
-See [`tooling/drot/src/drot_kernel/src/workspace.rs`](../tooling/drot/src/drot_kernel/src/workspace.rs).
+See [`tooling/drot/crates/drot_kernel/src/workspace.rs`](../tooling/drot/crates/drot_kernel/src/workspace.rs).
 
 ## `tags` field
 
@@ -158,27 +160,27 @@ future builder features.
 
 | Path | Role |
 |------|------|
-| `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
-| `tooling/drot/src/drot_dhara_storage/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
+| `tooling/drot/crates/drot_dhara_storage/package/triddefs_xml.7z` | Build input: TrID XML source archive (gitignored when large) |
+| `tooling/drot/crates/drot_dhara_storage/package/triddefs_xml.source.toml` | Build input: sidecar with upstream `definitions_release` date |
 | `{tool_root}/package/` | Runtime default for TrID input (copied beside binary at build) |
 | `core/dhara_storage/resources/filedefs.dat` | Embedded runtime package (published with crate) |
 | `dhara_storage` (compile time) | Embeds `resources/filedefs.dat` via `include_bytes!` |
-| `tooling/drot/src/drot_dhara_storage/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
+| `tooling/drot/crates/drot_dhara_storage/data/` | Compile-time MIME/extension catalogs (`include_str!`) |
 
-Typical operator commands (via [`run-drot`](../tooling/scripts/run-drot.ps1); `-Cli` for the direct CLI — default with no args opens the TUI):
+Typical operator commands (via [`run-drot`](../tooling/scripts/run-drot.ps1); pass a subcommand for the Direct CLI — default with no subcommand opens the TUI):
 
 ```powershell
 # Build from the default TrID archive into core/dhara_storage/resources/filedefs.dat
-./tooling/scripts/run-drot.ps1 -Cli --yes defs build-trid-xml
+./tooling/scripts/run-drot.ps1 --yes defs build-trid-xml
 
 # Inspect the current package
-./tooling/scripts/run-drot.ps1 -Cli --yes defs inspect
+./tooling/scripts/run-drot.ps1 --yes defs inspect
 
 # Re-copy / rebuild the embedded runtime artifact when needed
-./tooling/scripts/run-drot.ps1 -Cli --yes defs sync-embedded
+./tooling/scripts/run-drot.ps1 --yes defs sync-embedded
 
 # Full repository build (config → defs → quality → native → verify)
-./tooling/scripts/run-drot.ps1 -Cli --yes build run
+./tooling/scripts/run-drot.ps1 --yes build run
 ```
 
 The sidecar TOML uses the source stem (`triddefs_xml.source.toml` beside
@@ -219,13 +221,13 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 ## Related docs
 
-- [Logging conventions][logging] — redirect → DROT audit log format
+- [Logging conventions][logging] — DROT audit log format
 - [dhara_storage_core README][readme-core] — crate-local quick reference
 - [drot package/ notes][package-readme] — shipped TrID build inputs
 - [CI/CD pipelines][ci-cd] — defs build in release flow
 - [Docs index][docs-index]
 
-[logging]: logging.md
+[logging]: ../tooling/drot/docs/logging.md
 [readme-core]: ../core/dhara_storage_core/README.md
 [package-readme]: ../tooling/drot/crates/drot_dhara_storage/package/README.md
 [ci-cd]: ci-cd-pipelines.md

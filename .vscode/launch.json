@@ -4,13 +4,13 @@
     {
       "id": "drotArgs",
       "type": "promptString",
-      "description": "drot CLI args after '--' (empty prints help)",
+      "description": "drot args after '--' (empty opens TUI on a TTY; --help lists commands)",
       "default": ""
     }
   ],
   "configurations": [
     {
-      "name": "Debug drot (dev)",
+      "name": "Debug drot TUI (dev)",
       "type": "lldb",
       "request": "launch",
       "cwd": "${workspaceFolder}",
@@ -29,10 +29,10 @@
           "kind": "bin"
         }
       },
-      "args": []
+      "args": ["-r", "${workspaceFolder}"]
     },
     {
-      "name": "Debug drot_tui (dev)",
+      "name": "Debug drot CLI (dev)",
       "type": "lldb",
       "request": "launch",
       "cwd": "${workspaceFolder}",
@@ -43,15 +43,15 @@
           "--manifest-path",
           "tooling/drot/Cargo.toml",
           "-p",
-          "drot_tui",
+          "drot",
           "--"
         ],
         "filter": {
-          "name": "drot_tui",
+          "name": "drot",
           "kind": "bin"
         }
       },
-      "args": []
+      "args": ["-r", "${workspaceFolder}", "--help"]
     },
     {
       "name": "Run drot (dist)",

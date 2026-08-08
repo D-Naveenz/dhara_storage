@@ -8,19 +8,24 @@ members = [
 resolver = "3"
 
 [workspace.package]
-version = "0.9.22"
+version = "0.9.23"
 edition = "2024"
 license = "Apache-2.0"
 repository = "https://github.com/D-Naveenz/dhara_storage"
 homepage = "https://github.com/D-Naveenz/dhara_storage"
+authors = ["Naveen Dharmathunga"]
 
 [workspace.dependencies]
-dhara_storage_core = { version = "0.9.22", path = "core/dhara_storage_core" }
-dhara_storage = { version = "0.9.22", path = "core/dhara_storage" }
+dhara_storage_core = { version = "0.9.23", path = "core/dhara_storage_core" }
+dhara_storage = { version = "0.9.23", path = "core/dhara_storage" }
 
-# Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
+# Single release profile for CI native staging, local `stage-native`, and NuGet-bound `dhara-sd`.
+# opt-level 3 favors daemon / analysis speed over Ratatui-style size-first `"s"`.
+# thin LTO keeps multi-RID release links usable locally and in Package Pipeline (five 64-bit RIDs);
+# panic=abort + strip shrink the sidecar without a second profile.
 [profile.release]
-codegen-units = 1   # Allows compiler to perform better optimization.
-lto = true          # Enables Link-time Optimization.
-opt-level = "s"     # Prioritizes small binary size. Use `3` if you prefer speed.
-strip = true        # Ensures debug symbols are removed.
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+panic = "abort"
+strip = true

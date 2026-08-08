@@ -7,14 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.9.23 - 2026-08-08
+
 ### Changed
-- Bumped DROT tool workspace to **0.9.13** (`tooling/drot`): TUI Tasks tree polish (explorer chrome, marquee, click expand), Learn-style Info tab, compact Actions panel (Unicode capsule Gauge bar, Run/Cancel toggle, Options Reset), keyed UI strings.
+- Single `drot` binary for CLI and TUI (pinned DROT **0.10.0**): no subcommand on a TTY opens the TUI; subcommands and `--help` use the Direct CLI. Host `run-drot` / `ensure-drot-dist` no longer switch on `-Cli` / a separate `drot_tui` binary.
+- Host `[profile.release]` favors daemon speed and practical multi-RID links (`opt-level = 3`, thin LTO, `panic = "abort"`, strip). DROT keeps fat-LTO `--release` for CI pack and thin-LTO `--profile dist` for local `target/dist/drot`.
 - Replaced the binding pilot with product `dhara-sd`; `Dhara.Storage` NuGet uses the daemon (gRPC + handle transfer) instead of in-process FFI. Rust `dharastorage-ffi` remains for evidence benchmarks only.
 - Added `Dhara.Storage.Extensions.Hosting` for Generic Host lifetime of the sidecar.
 - Promoted BenchPilot to `benchmark/Dhara.Storage.Benchmarks` (FFI vs `dhara-sd` rung 1).
 - DROT workspace crates live under `tooling/drot/crates/`; embed path is `core/dhara_storage/resources/filedefs.dat`.
 - Relocated monorepo packages out of `src/`: `core/`, `interop/`, `bindings/csharp/`, and `benchmark/`. Tooling stays under `tooling/`.
-- Native packaging / CI stages `dhara-sd` sidecars (not the FFI cdylib); managed tests and NuGet verify smoke run on Windows (`win-x64`).
+- Native packaging / CI stages `dhara-sd` sidecars (not the FFI cdylib); managed tests and NuGet verify smoke run on the configured host/AOT RIDs.
 
 ### Fixed
 - Honored `overwrite` on `StorageFile.CopyAsync` / `MoveAsync` when progress is null (always use the operation ABI).
@@ -22,7 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - File streams over duplicated handles use synchronous `FileStream` (handles are opened without `FILE_FLAG_OVERLAPPED`).
 
 ### Technical
-- Documented daemon transport, Windows code-signing (winresource vs Authenticode), and binding benchmark ladder under `docs/`.
+- Bumped workspace / NuGet product line to **0.9.23**.
+- Documented daemon transport, Windows code-signing (winresource vs Authenticode), binding benchmark ladder, and DROT one-binary / profile roles under `docs/` and AGENTS.
 - `dhara-sd` embeds VERSIONINFO via `winresource`; named-pipe accept loop keeps a spare listener.
 
 ---

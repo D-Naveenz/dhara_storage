@@ -29,7 +29,7 @@
   <PropertyGroup>
     <PackageId>Dhara.Storage</PackageId>
     <Product>Dhara Storage</Product>
-    <Version>0.9.22</Version>
+    <Version>0.9.23</Version>
     <Description>.NET bindings for Dhara Storage: content-based file intelligence, file and directory handles, transfers, watching, and metadata via the bundled sidecar daemon.</Description>
     <Authors>Naveen Dharmathunga</Authors>
     <PackageTags>storage;grpc;rust;analysis;file-handling;directory-management;watching</PackageTags>
@@ -48,7 +48,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     <PackageReference Include="Google.Protobuf" Version="3.35.1" />
-    <PackageReference Include="Grpc.Net.Client" Version="2.80.0" />
+    <PackageReference Include="Grpc.Net.Client" Version="2.83.0" />
     <PackageReference Include="Grpc.Tools" Version="2.83.0">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

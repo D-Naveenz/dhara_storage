@@ -8,9 +8,9 @@ Not CI/CD. Windows-first.
 
 | Rung | Audience | Comparison | Status |
 |------|----------|------------|--------|
-| **1** | “Why drop FFI from NuGet?” | `dharastorage-ffi` (bench harness) vs `dhara-sd` + handle-dup | **Current suite** |
-| **2** | Developers | Daemon RPC delay vs in-process `dhara_storage` (Criterion) | Planned |
-| **3** | Users | `Dhara.Storage` vs language-native I/O (e.g. `File.Copy`) | Planned |
+| **1** | “Why drop FFI from NuGet?” | `dharastorage-ffi` (bench harness) vs `dhara-sd` + handle-dup | **Current suite** (decision archived; suite kept for regression) |
+
+Rung 1 answered the NuGet packaging question.
 
 ## Layout
 
@@ -21,7 +21,20 @@ Not CI/CD. Windows-first.
 | [`interop/dharastorage-ffi/`](../interop/dharastorage-ffi/) | FFI cdylib for rung 1 only |
 | [`benchmark/Dhara.Storage.Benchmarks/`](../benchmark/Dhara.Storage.Benchmarks/) | BenchmarkDotNet harness |
 
-Outputs: `target/bench-pilot/bdn/` (gitignored; path may rename later).
+Outputs (gitignored): `target/benchmarks/` — fixtures under `fixtures/`, BenchmarkDotNet artifacts under `bdn/`.
+
+## Reports
+
+After a run, open session-stamped files under `target/benchmarks/bdn/results/` (same timestamp stem as the BDN `.log` in `bdn/`):
+
+| Pattern | Audience | Contents |
+|---------|----------|----------|
+| `{suite}-{yyyyMMdd-HHmmss}-report.html` | Humans | Styled evidence report: purpose, how we measure / host specs, findings + B1/B2 comparison, detailed table, footer |
+| `{suite}-{yyyyMMdd-HHmmss}-results.json` | Machines / agents | Raw per-method stats plus comparison verdicts (`dhara.benchmarks.results/v1`) |
+
+Each run keeps its own pair; nothing is overwritten by the next session.
+
+Default BenchmarkDotNet CSV/HTML/Markdown sprawl is disabled. Use `report.html` findings when you need a human-readable snapshot.
 
 ## Baselines (rung 1)
 
@@ -50,7 +63,9 @@ dotnet run --project benchmark/Dhara.Storage.Benchmarks/Dhara.Storage.Benchmarks
 | Read ≥1MB (handle dup) | — | Throughput / mean competitive with B1 |
 | Copy 1MB | ≤ +10% | — |
 
-**Product lean:** NuGet uses `dhara-sd`; keep FFI only until rung-1 evidence is archived.
+The HTML report applies these budgets to paired scenarios (Pass / Watch / Fail). Unpaired B2-only methods appear without ratios.
+
+**Product lean:** NuGet uses `dhara-sd`; FFI remains bench-only for rung-1 regression.
 
 ## Stability notes
 
@@ -60,7 +75,3 @@ dotnet run --project benchmark/Dhara.Storage.Benchmarks/Dhara.Storage.Benchmarks
 4. `CPUUsageDiagnoser` may be commented when DiagnosticsHub ETW is exhausted.
 
 Transport design: [daemon-transport.md](daemon-transport.md). Signing: [windows-code-signing.md](windows-code-signing.md).
-
-## Showcase (last full Release run)
-
-Re-run the suite after significant transport or packaging changes and refresh this section with current numbers.

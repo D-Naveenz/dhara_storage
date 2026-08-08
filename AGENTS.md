@@ -1,19 +1,21 @@
 # AGENTS.md
 
-Read this file before large changes in this workspace. It is the durable product note and AI/dev router for Dhara Storage. MindVault is **not** used here.
+Read this file before large changes in this workspace. It is the durable product note and AI/dev router for Dhara Storage.
+
+This is a **hybrid** repository: product code lives in this git history; the operator tool is the [`tooling/drot`](tooling/drot) submodule. For DROT work, also follow [`tooling/drot/AGENTS.md`](tooling/drot/AGENTS.md) and its `docs/` / `.cursor/rules`.
 
 ## Human vs AI docs
 
 | Surface | Audience | Role |
 |---------|----------|------|
 | `README.md` (root and **project** packages) | Humans | What / why / how to use — outcome language only |
-| This file (`AGENTS.md`) | Humans + AI | Ambition, lineage, architecture, commands, CI, guardrails |
+| This file (`AGENTS.md`) | Humans + AI | Ambition, lineage, architecture, commands, guardrails |
 | `docs/**` | Implementers | ABI, CI maps, DSFD, and other **storage** deep reference |
 | [`tooling/drot/AGENTS.md`](tooling/drot/AGENTS.md) + [`tooling/drot/docs/`](tooling/drot/docs/) | Humans + AI | **DROT** tool intent, TUI/CLI, operator logging — owned by the submodule |
 
 **Agents:** follow the global **`project-docs`** skill, then [`.cursor/rules/project-docs.mdc`](.cursor/rules/project-docs.mdc) (repo customizations) for README / AGENTS / `docs/`. For source **documentation comments**, headers, and why-comments, follow **`inline-code-docs`**. Project/registry READMEs have priority over the root README. No folder-container READMEs. Submodule project READMEs use the same convention.
 
-**DROT work:** edit docs and Cursor rules **inside** [`tooling/drot`](tooling/drot) (orchestration repo). Do not add DROT-deep essays under storage `docs/` — link to the submodule instead.
+**DROT work:** edit docs and Cursor rules **inside** [`tooling/drot`](tooling/drot). Do not add DROT-deep essays under storage `docs/` — link to the submodule instead.
 
 ---
 
@@ -32,11 +34,7 @@ Cross-platform **local** storage runtime with a handle-based file/directory mode
 
 ### Design lineage (named here — not in READMEs)
 
-Started as a portable answer to `Windows.Storage` (`StorageFile` / `StorageFolder`) limits: those APIs are WinRT/Windows-shaped (capabilities, pickers, known folders, app data) and hard to reuse from a normal library or another OS.
-
-Microsoft Learn documents that [`StorageFile.ContentType`](https://learn.microsoft.com/uwp/api/windows.storage.storagefile.contenttype) is an **extension association** — it does not inspect bytes (rename `.txt` → `.jpg` → reports `image/jpeg`).
-
-A pure C# mimic hit concurrency and system-level limits. The conclusion: implement content signature definitions and the storage runtime in Rust. Today Dhara is **not** a Windows.Storage mimic — it is the stronger, unrestricted model.
+Portable answer to `Windows.Storage` limits (WinRT-shaped APIs hard to reuse from a normal library or another OS). Microsoft Learn documents that [`StorageFile.ContentType`](https://learn.microsoft.com/uwp/api/windows.storage.storagefile.contenttype) is an **extension association**, not byte inspection. Dhara implements content signatures and the storage runtime in Rust — not a Windows.Storage mimic.
 
 ### Comparison (agents)
 
@@ -85,7 +83,7 @@ Agents editing READMEs must **not** add:
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`) — gRPC control + handle transfer for foreign bindings |
 | `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) — **benchmark / evidence only**; not shipped via NuGet |
 | `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — managed API over `dhara-sd` |
-| `bindings/csharp/Dhara.Storage.Extensions.Hosting` | Generic Host lifetime for the sidecar |
+| `bindings/csharp/Dhara.Storage.Extensions.Hosting` | .NET 10 NuGet — Generic Host lifetime for the sidecar |
 | `benchmark/Dhara.Storage.Benchmarks` | Manual BenchmarkDotNet harness (FFI vs daemon rung 1; not CI/CD) |
 | `tooling/drot` | Submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)) — operator CLI/TUI; **owns** its [AGENTS.md](tooling/drot/AGENTS.md) and [docs/](tooling/drot/docs/) |
 | `dhara.config.toml` | Shared product versions, NuGet metadata, RIDs (not DROT tool version) |
@@ -95,7 +93,7 @@ Agents editing READMEs must **not** add:
 - `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
-- Current product line: **0.9.22** (workspace crates and NuGet). `drot` is independently versioned in the DROT submodule (**0.9.13** in `tooling/drot/Cargo.toml`).
+- Product / NuGet semver: [`dhara.config.toml`](dhara.config.toml) `[versions]`. DROT tool version: [`tooling/drot/Cargo.toml`](tooling/drot/Cargo.toml). Storage pins the tool via submodule gitlink.
 
 Deep reference: [docs/README.md](docs/README.md).
 
@@ -104,38 +102,19 @@ Deep reference: [docs/README.md](docs/README.md).
 ## Local commands
 
 - Init submodule: `git submodule update --init --recursive`
-- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (default opens **TUI**; pass `-Cli` / `--cli` for the direct CLI; use `-Force` / `--force-build` to rebuild from submodule)
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot -Cli --yes quality run`
-- Full repository build (CLI): `./tooling/scripts/run-drot.ps1 -Cli --yes build run` (config → defs → quality → native → verify; skip flags available)
+- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (no subcommand opens **TUI**; pass a subcommand or `--help` for the Direct CLI; use `-Force` / `--force-build` to rebuild from submodule). Dist is gated by `tooling/drot` git `HEAD` via `target/dist/.drot-git-rev` (not Cargo semver).
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot --yes quality run`
+- Full repository build (CLI): `./tooling/scripts/run-drot.ps1 --yes build run` (config → defs → quality → native → verify; skip flags available)
 - Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
-- Active DROT development: work in the orchestration repo (or `tooling/drot` submodule); follow [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md). Build with `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
+- Active DROT development: work in the orchestration repo (or `tooling/drot` submodule); follow [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md). Local: `cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist`
 - Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)
 - **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. Workspace/NuGet manifest drift reconciles on the next `drot` run (confirm activation, or `--yes` in CI/scripts).
 
-**DROT rollout (orchestration repo):** commit submodule changes (core dep, `build run`, dependabot), merge on `dhara_repo_orchestration`, wait for `pack-windows` / `pack-linux` artifacts, then bump the storage `tooling/drot` gitlink to that SHA. Publish `dhara_storage_core` **0.9.22** to crates.io before pinning DROT to semver `0.9.22` if desired.
+**DROT source vs artifacts (agents):** edit sources under [`tooling/drot`](tooling/drot); run via `./tooling/scripts/run-drot.ps1` (sets `CARGO_TARGET_DIR` to this repo’s `target/`). The `drot` binary and `.drot-git-rev` live at **`target/dist/`** on the host — not inside the submodule. When spawning subagents for DROT work, pass both paths so they do not hunt for `drot.exe` under `tooling/drot`. DROT links one compile-time **extension** (`drot_dhara_storage` by default); see [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md).
 
-### Release / env (operator)
+### Release / env / CI
 
-Shared metadata: [dhara.config.toml](dhara.config.toml). Secrets in `.env.local` (from `.env.example`), not git.
-
-| Variable | Purpose |
-|----------|---------|
-| `CARGO_REGISTRY_TOKEN` | crates.io publish |
-| `NUGET_API_KEY` | NuGet.org publish |
-| `NUGET_SOURCE` | NuGet feed URL |
-| `TOOL_MAX_WORKERS` | Caps Rayon workers in `drot` defs builds |
-
-Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- config env init`.
-
----
-
-## CI/CD
-
-- PR pipeline: [`.github/workflows/pipeline.yml`](.github/workflows/pipeline.yml) — [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md)
-- Merge publishes: [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml) — path-filtered; `workflow_dispatch` when automation skips
-- **PR quality** uses direct `cargo fmt/clippy/doc` (core + FFI only). **DROT** is downloaded as an artifact from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); requires secret `DROT_ARTIFACTS_TOKEN`.
-- CD on merge reuses PR artifacts; use merge commits (not squash) so NuGet CD can resolve `HEAD^2`.
-- **DROT ↔ core:** `drot_dhara_storage` depends on published **`dhara_storage_core`** (crates.io; no `dhara_storage_dal`). `filedefs.dat` lives only under `core/dhara_storage/resources/` and is resolved at runtime once `-r` points at the storage repo. Storage CI downloads prebuilt `drot` from `dhara_repo_orchestration` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)); local dev uses [`run-drot`](tooling/scripts/run-drot.ps1).
+Shared metadata and secrets: [dhara.config.toml](dhara.config.toml), [`.env.example`](.env.example), and DROT [host-config](tooling/drot/docs/host-config.md). Pipeline map, Environments, Dependabot, and publish jobs: [docs/ci-cd-pipelines.md](docs/ci-cd-pipelines.md). Workflows: [`.github/workflows/quality.yml`](.github/workflows/quality.yml), [`.github/workflows/package-pipeline.yml`](.github/workflows/package-pipeline.yml), [`publish-crates.yml`](.github/workflows/publish-crates.yml), [`publish-nuget.yml`](.github/workflows/publish-nuget.yml). Local DROT: [`run-drot`](tooling/scripts/run-drot.ps1); CI downloads prebuilt `drot` for the pinned submodule SHA ([`download-drot`](.github/actions/download-drot/action.yml)).
 
 ---
 
@@ -145,4 +124,4 @@ Scaffold env: `cargo run --manifest-path tooling/drot/Cargo.toml -p drot -- conf
 - Treat Windows as the primary workstation; ship all five 64-bit RIDs via CI merge.
 - When rewriting README marketing, use **Product intent → Locked human pitch** above — do not invent a new story.
 - Do not add local private paths to this file.
-- Breaking changes are acceptable pre-1.0; see [`.cursor/rules/breaking-changes.mdc`](.cursor/rules/breaking-changes.mdc).
+- Prefer clean-cut breaking changes; decide in plan / follow plan / ask when unclear — see [`.cursor/rules/breaking-changes.mdc`](.cursor/rules/breaking-changes.mdc).

@@ -14,7 +14,3 @@
 4. Prefer trusted channels (winget, Store) when available.
 
 Do **not** document “turn off Smart App Control” as a product requirement. Developers may disable SAC locally so unsigned toolchains (`cargo`, `rustc`) run; that is a workstation choice, not an end-user instruction.
-
-## Follow-up (Next milestone)
-
-Wire `signtool` / Trusted Signing into release CI for `dhara-sd` (and eventually `drot`) before marketing the NuGet sidecar to SAC-On machines.

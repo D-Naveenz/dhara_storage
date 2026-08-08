@@ -1,6 +1,6 @@
 # Dhara Storage — workspace architecture
 
-This document maps how the monorepo is organized after the tool-focused modularization pass: crate boundaries, operator-tool layering, bindings layout, publish pipelines, and how the tool couples to `dhara_storage_core` at compile time versus at release time.
+This document maps crate boundaries, bindings layout, publish pipelines, and how the DROT operator tool couples to `dhara_storage_core` at compile time versus at release time.
 
 ## Repository layout
 
@@ -24,7 +24,7 @@ flowchart TB
   subgraph tool [tooling/drot]
     kernel[drot_kernel]
     plugin[drot_dhara_storage]
-    tui[drot_tui]
+    tuiLib[drot_tui lib]
     bin[drot binary]
   end
 
@@ -36,8 +36,8 @@ flowchart TB
   plugin --> kernel
   bin --> kernel
   bin --> plugin
-  tui --> kernel
-  tui --> plugin
+  bin --> tuiLib
+  tuiLib --> kernel
   plugin -.->|path or registry pin| coreCrate
 ```
 
@@ -49,41 +49,33 @@ flowchart TB
 | `interop/dharastorage-ffi` | C ABI crate — benchmark evidence only (not NuGet) |
 | `bindings/csharp/` | `Dhara.Storage` NuGet, Hosting extensions, tests |
 | `benchmark/` | Manual BenchmarkDotNet harness (not CI/CD) |
-| `tooling/drot/crates/*` | Nested DROT workspace (submodule) — see [DROT docs](../tooling/drot/docs/README.md) |
+| `tooling/drot/crates/*` | Nested DROT workspace (submodule) — see [DROT AGENTS.md](../tooling/drot/AGENTS.md) |
 | `dhara.config.toml` | Workspace semver, NuGet/CI metadata (not DROT tool version) |
 
 ## Operator tool (DROT submodule)
 
-Operator CLI/TUI **documentation, AGENTS.md, and Cursor rules** live in the [`tooling/drot`](../tooling/drot) submodule ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)), not in this `docs/` tree.
-
-| Start here | Topic |
-|------------|--------|
-| [DROT AGENTS.md](../tooling/drot/AGENTS.md) | Tool intent, crate map, local commands |
-| [DROT architecture](../tooling/drot/docs/architecture.md) | Crate DAG, TUI layout, path resolution |
-| [TUI operation progress](../tooling/drot/docs/tui-progress.md) | Progress bar lifecycle |
-| [Logging conventions](../tooling/drot/docs/logging.md) | Operator audit logs |
-
-Storage still owns **host** concerns: how CI downloads DROT artifacts, `run-drot` scripts, and product coupling (below).
+Operator CLI/TUI documentation, AGENTS.md, and Cursor rules live in [`tooling/drot`](../tooling/drot) ([dhara_repo_orchestration](https://github.com/D-Naveenz/dhara_repo_orchestration)). Start at [DROT AGENTS.md](../tooling/drot/AGENTS.md). This host still owns CI artifact download, `run-drot` scripts, and product coupling below.
 
 ## Publish pipelines (host ↔ DROT)
 
-Release logic in `drot_dhara_storage::ops::release` splits cleanly for CI:
+Merge CD uses **composite Actions** (not `drot release run`):
 
-| Workflow | Ops entry | Flags |
-|----------|-----------|-------|
-| `publish-crates.yml` | `release run` | `--skip-nuget` |
-| `publish-nuget.yml` | `release run` | `--skip-cargo --prepacked-nuget <path>` |
+| Workflow | Jobs | Action |
+|----------|------|--------|
+| `publish-crates.yml` | `dhara_storage_core` then `dhara_storage` (`needs` core; tag on core only) | [`publish-cargo-crate`](../.github/actions/publish-cargo-crate/action.yml) |
+| `publish-nuget.yml` | prepare once → parallel `Dhara.Storage` / Hosting | [`publish-nuget-package`](../.github/actions/publish-nuget-package/action.yml) |
 
-PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-package` artifacts; merge publishes download them at `HEAD^2` (merge second parent).
+Local operator publish still uses DROT (`package publish` / `release run`) with `.env.local` (`NUGET_API_KEY` / `CARGO_REGISTRY_TOKEN`). Config ownership: [DROT host-config](../tooling/drot/docs/host-config.md).
+
+Package Pipeline (`package-pipeline.yml`, `development` → `main`) produces `release-native-stage` and `release-nuget-package` (primary + `ci.managed_package_projects`); merge NuGet CD downloads them at `HEAD^2` (merge second parent). Feature → `development` runs Quality only.
 
 ## Tool ↔ core coupling
 
 | Concern | Mechanism |
 |---------|-----------|
-| **Compile-time codec** | `drot_dhara_storage` pins published `dhara_storage_core` from crates.io (no `dhara_storage_dal`) |
-| **Compile-time core (after publish)** | Switch plugin dep to `dhara_storage_core = "0.9.22"`; optional DROT workspace `[patch.crates-io]` to the local path |
+| **Compile-time codec** | `drot_dhara_storage` depends on published `dhara_storage_core` from crates.io (semver in that crate’s `Cargo.toml`; optional host `[patch.crates-io]` for co-dev) |
 | **Embedded defs bytes** | `defs sync-embedded` writes git-tracked `core/dhara_storage/resources/filedefs.dat` — data path, not a path dependency |
-| **Package version read** | Builder stamps `packageVersion` from linked codec crate `PACKAGE_VERSION` (dal interim; core after cutover) |
+| **Package version stamp** | Builder stamps `packageVersion` from the linked codec crate’s `PACKAGE_VERSION` |
 
 | Artifact | Version authority | Typical bump |
 |----------|-------------------|--------------|
@@ -91,10 +83,11 @@ PR CI (`pipeline.yml`) still produces `release-native-stage` and `release-nuget-
 | `drot` | `tooling/drot/Cargo.toml` only | Independent tool releases via submodule pin |
 | Tool codec dep | crates.io `dhara_storage_core` | Optional `[patch.crates-io]` in storage root for co-dev |
 
-CI `pipeline.yml` may download DROT artifacts or build from source; the interim dal pin keeps orchestration artifact builds green.
+CI Package Pipeline downloads DROT artifacts for the pinned submodule SHA (or builds from source when developing the tool). Use Ensure DROT Artifacts when the pin lacks a successful pack.
+
 ## Related docs
 
-- [CI/CD pipelines][ci-cd] — four-workflow map and path filters
+- [CI/CD pipelines][ci-cd] — workflow map and path filters
 - [filedefs.dat format][filedefs-dat]
 - [Typed C-compatible ABI][typed-abi]
 - [Native packaging][native-packaging]
