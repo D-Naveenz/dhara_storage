@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Ensures target/dist/drot (+ drot_tui) match the tooling/drot git checkout.
+# Ensures target/dist/drot matches the tooling/drot git checkout.
 # Stamp: target/dist/.drot-git-rev (full HEAD SHA when the tree was clean at build time).
 # Tool version still lives in tooling/drot/Cargo.toml; rebuild gating is by git, not semver.
 set -euo pipefail
@@ -23,7 +23,6 @@ if [[ ! -f "$manifest" ]]; then
 fi
 
 cli_bin="$repo_root/target/dist/drot"
-tui_bin="$repo_root/target/dist/drot_tui"
 stamp_path="$repo_root/target/dist/.drot-git-rev"
 need_build=false
 
@@ -43,8 +42,8 @@ fi
 head="$(drot_git_head)"
 
 if [[ "$need_build" != true ]]; then
-  if [[ ! -f "$cli_bin" || ! -f "$tui_bin" ]]; then
-    echo "build: dist missing CLI and/or TUI"
+  if [[ ! -f "$cli_bin" ]]; then
+    echo "build: dist missing drot"
     need_build=true
   elif drot_git_dirty; then
     # Stamp is only trustworthy on a clean tree; local edits must rebuild.
@@ -66,9 +65,9 @@ fi
 
 if [[ "$need_build" == true ]]; then
   export CARGO_TARGET_DIR="$repo_root/target"
-  cargo build --manifest-path tooling/drot/Cargo.toml -p drot -p drot_tui --profile dist
-  if [[ ! -f "$cli_bin" || ! -f "$tui_bin" ]]; then
-    echo "smoke failed: drot and/or drot_tui missing under target/dist after dist build" >&2
+  cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
+  if [[ ! -f "$cli_bin" ]]; then
+    echo "smoke failed: drot missing under target/dist after dist build" >&2
     exit 1
   fi
 

@@ -1,4 +1,4 @@
-# Ensures target/dist/drot (+ drot_tui) match the tooling/drot git checkout.
+# Ensures target/dist/drot matches the tooling/drot git checkout.
 # Stamp: target/dist/.drot-git-rev (full HEAD SHA when the tree was clean at build time).
 # Tool version still lives in tooling/drot/Cargo.toml; rebuild gating is by git, not semver.
 param(
@@ -17,7 +17,6 @@ if (-not (Test-Path $manifestPath)) {
 }
 
 $cliBin = Join-Path $repoRoot "target\dist\drot.exe"
-$tuiBin = Join-Path $repoRoot "target\dist\drot_tui.exe"
 $stampPath = Join-Path $repoRoot "target\dist\.drot-git-rev"
 $needBuild = [bool]$Force
 
@@ -54,8 +53,8 @@ $head = Get-DrotGitHead
 $dirty = Test-DrotGitDirty
 
 if (-not $needBuild) {
-    if (-not (Test-Path $cliBin) -or -not (Test-Path $tuiBin)) {
-        Write-Host "build: dist missing CLI and/or TUI"
+    if (-not (Test-Path $cliBin)) {
+        Write-Host "build: dist missing drot"
         $needBuild = $true
     }
     elseif ($dirty) {
@@ -84,15 +83,15 @@ if ($needBuild) {
     # cargo prints progress on stderr; do not let that trip ErrorAction Stop.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    cargo build --manifest-path tooling/drot/Cargo.toml -p drot -p drot_tui --profile dist
+    cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist
     $cargoExit = $LASTEXITCODE
     $ErrorActionPreference = $prevEap
     if ($cargoExit -ne 0) {
         exit $cargoExit
     }
 
-    if (-not (Test-Path $cliBin) -or -not (Test-Path $tuiBin)) {
-        Write-Error "smoke failed: drot and/or drot_tui missing under target\dist after dist build"
+    if (-not (Test-Path $cliBin)) {
+        Write-Error "smoke failed: drot missing under target\dist after dist build"
         exit 1
     }
 

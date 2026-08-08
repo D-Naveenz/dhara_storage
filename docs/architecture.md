@@ -24,7 +24,7 @@ flowchart TB
   subgraph tool [tooling/drot]
     kernel[drot_kernel]
     plugin[drot_dhara_storage]
-    tui[drot_tui]
+    tuiLib[drot_tui lib]
     bin[drot binary]
   end
 
@@ -36,8 +36,8 @@ flowchart TB
   plugin --> kernel
   bin --> kernel
   bin --> plugin
-  tui --> kernel
-  tui --> plugin
+  bin --> tuiLib
+  tuiLib --> kernel
   plugin -.->|path or registry pin| coreCrate
 ```
 

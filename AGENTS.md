@@ -102,15 +102,15 @@ Deep reference: [docs/README.md](docs/README.md).
 ## Local commands
 
 - Init submodule: `git submodule update --init --recursive`
-- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (default opens **TUI**; pass `-Cli` / `--cli` for the direct CLI; use `-Force` / `--force-build` to rebuild from submodule). Dist is gated by `tooling/drot` git `HEAD` via `target/dist/.drot-git-rev` (not Cargo semver).
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot -Cli --yes quality run`
-- Full repository build (CLI): `./tooling/scripts/run-drot.ps1 -Cli --yes build run` (config → defs → quality → native → verify; skip flags available)
+- Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (no subcommand opens **TUI**; pass a subcommand or `--help` for the Direct CLI; use `-Force` / `--force-build` to rebuild from submodule). Dist is gated by `tooling/drot` git `HEAD` via `target/dist/.drot-git-rev` (not Cargo semver).
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot --yes quality run`
+- Full repository build (CLI): `./tooling/scripts/run-drot.ps1 --yes build run` (config → defs → quality → native → verify; skip flags available)
 - Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
-- Active DROT development: work in the orchestration repo (or `tooling/drot` submodule); follow [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md). Build with `cargo build --manifest-path tooling/drot/Cargo.toml -p drot`
+- Active DROT development: work in the orchestration repo (or `tooling/drot` submodule); follow [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md). Local: `cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist`
 - Verify NuGet package shape: `target/dist/drot -r . --yes verify package` (after ensure)
 - **Tool version:** owned only by DROT (`tooling/drot/Cargo.toml`). Storage pins via submodule gitlink. Workspace/NuGet manifest drift reconciles on the next `drot` run (confirm activation, or `--yes` in CI/scripts).
 
-**DROT source vs artifacts (agents):** edit sources under [`tooling/drot`](tooling/drot); run via `./tooling/scripts/run-drot.ps1` (sets `CARGO_TARGET_DIR` to this repo’s `target/`). Binaries and `.drot-git-rev` live at **`target/dist/`** on the host — not inside the submodule. When spawning subagents for DROT work, pass both paths so they do not hunt for `drot.exe` under `tooling/drot`. DROT links one compile-time **extension** (`drot_dhara_storage` by default); see [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md).
+**DROT source vs artifacts (agents):** edit sources under [`tooling/drot`](tooling/drot); run via `./tooling/scripts/run-drot.ps1` (sets `CARGO_TARGET_DIR` to this repo’s `target/`). The `drot` binary and `.drot-git-rev` live at **`target/dist/`** on the host — not inside the submodule. When spawning subagents for DROT work, pass both paths so they do not hunt for `drot.exe` under `tooling/drot`. DROT links one compile-time **extension** (`drot_dhara_storage` by default); see [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md).
 
 ### Release / env / CI
 
