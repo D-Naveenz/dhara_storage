@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Ensures target/dist/drot (+ drot_tui) match tooling/drot, then launches the tool.
+# Ensures target/dist/drot matches tooling/drot, then launches the tool.
 #
-# Default: interactive TUI (drot_tui) — for developers.
-# Agents / scripts: pass --cli to run the direct CLI (drot).
+# Default (no subcommand): interactive TUI.
+# Agents / scripts: pass a subcommand or --help for the Direct CLI.
 #
 # Examples:
 #   ./tooling/scripts/run-drot.sh
-#   ./tooling/scripts/run-drot.sh --cli --yes quality run
-#   ./tooling/scripts/run-drot.sh --cli --yes build run --skip-verify
+#   ./tooling/scripts/run-drot.sh --yes quality run
+#   ./tooling/scripts/run-drot.sh --help
+#   ./tooling/scripts/run-drot.sh --yes build run --skip-verify
 set -euo pipefail
 
 force_build=false
-use_cli=false
 repository=""
 drot_args=()
 
@@ -19,10 +19,6 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --force-build|-f)
       force_build=true
-      shift
-      ;;
-    --cli)
-      use_cli=true
       shift
       ;;
     -r|--repository)
@@ -50,16 +46,7 @@ if [[ "$force_build" == true ]]; then
 fi
 "$(dirname "$0")/ensure-drot-dist.sh" "${ensure_args[@]}"
 
-# Remaining command tokens imply CLI even without --cli (TUI does not take subcommands).
-if [[ "$use_cli" != true && ${#drot_args[@]} -gt 0 ]]; then
-  use_cli=true
-fi
-
-if [[ "$use_cli" == true ]]; then
-  bin="$repo_root/target/dist/drot"
-else
-  bin="$repo_root/target/dist/drot_tui"
-fi
+bin="$repo_root/target/dist/drot"
 
 if [[ ! -f "$bin" ]]; then
   echo "drot binary missing at $bin after ensure-drot-dist" >&2

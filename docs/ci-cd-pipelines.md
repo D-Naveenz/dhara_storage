@@ -124,8 +124,8 @@ flowchart TB
 
 - **CI:** [`download-drot`](../.github/actions/download-drot/action.yml) fetches `drot-windows-x64` or `drot-linux-x64` from `dhara_repo_orchestration` `package-pipeline.yml` for `git rev-parse HEAD:tooling/drot` (secret `DROT_ARTIFACTS_TOKEN`). Product-only PRs skip rebuilding the tool when the submodule gitlink is unchanged.
 - **Missing pack:** run [ensure-drot-artifacts.yml][ensure-drot-artifacts-yml] (`workflow_dispatch`) to probe and remotely dispatch DROT Package Pipeline for the pin.
-- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) git-stamp `target/dist/drot` + `drot_tui` against `tooling/drot` `HEAD` (`.drot-git-rev`; rebuilds when the submodule is dirty, the stamp mismatches, or binaries are missing; `--force-build` / `-Force` always rebuilds). With **no args**, opens the **TUI**. Agents and scripts pass `-Cli` / `--cli` (or any command tokens) to run the direct CLI with `-r` defaulting to the storage repo root.
-- **Full local build:** `run-drot -Cli --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
+- **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) git-stamp `target/dist/drot` against `tooling/drot` `HEAD` (`.drot-git-rev`; rebuilds when the submodule is dirty, the stamp mismatches, or the binary is missing; `--force-build` / `-Force` always rebuilds). With **no subcommand**, opens the **TUI**. Agents and scripts pass a subcommand or `--help` for the Direct CLI (`-r` defaults to the storage repo root).
+- **Full local build:** `run-drot --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
 - **Binary path:** `target/dist/drot` (`.exe` on Windows). `[profile.dist]` lives in [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
 
 ### DROT orchestration CI (submodule repo)
@@ -228,7 +228,7 @@ After `NuGet package (linux)`:
 
 ## Local parity
 
-[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] git-stamp the dist binaries against `tooling/drot` (default TUI; `-Cli` / `--cli` for scripted CLI). [`verify-local.ps1`][verify-local-ps1] runs `run-drot -Cli --yes quality run` — stricter than PR CI.
+[`run-drot.ps1`][run-drot-ps1] / [`.sh`][run-drot-sh] git-stamp the dist binary against `tooling/drot` (no subcommand → TUI; subcommand / `--help` → Direct CLI). [`verify-local.ps1`][verify-local-ps1] runs `run-drot --yes quality run` — stricter than PR CI.
 
 ## Related docs
 
