@@ -126,7 +126,7 @@ flowchart TB
 - **Missing pack:** run [ensure-drot-artifacts.yml][ensure-drot-artifacts-yml] (`workflow_dispatch`) to probe and remotely dispatch DROT Package Pipeline for the pin.
 - **Local / AI:** [`run-drot.ps1`](../tooling/scripts/run-drot.ps1) / [`.sh`](../tooling/scripts/run-drot.sh) git-stamp `target/dist/drot` against `tooling/drot` `HEAD` (`.drot-git-rev`; rebuilds when the submodule is dirty, the stamp mismatches, or the binary is missing; `--force-build` / `-Force` always rebuilds). With **no subcommand**, opens the **TUI**. Agents and scripts pass a subcommand or `--help` for the Direct CLI (`-r` defaults to the storage repo root).
 - **Full local build:** `run-drot --yes build run` (or TUI **Build → Run full local repository build workflow**) — config drift → defs sync → quality → native stage → verify package.
-- **Binary path:** `target/dist/drot` (`.exe` on Windows). `[profile.dist]` lives in [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
+- **Binary path:** `target/dist/drot` (`.exe` on Windows) from host `ensure-drot-dist` (`--profile dist`, thin LTO). DROT Package Pipeline ships fat-LTO `--release` artifacts into `drot-*-x64`; download still lands under `target/dist/`. Profile definitions: [`tooling/drot/Cargo.toml`](../tooling/drot/Cargo.toml).
 
 ### DROT orchestration CI (submodule repo)
 
