@@ -1,8 +1,9 @@
-//! [`FileMetadata`] — on-demand file metadata with stateful content analysis.
+//! [`FileMetadata`] — on-demand file metadata snapshot.
 //!
 //! Maps roughly to Explorer's Details tab (type, dates, attributes) with Dhara
-//! extensions: content-based [`StorageType`] / [`FileExtension`] after
-//! [`FileMetadata::analyze`]. Size and paths live on [`crate::storage::FileStorage`].
+//! extensions: content-based [`StorageType`] / [`FileExtension`] when enriched from
+//! a prior [`crate::storage::FileStorage::analyze`]. Size and paths live on
+//! [`crate::storage::FileStorage`].
 //!
 //! # Future work
 //!
@@ -15,7 +16,7 @@ use std::path::{Path, PathBuf};
 use once_cell::sync::OnceCell;
 use tracing::debug;
 
-use crate::analysis::{AnalysisReport, analyze_path};
+use crate::analysis::AnalysisReport;
 use crate::error::StorageError;
 
 use super::attributes::StorageAttributes;
@@ -26,9 +27,10 @@ use super::windows_shell::{ShellDetails, load_shell_details};
 
 /// Human type label plus optional MIME type.
 ///
-/// After [`FileMetadata::analyze`], both fields typically come from the analysis
-/// report (works on non-Windows hosts). Before analysis, Windows shell may fill
-/// `name` only; `mime_type` stays empty until analysis unless another source provides it.
+/// After enrichment from [`crate::storage::FileStorage::analyze`], both fields typically
+/// come from the analysis report (works on non-Windows hosts). Before analysis, Windows
+/// shell may fill `name` only; `mime_type` stays empty until analysis unless another
+/// source provides it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageType {
     /// Human-friendly type label (for example `"PNG Image"` or `"JSON Source File"`).
@@ -50,7 +52,7 @@ impl FileExtension {
         self.source.as_deref()
     }
 
-    /// Extension detected by content analysis, when [`FileMetadata::analyze`] has run.
+    /// Extension detected by content analysis, when the metadata was enriched from a report.
     pub fn detected(&self) -> Option<&str> {
         self.detected.as_deref()
     }
@@ -93,7 +95,7 @@ fn normalized_extension(path: &Path) -> Option<String> {
         .filter(|ext| !ext.is_empty())
 }
 
-/// File metadata snapshot with optional stateful analysis.
+/// File metadata snapshot, optionally enriched from a prior content analysis.
 #[derive(Debug)]
 pub struct FileMetadata {
     /// Private absolute path used for on-demand loads (not part of the public metadata API).
@@ -106,7 +108,7 @@ pub struct FileMetadata {
 }
 
 impl FileMetadata {
-    /// Load file metadata for an absolute path without running content analysis.
+    /// Load file metadata for an absolute path without content analysis.
     pub fn load(absolute_path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let absolute_path = absolute_path.as_ref().to_path_buf();
         debug!(
@@ -131,6 +133,13 @@ impl FileMetadata {
             shell_details: OnceCell::new(),
             shell_icon: OnceCell::new(),
         })
+    }
+
+    /// Apply a content-analysis report, updating type/extension derived views.
+    pub(crate) fn apply_analysis(&mut self, report: AnalysisReport) {
+        self.extension = FileExtension::from_path(&self.absolute_path)
+            .with_detected(report.top_detected_extension.clone());
+        self.analysis = Some(report);
     }
 
     /// File content/identity type (analysis-aware when a report is stored).
@@ -164,28 +173,12 @@ impl FileMetadata {
         }
     }
 
-    /// Source and (after analyze) detected extensions.
+    /// Source and (after enrichment) detected extensions.
     pub fn extension(&self) -> FileExtension {
         self.extension.clone()
     }
 
-    /// Run content analysis; return the report and retain it on `self`.
-    ///
-    /// Updates [`Self::file_type`] and [`Self::extension`] derived views.
-    pub fn analyze(&mut self) -> Result<&AnalysisReport, StorageError> {
-        debug!(
-            target: "dhara_storage::metadata::file",
-            path = %self.absolute_path.display(),
-            "analyzing file content"
-        );
-        let report = analyze_path(&self.absolute_path)?;
-        self.extension = FileExtension::from_path(&self.absolute_path)
-            .with_detected(report.top_detected_extension.clone());
-        self.analysis = Some(report);
-        Ok(self.analysis.as_ref().expect("analysis just stored"))
-    }
-
-    /// Returns a previously stored analysis report, if any.
+    /// Returns a previously applied analysis report, if any.
     pub fn analysis(&self) -> Option<&AnalysisReport> {
         self.analysis.as_ref()
     }

@@ -1,8 +1,9 @@
 //! On-demand storage metadata, attributes, permissions, and size helpers.
 //!
 //! Paths and size live on [`crate::storage`] handles. Metadata is loaded when
-//! requested and is not cached on those handles. [`FileMetadata::analyze`] makes
-//! a held metadata value stateful with an [`crate::analysis::AnalysisReport`].
+//! requested and is not cached on those handles. [`crate::storage::FileStorage::analyze`]
+//! caches an [`crate::analysis::AnalysisReport`] on the file handle; [`FileMetadata`]
+//! is enriched from that cache when present.
 
 mod attributes;
 mod directory;

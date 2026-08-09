@@ -121,11 +121,14 @@ fn copy_directory_with_progress_preserves_tree() {
 fn file_storage_wraps_operations_without_eager_analysis() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("story.txt");
-    let file = FileStorage::new(&path).unwrap();
+    let file = FileStorage::new(&path)
+        .unwrap()
+        .write_string("story body")
+        .unwrap();
 
-    file.write_string("story body").unwrap();
-    let mut meta = file.metadata().unwrap();
-    meta.analyze().unwrap();
+    assert!(file.metadata().unwrap().analysis().is_none());
+    file.analyze().unwrap();
+    let meta = file.metadata().unwrap();
 
     assert_eq!(
         meta.analysis().unwrap().content_kind,

@@ -3,7 +3,11 @@
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
+use tracing::debug;
+
+use crate::analysis::{AnalysisReport, analyze_path};
 use crate::error::StorageError;
 use crate::metadata::{
     FileMetadata, StorageAttributes, StoragePermissions, StorageSize, is_temporary_path,
@@ -17,20 +21,40 @@ use crate::operations::{
 
 /// Rust-native handle for file operations and on-demand metadata.
 ///
-/// Paths and [`Self::size`] live on the handle. Metadata is loaded via
-/// [`Self::metadata`] and is not cached here. Content analysis is
-/// [`FileMetadata::analyze`] on a held metadata value.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Paths and [`Self::size`] live on the handle. [`Self::analyze`] runs content
+/// analysis and caches the report here; [`Self::metadata`] applies that cache when
+/// present. Metadata snapshots themselves are not otherwise cached on the handle.
+#[derive(Debug)]
 pub struct FileStorage {
     absolute_path: PathBuf,
     relative_path: Option<PathBuf>,
+    analysis: Mutex<Option<AnalysisReport>>,
 }
+
+impl Clone for FileStorage {
+    fn clone(&self) -> Self {
+        Self {
+            absolute_path: self.absolute_path.clone(),
+            relative_path: self.relative_path.clone(),
+            analysis: Mutex::new(self.analysis.lock().map_or(None, |guard| guard.clone())),
+        }
+    }
+}
+
+impl PartialEq for FileStorage {
+    fn eq(&self, other: &Self) -> bool {
+        self.absolute_path == other.absolute_path && self.relative_path == other.relative_path
+    }
+}
+
+impl Eq for FileStorage {}
 
 impl FileStorage {
     fn from_resolved(resolved: ResolvedPaths) -> Self {
         Self {
             absolute_path: resolved.absolute,
             relative_path: resolved.relative,
+            analysis: Mutex::new(None),
         }
     }
 
@@ -38,6 +62,7 @@ impl FileStorage {
         Self {
             absolute_path: absolute,
             relative_path: None,
+            analysis: Mutex::new(None),
         }
     }
 
@@ -49,6 +74,7 @@ impl FileStorage {
             } else {
                 Some(destination.to_path_buf())
             },
+            analysis: Mutex::new(None),
         }
     }
 
@@ -114,9 +140,34 @@ impl FileStorage {
         Ok(StorageSize::from_bytes(metadata.len()))
     }
 
-    /// Load on-demand file metadata (no analysis until [`FileMetadata::analyze`]).
+    /// Run content analysis, cache the report on this handle, and return it.
+    ///
+    /// Subsequent [`Self::metadata`] calls enrich type/extension from this cache.
+    pub fn analyze(&self) -> Result<AnalysisReport, StorageError> {
+        debug!(
+            target: "dhara_storage::storage::file",
+            path = %self.absolute_path.display(),
+            "analyzing file content"
+        );
+        let report = analyze_path(&self.absolute_path)?;
+        if let Ok(mut guard) = self.analysis.lock() {
+            *guard = Some(report.clone());
+        }
+        Ok(report)
+    }
+
+    /// Returns the analysis report cached by a prior [`Self::analyze`], if any.
+    pub fn analysis(&self) -> Option<AnalysisReport> {
+        self.analysis.lock().ok().and_then(|guard| guard.clone())
+    }
+
+    /// Load on-demand file metadata, enriching from a prior [`Self::analyze`] when present.
     pub fn metadata(&self) -> Result<FileMetadata, StorageError> {
-        FileMetadata::load(&self.absolute_path)
+        let mut metadata = FileMetadata::load(&self.absolute_path)?;
+        if let Some(report) = self.analysis() {
+            metadata.apply_analysis(report);
+        }
+        Ok(metadata)
     }
 
     /// Read settable attributes for this file.

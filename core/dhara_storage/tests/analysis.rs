@@ -7,8 +7,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use dhara_storage::{
-    ContentKind, DirectoryMetadata, FileMetadata, StorageError, StorageMetadata, analyze_path,
-    analyze_reader,
+    ContentKind, DirectoryMetadata, FileMetadata, FileStorage, StorageError, StorageMetadata,
+    analyze_path, analyze_reader,
 };
 use tempfile::tempdir;
 
@@ -178,8 +178,9 @@ fn file_metadata_from_path_exposes_rust_native_metadata() {
     let path = temp.path().join("sample.txt");
     fs::write(&path, b"hello file info").unwrap();
 
-    let mut meta = FileMetadata::load(&path).unwrap();
-    meta.analyze().unwrap();
+    let file = FileStorage::from_existing(&path).unwrap();
+    file.analyze().unwrap();
+    let meta = file.metadata().unwrap();
 
     assert_eq!(meta.extension().source(), Some("txt"));
     assert_eq!(meta.file_type().mime_type.as_deref(), Some("text/plain"));
@@ -195,18 +196,28 @@ fn file_metadata_from_path_rejects_directories() {
 }
 
 #[test]
-fn file_metadata_analysis_is_stateful_after_analyze() {
+fn file_storage_analysis_enriches_subsequent_metadata() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("lazy.txt");
     fs::write(&path, b"lazy analysis").unwrap();
 
-    let mut meta = FileMetadata::load(&path).unwrap();
-    assert!(meta.analysis().is_none());
-    meta.analyze().unwrap();
+    let file = FileStorage::from_existing(&path).unwrap();
+    assert!(file.analysis().is_none());
+    assert!(file.metadata().unwrap().analysis().is_none());
+
+    let report = file.analyze().unwrap();
+    assert_eq!(report.top_mime_type.as_deref(), Some("text/plain"));
+    assert!(file.analysis().is_some());
+
+    let meta = file.metadata().unwrap();
     assert!(meta.analysis().is_some());
     fs::remove_file(&path).unwrap();
 
-    // Stored report remains available after the file is removed.
+    // Cached report remains available after the file is removed.
+    assert_eq!(
+        file.analysis().unwrap().top_mime_type.as_deref(),
+        Some("text/plain")
+    );
     assert_eq!(
         meta.analysis().unwrap().top_mime_type.as_deref(),
         Some("text/plain")
@@ -214,13 +225,14 @@ fn file_metadata_analysis_is_stateful_after_analyze() {
 }
 
 #[test]
-fn file_metadata_type_name_prefers_loaded_analysis() {
+fn file_storage_type_name_prefers_loaded_analysis() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("typed.txt");
     fs::write(&path, b"typed").unwrap();
 
-    let mut meta = FileMetadata::load(&path).unwrap();
-    meta.analyze().unwrap();
+    let file = FileStorage::from_existing(&path).unwrap();
+    file.analyze().unwrap();
+    let meta = file.metadata().unwrap();
 
     assert_eq!(meta.file_type().name, "Plain Text");
 }
