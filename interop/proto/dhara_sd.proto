@@ -10,8 +10,8 @@ service DharaSd {
   rpc Echo(EchoRequest) returns (EchoResponse);
   rpc Handshake(HandshakeRequest) returns (HandshakeResponse);
 
-  rpc GetFileInfo(GetFileInfoRequest) returns (GetFileInfoResponse);
-  rpc GetDirectoryInfo(GetDirectoryInfoRequest) returns (GetDirectoryInfoResponse);
+  rpc GetFileMetadata(GetFileMetadataRequest) returns (GetFileMetadataResponse);
+  rpc GetDirectoryMetadata(GetDirectoryMetadataRequest) returns (GetDirectoryMetadataResponse);
   rpc ListEntries(ListEntriesRequest) returns (ListEntriesResponse);
   rpc AnalyzePath(AnalyzePathRequest) returns (AnalyzePathResponse);
 
@@ -63,36 +63,87 @@ message ShellIconPayload {
   bytes rgba_pixels = 3;
 }
 
-message GetFileInfoRequest {
-  string path = 1;
-  bool include_shell_details = 2;
-  bool include_icon = 3;
-  uint32 icon_size = 4;
-}
-message GetFileInfoResponse {
-  string path = 1;
-  string name = 2;
-  uint64 size = 3;
-  optional string extension = 4;
-  bool is_read_only = 5;
-  optional string shell_display_name = 6;
-  optional string shell_type_name = 7;
-  optional ShellIconPayload icon = 8;
+message StorageSizePayload {
+  uint64 bytes = 1;
+  string formatted = 2;
 }
 
-message GetDirectoryInfoRequest {
-  string path = 1;
-  bool include_shell_details = 2;
-  bool include_icon = 3;
-  uint32 icon_size = 4;
+message StorageAttributesPayload {
+  bool read_only = 1;
+  bool hidden = 2;
+  bool system = 3;
+  bool archive = 4;
 }
-message GetDirectoryInfoResponse {
+
+message StoragePermissionsPayload {
+  bool can_read = 1;
+  bool can_write = 2;
+  bool can_modify = 3;
+  bool can_execute = 4;
+}
+
+message StorageTypePayload {
+  string name = 1;
+  optional string mime_type = 2;
+}
+
+message FileExtensionPayload {
+  optional string source = 1;
+  optional string detected = 2;
+  string display = 3;
+}
+
+message GetFileMetadataRequest {
   string path = 1;
-  string name = 2;
-  bool exists = 3;
-  optional string shell_display_name = 4;
-  optional string shell_type_name = 5;
-  optional ShellIconPayload icon = 6;
+  bool include_icon = 2;
+  uint32 icon_size = 3;
+  bool include_analysis = 4;
+}
+message GetFileMetadataResponse {
+  string absolute_path = 1;
+  optional string relative_path = 2;
+  string name = 3;
+  string display_name = 4;
+  StorageSizePayload size = 5;
+  StorageAttributesPayload attributes = 6;
+  StoragePermissionsPayload permissions = 7;
+  bool is_symbolic_link = 8;
+  optional string link_target = 9;
+  bool is_temporary = 10;
+  optional int64 created_at_unix_ms = 11;
+  optional int64 modified_at_unix_ms = 12;
+  optional int64 accessed_at_unix_ms = 13;
+  StorageTypePayload file_type = 14;
+  FileExtensionPayload extension = 15;
+  optional ShellIconPayload icon = 16;
+  optional AnalyzePathResponse analysis = 17;
+}
+
+message GetDirectoryMetadataRequest {
+  string path = 1;
+  bool include_icon = 2;
+  uint32 icon_size = 3;
+  bool include_summary = 4;
+}
+message GetDirectoryMetadataResponse {
+  string absolute_path = 1;
+  optional string relative_path = 2;
+  string name = 3;
+  string display_name = 4;
+  bool exists = 5;
+  StorageAttributesPayload attributes = 6;
+  StoragePermissionsPayload permissions = 7;
+  bool is_symbolic_link = 8;
+  optional string link_target = 9;
+  bool is_temporary = 10;
+  optional int64 created_at_unix_ms = 11;
+  optional int64 modified_at_unix_ms = 12;
+  optional int64 accessed_at_unix_ms = 13;
+  string type_name = 14;
+  optional StorageSizePayload size = 15;
+  optional uint64 file_count = 16;
+  optional uint64 directory_count = 17;
+  optional ShellIconPayload icon = 18;
 }
 
 message ListEntriesRequest {
