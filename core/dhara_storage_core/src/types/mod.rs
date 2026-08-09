@@ -9,8 +9,6 @@ mod permissions;
 mod size;
 
 pub use attributes::StorageAttributes;
-pub use options::{
-    DirectoryDeleteOptions, ReadOptions, TransferOptions, WriteOptions,
-};
+pub use options::{DirectoryDeleteOptions, ReadOptions, TransferOptions, WriteOptions};
 pub use permissions::StoragePermissions;
 pub use size::{SizeUnit, StorageSize, format_size};

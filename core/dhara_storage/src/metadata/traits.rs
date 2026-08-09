@@ -80,8 +80,7 @@ impl CommonFields {
         };
 
         let attributes = attributes_from_fs_metadata(&metadata, absolute_path);
-        let permissions =
-            permissions_from_metadata_and_attrs(absolute_path, &metadata, attributes);
+        let permissions = permissions_from_metadata_and_attrs(absolute_path, &metadata, attributes);
         let is_temporary = is_temporary_from_metadata(absolute_path, &metadata);
 
         Ok((

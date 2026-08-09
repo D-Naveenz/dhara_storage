@@ -8,9 +8,7 @@ use tracing::{debug, info};
 
 use crate::error::StorageError;
 
-use dhara_storage_core::{
-    ReadOptions, StorageProgress, TransferOptions, WriteOptions,
-};
+use dhara_storage_core::{ReadOptions, StorageProgress, TransferOptions, WriteOptions};
 
 use super::common::{
     choose_buffer_size, copy_reader_to_writer, lock_write_targets, normalize_existing_file,

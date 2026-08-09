@@ -3,8 +3,8 @@
 //! These primitives are FS-agnostic so the runtime and future extension crates can
 //! share the same transfer UX without depending on path I/O.
 
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Progress details emitted by long-running storage operations.
 #[derive(Debug, Clone, Copy, PartialEq)]

@@ -27,10 +27,7 @@ pub(crate) fn attributes_from_fs_metadata(
 }
 
 /// Apply settable attributes to an existing path (best-effort per platform).
-pub fn apply_storage_attributes(
-    path: &Path,
-    attrs: StorageAttributes,
-) -> Result<(), StorageError> {
+pub fn apply_storage_attributes(path: &Path, attrs: StorageAttributes) -> Result<(), StorageError> {
     #[cfg(windows)]
     {
         apply_attributes_windows(path, attrs)

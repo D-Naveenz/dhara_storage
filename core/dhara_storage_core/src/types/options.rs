@@ -1,8 +1,6 @@
 //! Option bundles for transfer, read, write, and directory-delete operations.
 
-use crate::process::{
-    SharedProgressReporter, StorageCancellationToken,
-};
+use crate::process::{SharedProgressReporter, StorageCancellationToken};
 
 /// Common options for copy and move style operations.
 #[derive(Clone, Default)]

@@ -12,9 +12,7 @@ use std::time::Instant;
 
 use once_cell::sync::Lazy;
 
-use dhara_storage_core::{
-    SharedProgressReporter, StorageCancellationToken, StorageProgress,
-};
+use dhara_storage_core::{SharedProgressReporter, StorageCancellationToken, StorageProgress};
 
 use crate::error::StorageError;
 

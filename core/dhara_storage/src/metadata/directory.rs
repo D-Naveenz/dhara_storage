@@ -12,9 +12,9 @@ use crate::error::StorageError;
 use super::attributes::StorageAttributes;
 use super::permissions::StoragePermissions;
 use super::shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon, load_shell_icon};
-use super::{StorageSize, format_size};
 use super::traits::{CommonFields, StorageMetadata};
 use super::windows_shell::{ShellDetails, load_shell_details};
+use super::{StorageSize, format_size};
 
 /// Recursive directory statistics computed on demand.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
