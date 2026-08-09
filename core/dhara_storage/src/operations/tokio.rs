@@ -7,7 +7,7 @@ use tokio::task;
 
 use crate::error::StorageError;
 
-use super::common::{DirectoryDeleteOptions, ReadOptions, TransferOptions, WriteOptions};
+use dhara_storage_core::{DirectoryDeleteOptions, ReadOptions, TransferOptions, WriteOptions};
 
 /// Async wrapper for [`super::copy_file`]. Runs on Tokio's blocking pool.
 pub async fn copy_file_async(

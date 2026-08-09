@@ -99,9 +99,11 @@ Install a `tracing` subscriber in your app if you want structured logs.
 
 ## Related
 
-- DSFD framework: [dhara_storage_core][core]
+- Framework crate (DSFD, progress/cancel, portable types): [dhara_storage_core][core]
 - Product overview: [Dhara Storage][root]
 - API docs: [docs.rs/dhara_storage][docs-rs]
+
+Extension crates may depend on this runtime and compose `FileStorage` / `DirectoryStorage` (for example a future archives crate). Apps that need a closed mixed collection of handle kinds should use a consumer-owned enum.
 
 ## License
 

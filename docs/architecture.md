@@ -43,8 +43,8 @@ flowchart TB
 
 | Path | Role |
 |------|------|
-| `core/dhara_storage_core` | Framework / abstraction layer (`definitions` = DSFD today; no embedded defs) |
-| `core/dhara_storage` | Business runtime; embeds `filedefs.dat` |
+| `core/dhara_storage_core` | Framework (`definitions` = DSFD; `process` = progress/cancel; `types` = options + value shapes; no embedded defs) |
+| `core/dhara_storage` | Business runtime; embeds `filedefs.dat`; concrete path handles and FS I/O |
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`); gRPC + handle transfer |
 | `interop/dharastorage-ffi` | C ABI crate — benchmark evidence only (not NuGet) |
 | `bindings/csharp/` | `Dhara.Storage` NuGet, Hosting extensions, tests |

@@ -1,57 +1,36 @@
-//! Settable filesystem attributes (subset of metadata; excludes temporary and symlink).
+//! Settable filesystem attributes — path I/O over core [`StorageAttributes`].
 
 use std::fs;
 use std::path::Path;
 
 use crate::error::StorageError;
 
-/// Settable storage attributes shared by files and directories.
-///
-/// Temporary and symbolic-link state are **not** attributes here: they are
-/// creation-time / detection concerns and cannot be toggled like Hidden.
-///
-/// # Platform notes
-///
-/// - **Windows:** maps to Win32 file attributes (`FILE_ATTRIBUTE_*`).
-/// - **Unix:** `read_only` uses `Permissions::set_readonly`; `hidden` follows
-///   the leading-dot name convention (renaming is not performed by setters);
-///   `system` and `archive` have no portable equivalent and are ignored on set.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct StorageAttributes {
-    /// Read-only bit / owner write disabled.
-    pub read_only: bool,
-    /// Hidden (Windows attribute, or Unix leading-dot name convention on read).
-    pub hidden: bool,
-    /// Windows system attribute.
-    pub system: bool,
-    /// Windows archive attribute.
-    pub archive: bool,
+pub use dhara_storage_core::StorageAttributes;
+
+/// Read settable attributes for an existing path.
+pub(crate) fn attributes_from_path(path: &Path) -> Result<StorageAttributes, StorageError> {
+    let metadata = fs::symlink_metadata(path)
+        .map_err(|err| StorageError::io("read metadata for", path, err))?;
+    Ok(attributes_from_fs_metadata(&metadata, path))
 }
 
-impl StorageAttributes {
-    /// Read settable attributes for an existing path.
-    pub(crate) fn from_path(path: &Path) -> Result<Self, StorageError> {
-        let metadata = fs::symlink_metadata(path)
-            .map_err(|err| StorageError::io("read metadata for", path, err))?;
-        Ok(Self::from_fs_metadata(&metadata, path))
-    }
-
-    pub(crate) fn from_fs_metadata(metadata: &fs::Metadata, path: &Path) -> Self {
-        Self {
-            read_only: metadata.permissions().readonly(),
-            hidden: is_hidden(metadata, path),
-            system: is_system(metadata),
-            archive: is_archive(metadata),
-        }
-    }
-
-    /// Apply these attributes to an existing path (best-effort per platform).
-    pub fn apply_to(&self, path: &Path) -> Result<(), StorageError> {
-        apply_attributes(path, *self)
+pub(crate) fn attributes_from_fs_metadata(
+    metadata: &fs::Metadata,
+    path: &Path,
+) -> StorageAttributes {
+    StorageAttributes {
+        read_only: metadata.permissions().readonly(),
+        hidden: is_hidden(metadata, path),
+        system: is_system(metadata),
+        archive: is_archive(metadata),
     }
 }
 
-fn apply_attributes(path: &Path, attrs: StorageAttributes) -> Result<(), StorageError> {
+/// Apply settable attributes to an existing path (best-effort per platform).
+pub fn apply_storage_attributes(
+    path: &Path,
+    attrs: StorageAttributes,
+) -> Result<(), StorageError> {
     #[cfg(windows)]
     {
         apply_attributes_windows(path, attrs)

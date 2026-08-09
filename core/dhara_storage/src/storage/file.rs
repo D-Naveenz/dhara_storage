@@ -10,7 +10,8 @@ use tracing::debug;
 use crate::analysis::{AnalysisReport, analyze_path};
 use crate::error::StorageError;
 use crate::metadata::{
-    FileMetadata, StorageAttributes, StoragePermissions, StorageSize, is_temporary_path,
+    FileMetadata, StorageAttributes, StoragePermissions, StorageSize, apply_storage_attributes,
+    attributes_from_path, is_temporary_path, permissions_from_path,
 };
 use crate::operations::common::{ResolvedPaths, resolve_storage_paths};
 use crate::operations::{
@@ -172,17 +173,17 @@ impl FileStorage {
 
     /// Read settable attributes for this file.
     pub fn attributes(&self) -> Result<StorageAttributes, StorageError> {
-        StorageAttributes::from_path(&self.absolute_path)
+        attributes_from_path(&self.absolute_path)
     }
 
     /// Apply settable attributes to this file.
     pub fn set_attributes(&self, attributes: StorageAttributes) -> Result<(), StorageError> {
-        attributes.apply_to(&self.absolute_path)
+        apply_storage_attributes(&self.absolute_path, attributes)
     }
 
     /// Effective permissions for the current process.
     pub fn permissions(&self) -> Result<StoragePermissions, StorageError> {
-        StoragePermissions::from_path(&self.absolute_path)
+        permissions_from_path(&self.absolute_path)
     }
 
     /// Whether this path looks temporary by attribute and/or temp location.

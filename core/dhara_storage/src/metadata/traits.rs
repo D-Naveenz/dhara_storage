@@ -6,8 +6,8 @@ use std::time::SystemTime;
 
 use crate::error::StorageError;
 
-use super::attributes::StorageAttributes;
-use super::permissions::StoragePermissions;
+use super::attributes::{StorageAttributes, attributes_from_fs_metadata};
+use super::permissions::{StoragePermissions, permissions_from_metadata_and_attrs};
 use super::shell_icon::ShellIcon;
 use super::temporary::is_temporary_from_metadata;
 
@@ -79,9 +79,9 @@ impl CommonFields {
             None
         };
 
-        let attributes = StorageAttributes::from_fs_metadata(&metadata, absolute_path);
+        let attributes = attributes_from_fs_metadata(&metadata, absolute_path);
         let permissions =
-            StoragePermissions::from_metadata_and_attrs(absolute_path, &metadata, attributes);
+            permissions_from_metadata_and_attrs(absolute_path, &metadata, attributes);
         let is_temporary = is_temporary_from_metadata(absolute_path, &metadata);
 
         Ok((

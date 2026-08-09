@@ -6,7 +6,8 @@ use std::path::{Component, Path, PathBuf};
 use crate::error::StorageError;
 use crate::metadata::{
     DirectoryMetadata, DirectorySummary, StorageAttributes, StoragePermissions, StorageSize,
-    is_temporary_path, scan_directory_summary,
+    apply_storage_attributes, attributes_from_path, is_temporary_path, permissions_from_path,
+    scan_directory_summary,
 };
 use crate::operations::common::{ResolvedPaths, resolve_storage_paths};
 use crate::operations::{
@@ -118,17 +119,17 @@ impl DirectoryStorage {
 
     /// Read settable attributes for this directory.
     pub fn attributes(&self) -> Result<StorageAttributes, StorageError> {
-        StorageAttributes::from_path(&self.absolute_path)
+        attributes_from_path(&self.absolute_path)
     }
 
     /// Apply settable attributes to this directory.
     pub fn set_attributes(&self, attributes: StorageAttributes) -> Result<(), StorageError> {
-        attributes.apply_to(&self.absolute_path)
+        apply_storage_attributes(&self.absolute_path, attributes)
     }
 
     /// Effective permissions for the current process.
     pub fn permissions(&self) -> Result<StoragePermissions, StorageError> {
-        StoragePermissions::from_path(&self.absolute_path)
+        permissions_from_path(&self.absolute_path)
     }
 
     /// Whether this path looks temporary by attribute and/or temp location.
