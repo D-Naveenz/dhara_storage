@@ -93,7 +93,7 @@ Install a `tracing` subscriber in your app if you want structured logs.
 |------------|---------|-------|-------|
 | Analysis, I/O, watching | yes | yes | yes |
 | `ShellIcon` (RGBA) | yes | yes* | yes |
-| `ShellDetails` | yes | no | no |
+| Shell display / type name | yes | fallback | fallback |
 
 \*Linux GTK icons may require the main thread. `ShellIcon` returns raw RGBA pixels—encode to PNG in your app if needed.
 
