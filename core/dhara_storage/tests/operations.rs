@@ -130,10 +130,7 @@ fn file_storage_wraps_operations_without_eager_analysis() {
     file.analyze().unwrap();
     let meta = file.metadata().unwrap();
 
-    assert_eq!(
-        meta.analysis().unwrap().content_kind,
-        ContentKind::Text
-    );
+    assert_eq!(meta.analysis().unwrap().content_kind, ContentKind::Text);
     assert_eq!(meta.file_type().mime_type.as_deref(), Some("text/plain"));
 }
 

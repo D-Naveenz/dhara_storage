@@ -78,11 +78,7 @@ impl DirectoryStorage {
     /// Create a temporary directory and return a handle for it.
     pub fn create_temporary() -> Result<Self, StorageError> {
         let dir = tempfile::TempDir::new().map_err(|err| {
-            StorageError::io(
-                "create temporary directory in",
-                std::env::temp_dir(),
-                err,
-            )
+            StorageError::io("create temporary directory in", std::env::temp_dir(), err)
         })?;
         let path = dir.keep();
         Self::from_existing(path)
@@ -423,8 +419,7 @@ impl DirectoryStorage {
 
     /// Async variant of [`Self::rename`].
     pub async fn rename_async(&self, new_name: impl Into<String>) -> Result<Self, StorageError> {
-        let path =
-            crate::operations::rename_directory_async(&self.absolute_path, new_name).await?;
+        let path = crate::operations::rename_directory_async(&self.absolute_path, new_name).await?;
         Ok(Self::from_absolute(path))
     }
 

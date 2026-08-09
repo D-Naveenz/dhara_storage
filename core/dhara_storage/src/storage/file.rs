@@ -328,8 +328,7 @@ impl FileStorage {
         bytes: impl AsRef<[u8]>,
         options: WriteOptions,
     ) -> Result<Self, StorageError> {
-        let path =
-            crate::operations::write_file_async(&self.absolute_path, bytes, options).await?;
+        let path = crate::operations::write_file_async(&self.absolute_path, bytes, options).await?;
         Ok(Self::from_absolute(path))
     }
 

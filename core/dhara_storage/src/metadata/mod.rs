@@ -23,4 +23,3 @@ pub use shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon};
 pub use size::{SizeUnit, StorageSize, format_size};
 pub use temporary::is_temporary_path;
 pub use traits::StorageMetadata;
-

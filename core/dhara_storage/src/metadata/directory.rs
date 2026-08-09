@@ -59,7 +59,8 @@ impl DirectoryMetadata {
             "loading directory metadata"
         );
         let (common, fs_metadata) = CommonFields::load(&absolute_path)?;
-        if !fs_metadata.is_dir() && !(fs_metadata.file_type().is_symlink() && absolute_path.is_dir())
+        if !fs_metadata.is_dir()
+            && !(fs_metadata.file_type().is_symlink() && absolute_path.is_dir())
         {
             return Err(StorageError::NotADirectory {
                 path: absolute_path,

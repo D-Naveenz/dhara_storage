@@ -222,9 +222,7 @@ impl DharaSd for DharaSdService {
                     can_execute: perms.can_execute,
                 }),
                 is_symbolic_link: meta.is_symbolic_link(),
-                link_target: meta
-                    .link_target()
-                    .map(|value| value.display().to_string()),
+                link_target: meta.link_target().map(|value| value.display().to_string()),
                 is_temporary: meta.is_temporary(),
                 created_at_unix_ms: system_time_to_unix_ms(meta.created_at()),
                 modified_at_unix_ms: system_time_to_unix_ms(meta.modified_at()),
@@ -335,9 +333,7 @@ impl DharaSd for DharaSdService {
                     can_execute: perms.can_execute,
                 }),
                 is_symbolic_link: meta.is_symbolic_link(),
-                link_target: meta
-                    .link_target()
-                    .map(|value| value.display().to_string()),
+                link_target: meta.link_target().map(|value| value.display().to_string()),
                 is_temporary: meta.is_temporary(),
                 created_at_unix_ms: system_time_to_unix_ms(meta.created_at()),
                 modified_at_unix_ms: system_time_to_unix_ms(meta.modified_at()),
