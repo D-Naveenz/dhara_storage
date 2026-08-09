@@ -42,7 +42,7 @@ Build the `cdylib` for your target, then load it from your host language.
 Representative entry points (see source for the full list):
 
 - `dhara_analyze_path`
-- `dhara_get_file_info` / `dhara_get_directory_info`
+- `dhara_get_file_metadata` / `dhara_get_directory_metadata`
 - `dhara_list_files` / `dhara_list_directories` / `dhara_list_entries`
 - Watch helpers: `dhara_watch_try_recv_event`, `dhara_watch_recv_event`, …
 

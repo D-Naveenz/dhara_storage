@@ -259,7 +259,9 @@ pub unsafe extern "C" fn dhara_operation_start_write_file(
                     &mut cursor,
                     write_options(&handle, overwrite != 0, create_parent_directories != 0),
                 )
-                .map(|file| crate::abi::OperationResult::String(path_to_string(file.path())))
+                .map(|file| {
+                    crate::abi::OperationResult::String(path_to_string(file.absolute_path()))
+                })
                 .map_err(FfiFailure::from)
             }))
         }
@@ -296,7 +298,9 @@ pub unsafe extern "C" fn dhara_operation_start_write_file_text(
                     &mut cursor,
                     write_options(&handle, overwrite != 0, create_parent_directories != 0),
                 )
-                .map(|file| crate::abi::OperationResult::String(path_to_string(file.path())))
+                .map(|file| {
+                    crate::abi::OperationResult::String(path_to_string(file.absolute_path()))
+                })
                 .map_err(FfiFailure::from)
             }))
         }
