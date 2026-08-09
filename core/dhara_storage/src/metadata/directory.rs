@@ -12,7 +12,7 @@ use crate::error::StorageError;
 use super::attributes::StorageAttributes;
 use super::permissions::StoragePermissions;
 use super::shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon, load_shell_icon};
-use super::size::{StorageSize, format_size};
+use super::{StorageSize, format_size};
 use super::traits::{CommonFields, StorageMetadata};
 use super::windows_shell::{ShellDetails, load_shell_details};
 
