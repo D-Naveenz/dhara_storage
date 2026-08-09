@@ -10,8 +10,12 @@ use tracing::{debug, info};
 use crate::error::StorageError;
 use crate::metadata::scan_directory_summary;
 
+use dhara_storage_core::{
+    DirectoryDeleteOptions, SharedProgressReporter, StorageCancellationToken, StorageProgress,
+    TransferOptions,
+};
+
 use super::common::{
-    DirectoryDeleteOptions, SharedProgressReporter, StorageProgress, TransferOptions,
     choose_buffer_size, lock_write_targets, normalize_existing_directory, normalize_path,
     open_destination_file, open_source_file, prepare_destination_directory,
     prepare_destination_file, report_progress, same_volume, validate_single_path_name,
@@ -336,14 +340,14 @@ struct DirectoryProgress {
     bytes_transferred: u64,
     started_at: Instant,
     reporter: Option<SharedProgressReporter>,
-    cancellation_token: Option<super::common::StorageCancellationToken>,
+    cancellation_token: Option<StorageCancellationToken>,
 }
 
 impl DirectoryProgress {
     fn new(
         total_bytes: Option<u64>,
         reporter: Option<SharedProgressReporter>,
-        cancellation_token: Option<super::common::StorageCancellationToken>,
+        cancellation_token: Option<StorageCancellationToken>,
     ) -> Self {
         Self {
             total_bytes,
@@ -369,7 +373,7 @@ impl DirectoryProgress {
 
 fn delete_directory_recursive(
     path: &Path,
-    cancellation_token: Option<&super::common::StorageCancellationToken>,
+    cancellation_token: Option<&StorageCancellationToken>,
 ) -> Result<(), StorageError> {
     debug!(
         target: "dhara_storage::operations::directory",

@@ -17,9 +17,8 @@ pub enum SizeUnit {
 
 /// On-demand storage size: raw OS bytes plus a readable label.
 ///
-/// Returned by [`crate::storage::FileStorage::size`] and
-/// [`crate::storage::DirectoryStorage::size`]. Size is measured when those
-/// methods run — it is not cached on the handle and is not part of metadata.
+/// Runtime handles measure size when asked; the value is not part of a metadata
+/// snapshot and is not cached on the handle by the framework.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageSize {
     /// Size in bytes as reported by the operating system (or directory walk total).

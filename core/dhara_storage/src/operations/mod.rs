@@ -1,7 +1,9 @@
 //! Free functions for file and directory create/copy/move/delete with progress options.
 //!
 //! Prefer [`crate::storage`] handles for a higher-level API; this module is the
-//! sync-first implementation surface (plus optional Tokio wrappers).
+//! sync-first implementation surface (plus optional Tokio wrappers). Progress,
+//! cancellation, and option types are defined in `dhara_storage_core` and
+//! re-exported here.
 
 pub(crate) mod common;
 mod directory;
@@ -10,7 +12,7 @@ pub(crate) mod file;
 #[cfg(feature = "async-tokio")]
 mod tokio;
 
-pub use common::{
+pub use dhara_storage_core::{
     DirectoryDeleteOptions, ProgressReporter, ReadOptions, SharedProgressReporter,
     StorageCancellationToken, StorageProgress, TransferOptions, WriteOptions,
 };

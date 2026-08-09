@@ -1,14 +1,18 @@
-//! Shared transfer options, progress reporting, and path utilities for operations.
+//! Path utilities, locks, and buffered copy helpers for storage operations.
+//!
+//! Progress, cancellation, and option bundles live in `dhara_storage_core` and
+//! are re-exported from [`crate::operations`].
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::Instant;
 
 use once_cell::sync::Lazy;
+
+use dhara_storage_core::{SharedProgressReporter, StorageCancellationToken, StorageProgress};
 
 use crate::error::StorageError;
 
@@ -18,127 +22,6 @@ const DEFAULT_BUFFER_SIZE: usize = 64 * 1024;
 
 static PATH_LOCKS: Lazy<Mutex<HashMap<String, Weak<Mutex<()>>>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
-
-/// Progress details emitted by long-running storage operations.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub struct StorageProgress {
-    /// Total number of bytes expected, when known in advance.
-    pub total_bytes: Option<u64>,
-    /// Number of bytes transferred so far.
-    pub bytes_transferred: u64,
-    /// Best-effort average transfer speed in bytes per second.
-    pub bytes_per_second: f64,
-}
-
-/// Cooperative cancellation token for long-running storage operations.
-#[derive(Debug, Clone, Default)]
-pub struct StorageCancellationToken {
-    cancelled: Arc<AtomicBool>,
-}
-
-impl StorageCancellationToken {
-    /// Create a new uncancelled token.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Mark the token as cancelled.
-    pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
-    }
-
-    /// Returns true when cancellation has been requested.
-    pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
-    }
-}
-
-/// Callback interface for optional storage progress reporting.
-pub trait ProgressReporter: Send + Sync + 'static {
-    /// Receives a progress snapshot from an in-flight storage operation.
-    fn report(&self, progress: StorageProgress);
-}
-
-impl<F> ProgressReporter for F
-where
-    F: Fn(StorageProgress) + Send + Sync + 'static,
-{
-    fn report(&self, progress: StorageProgress) {
-        self(progress);
-    }
-}
-
-/// Shared reporter type used by both sync and async APIs.
-pub type SharedProgressReporter = Arc<dyn ProgressReporter>;
-
-/// Common options for copy and move style operations.
-#[derive(Clone, Default)]
-pub struct TransferOptions {
-    /// Replace the destination when it already exists.
-    pub overwrite: bool,
-    /// Override the buffered copy size when progress reporting is enabled.
-    pub buffer_size: Option<usize>,
-    /// Optional progress callback. When omitted, the fastest available path is used.
-    pub progress: Option<SharedProgressReporter>,
-    /// Optional cancellation token for cooperative cancellation.
-    pub cancellation_token: Option<StorageCancellationToken>,
-}
-
-/// Common options for byte-oriented read operations.
-#[derive(Clone, Default)]
-pub struct ReadOptions {
-    /// Override the buffered read size when progress reporting is enabled.
-    pub buffer_size: Option<usize>,
-    /// Optional progress callback. When omitted, the fastest available path is used.
-    pub progress: Option<SharedProgressReporter>,
-    /// Optional cancellation token for cooperative cancellation.
-    pub cancellation_token: Option<StorageCancellationToken>,
-}
-
-/// Common options for file write operations.
-#[derive(Clone)]
-pub struct WriteOptions {
-    /// Replace the destination when it already exists.
-    pub overwrite: bool,
-    /// Create missing parent directories before opening the destination.
-    pub create_parent_directories: bool,
-    /// Override the buffered copy size when progress reporting is enabled.
-    pub buffer_size: Option<usize>,
-    /// Optional progress callback. When omitted, the fastest available path is used.
-    pub progress: Option<SharedProgressReporter>,
-    /// Optional cancellation token for cooperative cancellation.
-    pub cancellation_token: Option<StorageCancellationToken>,
-}
-
-impl Default for WriteOptions {
-    fn default() -> Self {
-        Self {
-            overwrite: true,
-            create_parent_directories: true,
-            buffer_size: None,
-            progress: None,
-            cancellation_token: None,
-        }
-    }
-}
-
-/// Options for directory deletion.
-#[derive(Debug, Clone)]
-pub struct DirectoryDeleteOptions {
-    /// Delete the directory recursively when true.
-    pub recursive: bool,
-    /// Optional cancellation token for cooperative cancellation.
-    pub cancellation_token: Option<StorageCancellationToken>,
-}
-
-impl Default for DirectoryDeleteOptions {
-    fn default() -> Self {
-        Self {
-            recursive: true,
-            cancellation_token: None,
-        }
-    }
-}
 
 pub(crate) fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
     Ok(resolve_storage_paths(path)?.absolute)

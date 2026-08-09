@@ -79,7 +79,7 @@ Agents editing READMEs must **not** add:
 | Path | Role |
 |------|------|
 | `core/dhara_storage` | Business runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
-| `core/dhara_storage_core` | Framework / abstraction layer for the runtime (DSFD definitions today; planned: process/queue primitives) |
+| `core/dhara_storage_core` | Framework layer — DSFD, process (progress/cancel), portable types/options; planned: `StorageProcess` / `ProcessingQueue` |
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`) — gRPC control + handle transfer for foreign bindings |
 | `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) — **benchmark / evidence only**; not shipped via NuGet |
 | `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — managed API over `dhara-sd` |
@@ -90,7 +90,8 @@ Agents editing READMEs must **not** add:
 
 **Design choices**
 
-- `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
+- `dhara_storage_core` is the framework; `dhara_storage` holds business process. Shipped core slices: **DSFD**, **process** (progress/cancel/reporter), and **types** (options + portable attribute/permission/size shapes). Next planned slice: `StorageProcess` / `ProcessingQueue` on top of `process`.
+- Concrete `FileStorage` / `DirectoryStorage` stay in the runtime. Extension crates (for example a future archives crate) may depend on `dhara_storage`, compose those handles, and define their own types. No product-level storage-object enum or `dyn` handle trait in core — closed mixed collections are consumer-owned enums.
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
 - Product / NuGet semver: [`dhara.config.toml`](dhara.config.toml) `[versions]`. DROT tool version: [`tooling/drot/Cargo.toml`](tooling/drot/Cargo.toml). Storage pins the tool via submodule gitlink.

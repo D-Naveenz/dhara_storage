@@ -2,8 +2,10 @@
 //!
 //! This crate provides definition-driven file typing (bundled `filedefs.dat`),
 //! path-based file and directory handles, transfers with optional progress, and
-//! debounced directory watching. Definition package encode/decode lives in
-//! `dhara_storage_core`; this crate embeds and indexes the runtime `filedefs.dat`.
+//! debounced directory watching. Framework primitives (DSFD encode/decode,
+//! progress/cancel, portable value types) live in `dhara_storage_core` and are
+//! re-exported here for the usual application dependency path. This crate embeds
+//! and indexes the runtime `filedefs.dat`.
 
 #![deny(missing_docs)]
 
@@ -15,7 +17,7 @@ pub mod definitions;
 pub mod error;
 /// On-demand metadata, attributes, permissions, and size helpers.
 pub mod metadata;
-/// File and directory mutation APIs plus progress and cancellation primitives.
+/// File and directory mutation APIs (progress/cancel types from core, re-exported).
 pub mod operations;
 /// Path-based storage handles layered over the core operation APIs.
 pub mod storage;
@@ -31,7 +33,7 @@ pub use error::StorageError;
 pub use metadata::{
     DEFAULT_SHELL_ICON_SIZE, DirectoryMetadata, DirectorySummary, FileExtension, FileMetadata,
     ShellIcon, SizeUnit, StorageAttributes, StorageMetadata, StoragePermissions, StorageSize,
-    StorageType, format_size, is_temporary_path, scan_directory_summary,
+    StorageType, apply_storage_attributes, format_size, is_temporary_path, scan_directory_summary,
 };
 pub use operations::{
     DirectoryDeleteOptions, ProgressReporter, ReadOptions, SharedProgressReporter,
