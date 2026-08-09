@@ -13,8 +13,8 @@ pub mod analysis;
 pub mod definitions;
 /// Typed error values returned by storage operations and metadata queries.
 pub mod error;
-/// Immutable file-system metadata models and formatting helpers.
-pub mod info;
+/// On-demand metadata, attributes, permissions, and size helpers.
+pub mod metadata;
 /// File and directory mutation APIs plus progress and cancellation primitives.
 pub mod operations;
 /// Path-based storage handles layered over the core operation APIs.
@@ -28,9 +28,10 @@ pub use definitions::{
     SignatureDefinition, SignaturePattern, bundled_definition_package, decode_definition_package,
 };
 pub use error::StorageError;
-pub use info::{
-    DEFAULT_SHELL_ICON_SIZE, DirectoryInfo, DirectorySummary, FileInfo, ShellDetails, ShellIcon,
-    SizeUnit, StorageMetadata, format_size,
+pub use metadata::{
+    DEFAULT_SHELL_ICON_SIZE, DirectoryMetadata, DirectorySummary, FileExtension, FileMetadata,
+    ShellIcon, SizeUnit, StorageAttributes, StorageMetadata, StoragePermissions, StorageSize,
+    StorageType, format_size, is_temporary_path, scan_directory_summary,
 };
 pub use operations::{
     DirectoryDeleteOptions, ProgressReporter, ReadOptions, SharedProgressReporter,

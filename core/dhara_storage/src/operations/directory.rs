@@ -8,7 +8,7 @@ use std::time::Instant;
 use tracing::{debug, info};
 
 use crate::error::StorageError;
-use crate::info::DirectoryInfo;
+use crate::metadata::scan_directory_summary;
 
 use super::common::{
     DirectoryDeleteOptions, SharedProgressReporter, StorageProgress, TransferOptions,
@@ -86,7 +86,7 @@ pub fn copy_directory_with_options(
             .map_err(|err| StorageError::io("create destination directory", &destination, err))?;
 
         let total_bytes = if options.progress.is_some() {
-            Some(DirectoryInfo::from_path(&source)?.summary()?.total_size)
+            Some(scan_directory_summary(&source)?.total_size)
         } else {
             None
         };

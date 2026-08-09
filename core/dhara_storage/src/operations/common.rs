@@ -141,14 +141,35 @@ impl Default for DirectoryDeleteOptions {
 }
 
 pub(crate) fn normalize_path(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
+    Ok(resolve_storage_paths(path)?.absolute)
+}
+
+/// Absolute path used for I/O, plus the original relative input when one was supplied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct ResolvedPaths {
+    /// Resolved absolute path.
+    pub absolute: PathBuf,
+    /// Original relative path when the caller passed a relative input; otherwise `None`.
+    pub relative: Option<PathBuf>,
+}
+
+/// Resolve a caller path into an absolute path, retaining a relative input when present.
+pub(crate) fn resolve_storage_paths(path: impl AsRef<Path>) -> Result<ResolvedPaths, StorageError> {
     let path = path.as_ref();
     if path.is_absolute() {
-        return Ok(path.to_path_buf());
+        return Ok(ResolvedPaths {
+            absolute: path.to_path_buf(),
+            relative: None,
+        });
     }
 
-    std::env::current_dir()
+    let absolute = std::env::current_dir()
         .map(|cwd| cwd.join(path))
-        .map_err(|err| StorageError::io("resolve current working directory for", path, err))
+        .map_err(|err| StorageError::io("resolve current working directory for", path, err))?;
+    Ok(ResolvedPaths {
+        absolute,
+        relative: Some(path.to_path_buf()),
+    })
 }
 
 pub(crate) fn normalize_existing_file(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {

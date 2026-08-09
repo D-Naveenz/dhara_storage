@@ -1,0 +1,275 @@
+//! [`FileMetadata`] — on-demand file metadata with stateful content analysis.
+//!
+//! Maps roughly to Explorer's Details tab (type, dates, attributes) with Dhara
+//! extensions: content-based [`StorageType`] / [`FileExtension`] after
+//! [`FileMetadata::analyze`]. Size and paths live on [`crate::storage::FileStorage`].
+//!
+//! # Future work
+//!
+//! PE/ELF/Mach-O binaries may later expose `ExecutableMetadata` (architecture,
+//! format, exports, imports via the `object` crate). Not implemented today.
+
+use std::fmt;
+use std::path::{Path, PathBuf};
+
+use once_cell::sync::OnceCell;
+use tracing::debug;
+
+use crate::analysis::{AnalysisReport, analyze_path};
+use crate::error::StorageError;
+
+use super::attributes::StorageAttributes;
+use super::permissions::StoragePermissions;
+use super::shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon, load_shell_icon};
+use super::traits::{CommonFields, StorageMetadata};
+use super::windows_shell::{ShellDetails, load_shell_details};
+
+/// Human type label plus optional MIME type.
+///
+/// After [`FileMetadata::analyze`], both fields typically come from the analysis
+/// report (works on non-Windows hosts). Before analysis, Windows shell may fill
+/// `name` only; `mime_type` stays empty until analysis unless another source provides it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StorageType {
+    /// Human-friendly type label (for example `"PNG Image"` or `"JSON Source File"`).
+    pub name: String,
+    /// MIME type when known (for example `Some("image/png")`).
+    pub mime_type: Option<String>,
+}
+
+/// Path extension versus content-detected extension.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct FileExtension {
+    source: Option<String>,
+    detected: Option<String>,
+}
+
+impl FileExtension {
+    /// Extension from the file name (no leading dot), resolved from the storage path.
+    pub fn source(&self) -> Option<&str> {
+        self.source.as_deref()
+    }
+
+    /// Extension detected by content analysis, when [`FileMetadata::analyze`] has run.
+    pub fn detected(&self) -> Option<&str> {
+        self.detected.as_deref()
+    }
+
+    fn from_path(path: &Path) -> Self {
+        Self {
+            source: normalized_extension(path),
+            detected: None,
+        }
+    }
+
+    fn with_detected(mut self, detected: Option<String>) -> Self {
+        self.detected = detected;
+        self
+    }
+}
+
+impl fmt::Display for FileExtension {
+    /// Formats as `JPEG`, or `JPEG (PNG)` when source and detected differ.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let source = self.source.as_deref().map(uppercase_ext);
+        let detected = self.detected.as_deref().map(uppercase_ext);
+        match (source, detected) {
+            (None, None) => Ok(()),
+            (Some(only), None) | (None, Some(only)) => write!(f, "{only}"),
+            (Some(src), Some(det)) if src == det => write!(f, "{src}"),
+            (Some(src), Some(det)) => write!(f, "{src} ({det})"),
+        }
+    }
+}
+
+fn uppercase_ext(value: &str) -> String {
+    value.to_ascii_uppercase()
+}
+
+fn normalized_extension(path: &Path) -> Option<String> {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| ext.trim().trim_start_matches('.').to_ascii_lowercase())
+        .filter(|ext| !ext.is_empty())
+}
+
+/// File metadata snapshot with optional stateful analysis.
+#[derive(Debug)]
+pub struct FileMetadata {
+    /// Private absolute path used for on-demand loads (not part of the public metadata API).
+    absolute_path: PathBuf,
+    common: CommonFields,
+    extension: FileExtension,
+    analysis: Option<AnalysisReport>,
+    shell_details: OnceCell<Option<ShellDetails>>,
+    shell_icon: OnceCell<Option<ShellIcon>>,
+}
+
+impl FileMetadata {
+    /// Load file metadata for an absolute path without running content analysis.
+    pub fn load(absolute_path: impl AsRef<Path>) -> Result<Self, StorageError> {
+        let absolute_path = absolute_path.as_ref().to_path_buf();
+        debug!(
+            target: "dhara_storage::metadata::file",
+            path = %absolute_path.display(),
+            "loading file metadata"
+        );
+        let (common, fs_metadata) = CommonFields::load(&absolute_path)?;
+        let is_file = fs_metadata.is_file()
+            || (fs_metadata.file_type().is_symlink() && absolute_path.is_file());
+        if !is_file {
+            return Err(StorageError::NotAFile {
+                path: absolute_path,
+            });
+        }
+
+        Ok(Self {
+            extension: FileExtension::from_path(&absolute_path),
+            absolute_path,
+            common,
+            analysis: None,
+            shell_details: OnceCell::new(),
+            shell_icon: OnceCell::new(),
+        })
+    }
+
+    /// File content/identity type (analysis-aware when a report is stored).
+    pub fn file_type(&self) -> StorageType {
+        if let Some(report) = self.analysis.as_ref() {
+            let name = report
+                .matches
+                .first()
+                .map(|item| item.file_type_label.clone())
+                .filter(|value| !value.is_empty())
+                .or_else(|| {
+                    self.shell_type_name()
+                        .map(str::to_owned)
+                        .filter(|value| !value.is_empty())
+                })
+                .unwrap_or_else(|| self.fallback_type_name());
+            return StorageType {
+                name,
+                mime_type: report.top_mime_type.clone(),
+            };
+        }
+
+        let name = self
+            .shell_type_name()
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned)
+            .unwrap_or_else(|| self.fallback_type_name());
+        StorageType {
+            name,
+            mime_type: None,
+        }
+    }
+
+    /// Source and (after analyze) detected extensions.
+    pub fn extension(&self) -> FileExtension {
+        self.extension.clone()
+    }
+
+    /// Run content analysis; return the report and retain it on `self`.
+    ///
+    /// Updates [`Self::file_type`] and [`Self::extension`] derived views.
+    pub fn analyze(&mut self) -> Result<&AnalysisReport, StorageError> {
+        debug!(
+            target: "dhara_storage::metadata::file",
+            path = %self.absolute_path.display(),
+            "analyzing file content"
+        );
+        let report = analyze_path(&self.absolute_path)?;
+        self.extension = FileExtension::from_path(&self.absolute_path)
+            .with_detected(report.top_detected_extension.clone());
+        self.analysis = Some(report);
+        Ok(self.analysis.as_ref().expect("analysis just stored"))
+    }
+
+    /// Returns a previously stored analysis report, if any.
+    pub fn analysis(&self) -> Option<&AnalysisReport> {
+        self.analysis.as_ref()
+    }
+
+    fn shell_type_name(&self) -> Option<&str> {
+        self.ensure_shell()
+            .and_then(|shell| shell.type_name.as_deref())
+    }
+
+    fn ensure_shell(&self) -> Option<&ShellDetails> {
+        self.shell_details
+            .get_or_init(|| load_shell_details(&self.absolute_path))
+            .as_ref()
+    }
+
+    fn fallback_type_name(&self) -> String {
+        self.extension
+            .source()
+            .map(|ext| format!("{} File", ext.to_ascii_uppercase()))
+            .unwrap_or_else(|| "File".to_owned())
+    }
+
+    fn shell_display_name(&self) -> Option<&str> {
+        self.ensure_shell()
+            .and_then(|shell| shell.display_name.as_deref())
+            .filter(|value| !value.is_empty())
+    }
+}
+
+impl StorageMetadata for FileMetadata {
+    fn name(&self) -> &str {
+        &self.common.name
+    }
+
+    fn display_name(&self) -> &str {
+        if let Some(shell_name) = self.shell_display_name() {
+            return shell_name;
+        }
+        self.absolute_path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .filter(|value| !value.is_empty())
+            .unwrap_or_else(|| self.name())
+    }
+
+    fn created_at(&self) -> Option<std::time::SystemTime> {
+        self.common.created_at
+    }
+
+    fn modified_at(&self) -> Option<std::time::SystemTime> {
+        self.common.modified_at
+    }
+
+    fn accessed_at(&self) -> Option<std::time::SystemTime> {
+        self.common.accessed_at
+    }
+
+    fn attributes(&self) -> StorageAttributes {
+        self.common.attributes
+    }
+
+    fn permissions(&self) -> StoragePermissions {
+        self.common.permissions
+    }
+
+    fn is_symbolic_link(&self) -> bool {
+        self.common.is_symbolic_link
+    }
+
+    fn link_target(&self) -> Option<&Path> {
+        self.common.link_target.as_deref()
+    }
+
+    fn is_temporary(&self) -> bool {
+        self.common.is_temporary
+    }
+
+    fn icon(&self) -> Option<&ShellIcon> {
+        self.shell_icon
+            .get_or_init(|| load_shell_icon(&self.absolute_path, DEFAULT_SHELL_ICON_SIZE))
+            .as_ref()
+    }
+
+    fn load_icon_at(&self, size: u32) -> Option<ShellIcon> {
+        load_shell_icon(&self.absolute_path, size)
+    }
+}

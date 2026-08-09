@@ -1,0 +1,25 @@
+//! On-demand storage metadata, attributes, permissions, and size helpers.
+//!
+//! Paths and size live on [`crate::storage`] handles. Metadata is loaded when
+//! requested and is not cached on those handles. [`FileMetadata::analyze`] makes
+//! a held metadata value stateful with an [`crate::analysis::AnalysisReport`].
+
+mod attributes;
+mod directory;
+mod file;
+mod permissions;
+mod shell_icon;
+mod size;
+mod temporary;
+mod traits;
+mod windows_shell;
+
+pub use attributes::StorageAttributes;
+pub use directory::{DirectoryMetadata, DirectorySummary, scan_directory_summary};
+pub use file::{FileExtension, FileMetadata, StorageType};
+pub use permissions::StoragePermissions;
+pub use shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon};
+pub use size::{SizeUnit, StorageSize, format_size};
+pub use temporary::is_temporary_path;
+pub use traits::StorageMetadata;
+

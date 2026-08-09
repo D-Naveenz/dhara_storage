@@ -7,7 +7,8 @@ use std::io::Write;
 use std::path::PathBuf;
 
 use dhara_storage::{
-    ContentKind, DirectoryInfo, FileInfo, StorageError, analyze_path, analyze_reader,
+    ContentKind, DirectoryMetadata, FileMetadata, StorageError, StorageMetadata, analyze_path,
+    analyze_reader,
 };
 use tempfile::tempdir;
 
@@ -172,99 +173,77 @@ fn analyze_path_can_read_file_while_another_handle_is_open() {
 }
 
 #[test]
-fn file_info_from_path_exposes_rust_native_metadata() {
+fn file_metadata_from_path_exposes_rust_native_metadata() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("sample.txt");
     fs::write(&path, b"hello file info").unwrap();
 
-    let info = FileInfo::from_path(&path).unwrap();
+    let mut meta = FileMetadata::load(&path).unwrap();
+    meta.analyze().unwrap();
 
-    assert_eq!(info.filename_extension(), Some("txt"));
-    assert_eq!(info.size(), 15);
-    assert_eq!(info.display_name(), "sample");
-    assert_eq!(info.mime_type().unwrap(), Some("text/plain"));
-    assert_eq!(info.content_kind().unwrap(), ContentKind::Text);
+    assert_eq!(meta.extension().source(), Some("txt"));
+    assert_eq!(meta.file_type().mime_type.as_deref(), Some("text/plain"));
+    assert!(!meta.display_name().is_empty());
 }
 
 #[test]
-fn file_info_from_path_rejects_directories() {
+fn file_metadata_from_path_rejects_directories() {
     let temp = tempdir().unwrap();
 
-    let err = FileInfo::from_path(temp.path()).unwrap_err();
+    let err = FileMetadata::load(temp.path()).unwrap_err();
     assert!(matches!(err, StorageError::NotAFile { .. }));
 }
 
 #[test]
-fn file_info_analysis_is_lazy() {
+fn file_metadata_analysis_is_stateful_after_analyze() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("lazy.txt");
     fs::write(&path, b"lazy analysis").unwrap();
 
-    let info = FileInfo::from_path(&path).unwrap();
+    let mut meta = FileMetadata::load(&path).unwrap();
+    assert!(meta.analysis().is_none());
+    meta.analyze().unwrap();
+    assert!(meta.analysis().is_some());
     fs::remove_file(&path).unwrap();
 
-    let err = info.analysis().unwrap_err();
-    assert!(matches!(err, StorageError::NotFound { .. }));
+    // Stored report remains available after the file is removed.
+    assert_eq!(
+        meta.analysis().unwrap().top_mime_type.as_deref(),
+        Some("text/plain")
+    );
 }
 
 #[test]
-fn file_info_preloaded_analysis_survives_file_removal() {
-    let temp = tempdir().unwrap();
-    let path = temp.path().join("preloaded.txt");
-    fs::write(&path, b"preloaded analysis").unwrap();
-
-    let info = FileInfo::from_path_with_analysis(&path).unwrap();
-    fs::remove_file(&path).unwrap();
-
-    assert_eq!(info.mime_type().unwrap(), Some("text/plain"));
-    assert_eq!(info.content_kind().unwrap(), ContentKind::Text);
-}
-
-#[test]
-fn file_info_type_name_prefers_loaded_analysis() {
+fn file_metadata_type_name_prefers_loaded_analysis() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("typed.txt");
     fs::write(&path, b"typed").unwrap();
 
-    let info = FileInfo::from_path_with_analysis(&path).unwrap();
+    let mut meta = FileMetadata::load(&path).unwrap();
+    meta.analyze().unwrap();
 
-    assert_eq!(info.type_name(), "Plain Text");
+    assert_eq!(meta.file_type().name, "Plain Text");
 }
 
 #[test]
-fn directory_info_summary_is_lazy() {
+fn directory_metadata_summary_is_lazy() {
     let temp = tempdir().unwrap();
     let nested = temp.path().join("nested");
     fs::create_dir(&nested).unwrap();
 
-    let info = DirectoryInfo::from_path(temp.path()).unwrap();
+    let meta = DirectoryMetadata::load(temp.path()).unwrap();
     fs::write(temp.path().join("late.txt"), b"late").unwrap();
     fs::write(nested.join("deep.txt"), b"deep").unwrap();
 
-    let summary = info.summary().unwrap();
+    let summary = meta.summary().unwrap();
     assert_eq!(summary.file_count, 2);
     assert_eq!(summary.directory_count, 1);
 }
 
 #[test]
-fn directory_info_preloaded_summary_is_cached() {
-    let temp = tempdir().unwrap();
-    let nested = temp.path().join("nested");
-    fs::create_dir(&nested).unwrap();
-    fs::write(temp.path().join("existing.txt"), b"existing").unwrap();
-
-    let info = DirectoryInfo::from_path_with_summary(temp.path()).unwrap();
-    fs::write(nested.join("later.txt"), b"later").unwrap();
-
-    let summary = info.summary().unwrap();
-    assert_eq!(summary.file_count, 1);
-    assert_eq!(summary.directory_count, 1);
-}
-
-#[test]
-fn directory_info_defaults_type_name_when_no_shell_data_is_needed() {
+fn directory_metadata_defaults_type_name_when_no_shell_data_is_needed() {
     let temp = tempdir().unwrap();
 
-    let info = DirectoryInfo::from_path(temp.path()).unwrap();
-    assert!(!info.type_name().is_empty());
+    let meta = DirectoryMetadata::load(temp.path()).unwrap();
+    assert!(!meta.file_type_name().is_empty());
 }
