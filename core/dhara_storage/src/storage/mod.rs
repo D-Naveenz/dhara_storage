@@ -1,7 +1,7 @@
 //! Path-based [`FileStorage`] and [`DirectoryStorage`] handles.
 //!
-//! Handles are lightweight wrappers over normalized paths; expensive work stays
-//! opt-in through info and analysis APIs.
+//! Handles expose absolute/optional relative paths and on-demand [`crate::metadata::StorageSize`].
+//! Metadata is loaded separately and is not cached on the handle.
 
 mod directory;
 mod file;
@@ -14,7 +14,7 @@ pub use file::FileStorage;
 use std::path::Path;
 
 use crate::error::StorageError;
-use crate::operations::common::normalize_path;
+use crate::operations::common::resolve_storage_paths;
 
 /// Controls whether directory enumeration is limited to the current folder or
 /// includes nested directories recursively.
@@ -38,29 +38,33 @@ pub enum StorageEntry {
 impl StorageEntry {
     /// Resolve an existing file-system path into a typed storage handle.
     pub fn from_existing(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = normalize_path(path)?;
-        if path.is_file() {
-            return Ok(Self::File(FileStorage::from_existing(path)?));
+        let resolved = resolve_storage_paths(path)?;
+        if resolved.absolute.is_file() {
+            return Ok(Self::File(FileStorage::from_existing(&resolved.absolute)?));
         }
-        if path.is_dir() {
-            return Ok(Self::Directory(DirectoryStorage::from_existing(path)?));
+        if resolved.absolute.is_dir() {
+            return Ok(Self::Directory(DirectoryStorage::from_existing(
+                &resolved.absolute,
+            )?));
         }
 
-        if !path.exists() {
-            return Err(StorageError::NotFound { path });
+        if !resolved.absolute.exists() {
+            return Err(StorageError::NotFound {
+                path: resolved.absolute,
+            });
         }
 
         Err(StorageError::path_conflict(
-            path,
+            resolved.absolute,
             "path is neither a regular file nor a directory",
         ))
     }
 
     /// The absolute path represented by this handle.
-    pub fn path(&self) -> &Path {
+    pub fn absolute_path(&self) -> &Path {
         match self {
-            Self::File(file) => file.path(),
-            Self::Directory(directory) => directory.path(),
+            Self::File(file) => file.absolute_path(),
+            Self::Directory(directory) => directory.absolute_path(),
         }
     }
 }

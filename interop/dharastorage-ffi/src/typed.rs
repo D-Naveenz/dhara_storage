@@ -3,8 +3,9 @@
 use std::ptr;
 
 use dhara_storage::{
-    AnalysisReport, ContentKind, DetectedDefinition, DirectoryInfo, FileInfo, StorageChangeEvent,
-    StorageChangeType,
+    AnalysisReport, ContentKind, DetectedDefinition, DirectoryMetadata, FileExtension,
+    FileMetadata, StorageAttributes, StorageChangeEvent, StorageChangeType, StorageMetadata,
+    StoragePermissions, StorageSize, StorageType,
 };
 
 use crate::errors::FfiFailure;
@@ -30,26 +31,77 @@ pub struct NativeOptionalUtf8 {
     pub value: NativeUtf8,
 }
 
-/// File-system metadata returned through the typed native ABI.
+/// Settable storage attributes returned through the typed native ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeStorageAttributes {
+    /// Non-zero when the item is read-only.
+    pub read_only: u8,
+    /// Non-zero when the item is hidden.
+    pub hidden: u8,
+    /// Non-zero when the item is marked as a Windows system item.
+    pub system: u8,
+    /// Non-zero when the item is marked with the Windows archive bit.
+    pub archive: u8,
+}
+
+/// Effective process permissions returned through the typed native ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeStoragePermissions {
+    /// Non-zero when the current process can read the entry.
+    pub can_read: u8,
+    /// Non-zero when the current process can write the entry.
+    pub can_write: u8,
+    /// Non-zero when the current process can modify/replace content.
+    pub can_modify: u8,
+    /// Non-zero when the current process can execute (files) or search (directories) the entry.
+    pub can_execute: u8,
+}
+
+/// Human type label plus optional MIME type returned through the typed native ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeStorageType {
+    /// Human-friendly type label.
+    pub name: NativeUtf8,
+    /// MIME type when known.
+    pub mime_type: NativeOptionalUtf8,
+}
+
+/// Path extension versus content-detected extension returned through the typed native ABI.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct NativeFileExtension {
+    /// Extension resolved from the storage path, when present.
+    pub source: NativeOptionalUtf8,
+    /// Extension detected by content analysis, when present.
+    pub detected: NativeOptionalUtf8,
+    /// Formatted display value (mirrors the Rust `Display` implementation).
+    pub display: NativeUtf8,
+}
+
+/// Shared file-system metadata returned through the typed native ABI.
+///
+/// Paths are not included here: callers already hold the path used to load this
+/// metadata, and the Rust core keeps paths on storage handles rather than metadata.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct NativeStorageMetadata {
-    /// Full path.
-    pub path: NativeUtf8,
     /// File or directory name.
     pub name: NativeUtf8,
-    /// Non-zero when the item is read-only.
-    pub is_read_only: u8,
-    /// Non-zero when the item is hidden.
-    pub is_hidden: u8,
-    /// Non-zero when the item is marked as a system item.
-    pub is_system: u8,
-    /// Non-zero when the item is marked temporary.
-    pub is_temporary: u8,
+    /// Display name (shell-backed on Windows when available).
+    pub display_name: NativeUtf8,
+    /// Settable attributes snapshot.
+    pub attributes: NativeStorageAttributes,
+    /// Effective permissions for the current process.
+    pub permissions: NativeStoragePermissions,
     /// Non-zero when the item is a symbolic link.
     pub is_symbolic_link: u8,
     /// Link target path when the item is a symbolic link and the target is available.
     pub link_target: NativeOptionalUtf8,
+    /// Non-zero when the item is marked temporary.
+    pub is_temporary: u8,
     /// Non-zero when `created_at_utc_ms` is meaningful.
     pub has_created_at_utc_ms: u8,
     /// Unix timestamp in milliseconds for creation time.
@@ -132,50 +184,36 @@ pub struct NativeShellIcon {
     pub pixels_len: usize,
 }
 
-/// Windows shell display metadata returned through the typed native ABI.
+/// File metadata returned through the typed native ABI.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct NativeShellDetails {
-    /// Non-zero when shell metadata is available.
-    pub has_value: u8,
-    /// Human-friendly shell display name when available.
-    pub display_name: NativeOptionalUtf8,
-    /// Shell type label when available.
-    pub type_name: NativeOptionalUtf8,
-}
-
-/// File information returned through the typed native ABI.
-#[repr(C)]
-#[derive(Debug, Clone, Copy)]
-pub struct NativeFileInformation {
+pub struct NativeFileMetadata {
     /// Shared file-system metadata.
     pub metadata: NativeStorageMetadata,
-    /// Display name.
-    pub display_name: NativeUtf8,
+    /// Content/identity type (analysis-aware when analysis was requested).
+    pub file_type: NativeStorageType,
+    /// Source and (after analysis) detected extensions.
+    pub extension: NativeFileExtension,
     /// File size in bytes.
     pub size: u64,
     /// Human-readable formatted size.
     pub formatted_size: NativeUtf8,
-    /// Filename extension when available.
-    pub filename_extension: NativeOptionalUtf8,
     /// Analysis report pointer when analysis was requested and available.
     pub analysis: *const NativeAnalysisReport,
     /// Non-zero when `icon` contains RGBA pixel data.
     pub has_icon: u8,
     /// Shell icon when `has_icon` is non-zero.
     pub icon: NativeShellIcon,
-    /// Optional Windows shell display metadata.
-    pub shell_details: NativeShellDetails,
 }
 
-/// Directory information returned through the typed native ABI.
+/// Directory metadata returned through the typed native ABI.
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
-pub struct NativeDirectoryInformation {
+pub struct NativeDirectoryMetadata {
     /// Shared file-system metadata.
     pub metadata: NativeStorageMetadata,
-    /// Display name.
-    pub display_name: NativeUtf8,
+    /// Content/identity type label (shell-backed on Windows when available).
+    pub file_type_name: NativeUtf8,
     /// Non-zero when `summary` is meaningful.
     pub has_summary: u8,
     /// Directory summary when `has_summary` is non-zero.
@@ -184,8 +222,6 @@ pub struct NativeDirectoryInformation {
     pub has_icon: u8,
     /// Shell icon when `has_icon` is non-zero.
     pub icon: NativeShellIcon,
-    /// Optional Windows shell display metadata.
-    pub shell_details: NativeShellDetails,
 }
 
 /// One listed storage entry returned through the typed native ABI.
@@ -274,16 +310,16 @@ struct AnalysisReportOwner {
 }
 
 #[repr(C)]
-struct FileInformationOwner {
-    abi: NativeFileInformation,
+struct FileMetadataOwner {
+    abi: NativeFileMetadata,
     analysis: Option<Box<AnalysisReportOwner>>,
     icon_pixels: Option<Vec<u8>>,
     strings: StringStore,
 }
 
 #[repr(C)]
-struct DirectoryInformationOwner {
-    abi: NativeDirectoryInformation,
+struct DirectoryMetadataOwner {
+    abi: NativeDirectoryMetadata,
     icon_pixels: Option<Vec<u8>>,
     strings: StringStore,
 }
@@ -342,18 +378,19 @@ impl AnalysisReportOwner {
     }
 }
 
-impl FileInformationOwner {
-    fn from_info(
-        info: FileInfo,
+impl FileMetadataOwner {
+    fn from_metadata(
+        metadata: FileMetadata,
+        size: StorageSize,
         include_analysis: bool,
         include_icon: bool,
         icon_size: u32,
     ) -> Result<Box<Self>, FfiFailure> {
         let mut strings = StringStore::default();
         let analysis = if include_analysis {
-            Some(AnalysisReportOwner::from_report(
-                info.analysis().map_err(FfiFailure::from)?.clone(),
-            ))
+            metadata
+                .analysis()
+                .map(|report| AnalysisReportOwner::from_report(report.clone()))
         } else {
             None
         };
@@ -363,7 +400,7 @@ impl FileInformationOwner {
             .unwrap_or_else(ptr::null);
 
         let (has_icon, icon_pixels, icon_abi) = if include_icon {
-            if let Some(shell_icon) = info.load_icon_at(icon_size) {
+            if let Some(shell_icon) = metadata.load_icon_at(icon_size) {
                 let pixels_len = shell_icon.rgba.len();
                 let abi = NativeShellIcon {
                     width: shell_icon.width,
@@ -379,19 +416,20 @@ impl FileInformationOwner {
             (0, None, empty_shell_icon_abi())
         };
 
-        let shell_details_abi = native_shell_details(info.shell_details(), &mut strings);
+        let common = native_storage_metadata(&metadata, &mut strings);
+        let file_type = native_storage_type(metadata.file_type(), &mut strings);
+        let extension = native_file_extension(metadata.extension(), &mut strings);
 
         let mut owner = Box::new(Self {
-            abi: NativeFileInformation {
-                metadata: native_metadata(info.metadata(), &mut strings),
-                display_name: strings.push(info.display_name()),
-                size: info.size(),
-                formatted_size: strings.push(info.formatted_size()),
-                filename_extension: strings.push_optional(info.filename_extension()),
+            abi: NativeFileMetadata {
+                metadata: common,
+                file_type,
+                extension,
+                size: size.bytes,
+                formatted_size: strings.push(size.formatted),
                 analysis: analysis_ptr,
                 has_icon,
                 icon: icon_abi,
-                shell_details: shell_details_abi,
             },
             analysis,
             icon_pixels: None,
@@ -406,23 +444,23 @@ impl FileInformationOwner {
         Ok(owner)
     }
 
-    fn into_raw_abi(mut owner: Box<Self>) -> *mut NativeFileInformation {
-        let ptr = &mut owner.abi as *mut NativeFileInformation;
+    fn into_raw_abi(mut owner: Box<Self>) -> *mut NativeFileMetadata {
+        let ptr = &mut owner.abi as *mut NativeFileMetadata;
         let _ = Box::into_raw(owner);
         ptr
     }
 }
 
-impl DirectoryInformationOwner {
-    fn from_info(
-        info: DirectoryInfo,
+impl DirectoryMetadataOwner {
+    fn from_metadata(
+        metadata: DirectoryMetadata,
         include_summary: bool,
         include_icon: bool,
         icon_size: u32,
     ) -> Result<Box<Self>, FfiFailure> {
         let mut strings = StringStore::default();
         let (has_summary, summary) = if include_summary {
-            let summary = *info.summary().map_err(FfiFailure::from)?;
+            let summary = *metadata.summary().map_err(FfiFailure::from)?;
             (
                 1,
                 NativeDirectorySummary {
@@ -445,7 +483,7 @@ impl DirectoryInformationOwner {
         };
 
         let (has_icon, icon_pixels, icon_abi) = if include_icon {
-            if let Some(shell_icon) = info.load_icon_at(icon_size) {
+            if let Some(shell_icon) = metadata.load_icon_at(icon_size) {
                 let pixels_len = shell_icon.rgba.len();
                 let abi = NativeShellIcon {
                     width: shell_icon.width,
@@ -461,17 +499,17 @@ impl DirectoryInformationOwner {
             (0, None, empty_shell_icon_abi())
         };
 
-        let shell_details_abi = native_shell_details(info.shell_details(), &mut strings);
+        let common = native_storage_metadata(&metadata, &mut strings);
+        let file_type_name = strings.push(metadata.file_type_name());
 
         let mut owner = Box::new(Self {
-            abi: NativeDirectoryInformation {
-                metadata: native_metadata(info.metadata(), &mut strings),
-                display_name: strings.push(info.display_name()),
+            abi: NativeDirectoryMetadata {
+                metadata: common,
+                file_type_name,
                 has_summary,
                 summary,
                 has_icon,
                 icon: icon_abi,
-                shell_details: shell_details_abi,
             },
             icon_pixels: None,
             strings,
@@ -485,8 +523,8 @@ impl DirectoryInformationOwner {
         Ok(owner)
     }
 
-    fn into_raw_abi(mut owner: Box<Self>) -> *mut NativeDirectoryInformation {
-        let ptr = &mut owner.abi as *mut NativeDirectoryInformation;
+    fn into_raw_abi(mut owner: Box<Self>) -> *mut NativeDirectoryMetadata {
+        let ptr = &mut owner.abi as *mut NativeDirectoryMetadata;
         let _ = Box::into_raw(owner);
         ptr
     }
@@ -556,24 +594,25 @@ pub(crate) fn analysis_report_to_native(report: AnalysisReport) -> *mut NativeAn
     AnalysisReportOwner::into_raw_abi(AnalysisReportOwner::from_report(report))
 }
 
-pub(crate) fn file_info_to_native(
-    info: FileInfo,
+pub(crate) fn file_metadata_to_native(
+    metadata: FileMetadata,
+    size: StorageSize,
     include_analysis: bool,
     include_icon: bool,
     icon_size: u32,
-) -> Result<*mut NativeFileInformation, FfiFailure> {
-    FileInformationOwner::from_info(info, include_analysis, include_icon, icon_size)
-        .map(FileInformationOwner::into_raw_abi)
+) -> Result<*mut NativeFileMetadata, FfiFailure> {
+    FileMetadataOwner::from_metadata(metadata, size, include_analysis, include_icon, icon_size)
+        .map(FileMetadataOwner::into_raw_abi)
 }
 
-pub(crate) fn directory_info_to_native(
-    info: DirectoryInfo,
+pub(crate) fn directory_metadata_to_native(
+    metadata: DirectoryMetadata,
     include_summary: bool,
     include_icon: bool,
     icon_size: u32,
-) -> Result<*mut NativeDirectoryInformation, FfiFailure> {
-    DirectoryInformationOwner::from_info(info, include_summary, include_icon, icon_size)
-        .map(DirectoryInformationOwner::into_raw_abi)
+) -> Result<*mut NativeDirectoryMetadata, FfiFailure> {
+    DirectoryMetadataOwner::from_metadata(metadata, include_summary, include_icon, icon_size)
+        .map(DirectoryMetadataOwner::into_raw_abi)
 }
 
 pub(crate) fn storage_entries_to_native(
@@ -586,22 +625,55 @@ pub(crate) fn watch_event_to_native(event: StorageChangeEvent) -> *mut NativeWat
     WatchEventOwner::into_raw_abi(WatchEventOwner::from_event(event))
 }
 
-fn native_metadata(
-    metadata: &dhara_storage::StorageMetadata,
+fn native_attributes(attrs: StorageAttributes) -> NativeStorageAttributes {
+    NativeStorageAttributes {
+        read_only: u8::from(attrs.read_only),
+        hidden: u8::from(attrs.hidden),
+        system: u8::from(attrs.system),
+        archive: u8::from(attrs.archive),
+    }
+}
+
+fn native_permissions(perms: StoragePermissions) -> NativeStoragePermissions {
+    NativeStoragePermissions {
+        can_read: u8::from(perms.can_read),
+        can_write: u8::from(perms.can_write),
+        can_modify: u8::from(perms.can_modify),
+        can_execute: u8::from(perms.can_execute),
+    }
+}
+
+fn native_storage_type(value: StorageType, strings: &mut StringStore) -> NativeStorageType {
+    NativeStorageType {
+        name: strings.push(value.name),
+        mime_type: strings.push_optional(value.mime_type),
+    }
+}
+
+fn native_file_extension(value: FileExtension, strings: &mut StringStore) -> NativeFileExtension {
+    let display = value.to_string();
+    NativeFileExtension {
+        source: strings.push_optional(value.source().map(str::to_owned)),
+        detected: strings.push_optional(value.detected().map(str::to_owned)),
+        display: strings.push(display),
+    }
+}
+
+fn native_storage_metadata(
+    metadata: &dyn StorageMetadata,
     strings: &mut StringStore,
 ) -> NativeStorageMetadata {
     let created_at_utc_ms = system_time_to_unix_millis(metadata.created_at());
     let modified_at_utc_ms = system_time_to_unix_millis(metadata.modified_at());
     let accessed_at_utc_ms = system_time_to_unix_millis(metadata.accessed_at());
     NativeStorageMetadata {
-        path: strings.push(path_to_string(metadata.path())),
         name: strings.push(metadata.name()),
-        is_read_only: u8::from(metadata.is_read_only()),
-        is_hidden: u8::from(metadata.is_hidden()),
-        is_system: u8::from(metadata.is_system()),
-        is_temporary: u8::from(metadata.is_temporary()),
+        display_name: strings.push(metadata.display_name()),
+        attributes: native_attributes(metadata.attributes()),
+        permissions: native_permissions(metadata.permissions()),
         is_symbolic_link: u8::from(metadata.is_symbolic_link()),
         link_target: strings.push_optional(metadata.link_target().map(path_to_string)),
+        is_temporary: u8::from(metadata.is_temporary()),
         has_created_at_utc_ms: u8::from(created_at_utc_ms.is_some()),
         created_at_utc_ms: created_at_utc_ms.unwrap_or(0),
         has_modified_at_utc_ms: u8::from(modified_at_utc_ms.is_some()),
@@ -653,35 +725,6 @@ fn empty_shell_icon_abi() -> NativeShellIcon {
     }
 }
 
-fn empty_optional_utf8() -> NativeOptionalUtf8 {
-    NativeOptionalUtf8 {
-        has_value: 0,
-        value: NativeUtf8 {
-            ptr: ptr::null(),
-            len: 0,
-        },
-    }
-}
-
-fn native_shell_details(
-    details: Option<&dhara_storage::ShellDetails>,
-    strings: &mut StringStore,
-) -> NativeShellDetails {
-    let Some(details) = details else {
-        return NativeShellDetails {
-            has_value: 0,
-            display_name: empty_optional_utf8(),
-            type_name: empty_optional_utf8(),
-        };
-    };
-
-    NativeShellDetails {
-        has_value: 1,
-        display_name: strings.push_optional(details.display_name.as_deref()),
-        type_name: strings.push_optional(details.type_name.as_deref()),
-    }
-}
-
 fn slice_ptr<T>(slice: &[T]) -> *const T {
     if slice.is_empty() {
         ptr::null()
@@ -703,27 +746,27 @@ pub unsafe extern "C" fn dhara_analysis_report_free(report: *mut NativeAnalysisR
     }
 }
 
-/// Frees file information returned by the typed native ABI.
+/// Frees file metadata returned by the typed native ABI.
 ///
 /// # Safety
 ///
-/// `info` must be null or a pointer returned by `dhara_get_file_info`.
+/// `metadata` must be null or a pointer returned by `dhara_get_file_metadata`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dhara_file_info_free(info: *mut NativeFileInformation) {
-    if !info.is_null() {
-        drop(Box::from_raw(info as *mut FileInformationOwner));
+pub unsafe extern "C" fn dhara_file_metadata_free(metadata: *mut NativeFileMetadata) {
+    if !metadata.is_null() {
+        drop(Box::from_raw(metadata as *mut FileMetadataOwner));
     }
 }
 
-/// Frees directory information returned by the typed native ABI.
+/// Frees directory metadata returned by the typed native ABI.
 ///
 /// # Safety
 ///
-/// `info` must be null or a pointer returned by `dhara_get_directory_info`.
+/// `metadata` must be null or a pointer returned by `dhara_get_directory_metadata`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dhara_directory_info_free(info: *mut NativeDirectoryInformation) {
-    if !info.is_null() {
-        drop(Box::from_raw(info as *mut DirectoryInformationOwner));
+pub unsafe extern "C" fn dhara_directory_metadata_free(metadata: *mut NativeDirectoryMetadata) {
+    if !metadata.is_null() {
+        drop(Box::from_raw(metadata as *mut DirectoryMetadataOwner));
     }
 }
 

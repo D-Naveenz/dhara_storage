@@ -1,4 +1,4 @@
-namespace Dhara.Storage.Models.Information;
+namespace Dhara.Storage.Models.Metadata;
 
 /// <summary>
 /// Represents a listed directory entry.

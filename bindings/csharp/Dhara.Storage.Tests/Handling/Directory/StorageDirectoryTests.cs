@@ -22,17 +22,17 @@ public sealed class StorageDirectoryTests
     }
 
     [Fact]
-    public void RefreshInformation_WithSummary_ReturnsTypedSummary()
+    public void RefreshMetadata_WithSummary_ReturnsTypedSummary()
     {
         using var temp = new TemporaryDirectory();
         System.IO.Directory.CreateDirectory(temp.PathFor("docs"));
         System.IO.File.WriteAllText(temp.PathFor("docs", "a.txt"), "A");
         var directory = DharaStorage.Directory(temp.PathFor("docs"));
 
-        var info = directory.RefreshInformation(includeSummary: true);
+        var metadata = directory.RefreshMetadata(includeSummary: true);
 
-        Assert.NotNull(info.Summary);
-        Assert.True(info.Summary.FileCount >= 1);
+        Assert.NotNull(metadata.Summary);
+        Assert.True(metadata.Summary.FileCount >= 1);
     }
 
     [Fact]
@@ -48,8 +48,8 @@ public sealed class StorageDirectoryTests
 
         var copy = await directory.CopyAsync(temp.PathFor("copy"), progress, overwrite: false, cancellationToken);
 
-        Assert.True(System.IO.Directory.Exists(copy.FullPath));
-        Assert.True(System.IO.File.Exists(Path.Combine(copy.FullPath, "nested", "file.txt")));
+        Assert.True(System.IO.Directory.Exists(copy.AbsolutePath));
+        Assert.True(System.IO.File.Exists(Path.Combine(copy.AbsolutePath, "nested", "file.txt")));
         Assert.NotEmpty(progressValues);
     }
 }

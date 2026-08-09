@@ -1,5 +1,5 @@
 using Dhara.Storage.Models.Analysis;
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 
 namespace Dhara.Storage.Abstractions;
@@ -13,27 +13,41 @@ namespace Dhara.Storage.Abstractions;
 public interface IStorageFile : IStorageItem
 {
     /// <summary>
-    /// Gets cached file information, refreshing it on first use.
+    /// Gets cached file metadata, refreshing it on first use.
     /// </summary>
-    /// <remarks>This property loads lightweight file information only. Use <see cref="RefreshInformation(bool)"/>
-    /// with the method argument set to <see langword="true"/> when you also need content-analysis
-    /// results in the returned <see cref="FileInformation"/> instance.</remarks>
-    FileInformation Information { get; }
+    /// <remarks>Loads lightweight file metadata. After <see cref="Analyze"/>, subsequent
+    /// metadata snapshots are enriched from the analysis cached on this wrapper. Use
+    /// <see cref="RefreshMetadata(bool)"/> with <see langword="true"/> to force a fresh
+    /// analysis as part of the metadata load.</remarks>
+    FileMetadata Metadata { get; }
 
     /// <summary>
-    /// Refreshes the cached file information.
+    /// Refreshes the cached file metadata.
     /// </summary>
-    /// <param name="includeAnalysis"><see langword="true"/> to include content-analysis results in the refreshed snapshot;
-    /// otherwise, <see langword="false"/> to refresh metadata only.</param>
-    /// <returns>A new <see cref="FileInformation"/> snapshot for the current file path.</returns>
+    /// <param name="includeAnalysis"><see langword="true"/> to run content analysis now and include
+    /// the report in the snapshot; otherwise, <see langword="false"/> to refresh metadata only
+    /// (still enriched from a prior <see cref="Analyze"/> when one is cached).</param>
+    /// <returns>A new <see cref="FileMetadata"/> snapshot for the current file path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read file information.</exception>
-    FileInformation RefreshInformation(bool includeAnalysis = false);
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read file metadata.</exception>
+    FileMetadata RefreshMetadata(bool includeAnalysis = false);
 
     /// <summary>
-    /// Runs content analysis for the current file.
+    /// Measures the current file size on demand.
+    /// </summary>
+    /// <returns>A <see cref="StorageSize"/> snapshot for the current file path.</returns>
+    /// <remarks>Size is measured by the daemon rather than cached as part of <see cref="Metadata"/>, since
+    /// paths and size live on the storage wrapper, not on a metadata snapshot.</remarks>
+    /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read the file size.</exception>
+    StorageSize Size();
+
+    /// <summary>
+    /// Runs content analysis for the current file and caches the report on this wrapper.
     /// </summary>
     /// <returns>An <see cref="AnalysisReport"/> describing the strongest file-type matches for the current file.</returns>
+    /// <remarks>Subsequent <see cref="Metadata"/> / <see cref="RefreshMetadata"/> calls enrich type and
+    /// extension from this cached report.</remarks>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be analyzed by the native runtime.</exception>
     AnalysisReport Analyze();

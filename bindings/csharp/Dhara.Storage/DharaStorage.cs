@@ -1,6 +1,6 @@
 using Dhara.Storage.Core;
 using Dhara.Storage.Models.Analysis;
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Runtime;
 using Dhara.Storage.Sd.V1;
 using Microsoft.Extensions.Logging;
@@ -10,48 +10,26 @@ namespace Dhara.Storage;
 /// <summary>
 /// Entry points for creating strongly typed storage wrappers and running direct metadata queries.
 /// </summary>
-/// <remarks>
-/// <para>
-/// Prefer these factories from application code. Paths may refer to existing items or future
-/// destinations. Content analysis uses the native definition database (not extension-only MIME).
-/// </para>
-/// <para>
-/// Calls are served by the bundled <c>dhara-sd</c> sidecar daemon over a local gRPC transport;
-/// the daemon is started on first use.
-/// </para>
-/// </remarks>
 public static class DharaStorage
 {
     /// <summary>
     /// Registers an <see cref="ILoggerFactory"/> that receives managed wrapper logs.
     /// </summary>
-    /// <remarks>Passing <see langword="null"/> removes the current logger factory. Configure logging
-    /// before starting long-running storage operations when you want initialization, progress, and
-    /// failure details to flow into the host logging pipeline.</remarks>
-    /// <param name="loggerFactory">The logger factory that should receive Dhara Storage log events, or <see langword="null"/> to disable forwarding.</param>
     public static void UseLoggerFactory(ILoggerFactory? loggerFactory) => DharaStorageLogBridge.UseLoggerFactory(loggerFactory);
 
     /// <summary>
     /// Creates a path-based file wrapper.
     /// </summary>
-    /// <param name="path">The file path to wrap. The path may point to an existing file or to a future destination for write operations.</param>
-    /// <returns>A new <see cref="StorageFile"/> wrapper for <paramref name="path"/>.</returns>
     public static StorageFile File(string path) => new(path);
 
     /// <summary>
     /// Creates a path-based directory wrapper.
     /// </summary>
-    /// <param name="path">The directory path to wrap. The path may point to an existing directory or to a future destination for create operations.</param>
-    /// <returns>A new <see cref="StorageDirectory"/> wrapper for <paramref name="path"/>.</returns>
     public static StorageDirectory Directory(string path) => new(path);
 
     /// <summary>
     /// Runs content analysis for a path immediately.
     /// </summary>
-    /// <param name="path">The file path to analyze.</param>
-    /// <returns>An <see cref="AnalysisReport"/> describing the strongest file-type matches for <paramref name="path"/>.</returns>
-    /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot analyze the path.</exception>
     public static AnalysisReport AnalyzePath(string path)
     {
         var response = DaemonClient.Call(
@@ -62,66 +40,56 @@ public static class DharaStorage
     }
 
     /// <summary>
-    /// Queries file information immediately.
+    /// Queries file metadata immediately.
     /// </summary>
-    /// <param name="path">The file path to inspect.</param>
-    /// <param name="includeAnalysis"><see langword="true"/> to include content-analysis results in the returned snapshot; otherwise, <see langword="false"/> to load metadata only.</param>
-    /// <param name="includeIcon"><see langword="true"/> to request shell icon pixels from the daemon.</param>
-    /// <param name="iconSize">Requested shell icon size in pixels when <paramref name="includeIcon"/> is <see langword="true"/>.</param>
-    /// <returns>A <see cref="FileInformation"/> snapshot for <paramref name="path"/>.</returns>
-    /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot read file information.</exception>
-    public static FileInformation GetFileInformation(
+    public static FileMetadata GetFileMetadata(
         string path,
         bool includeAnalysis = false,
         bool includeIcon = false,
         int iconSize = 32)
     {
         var response = DaemonClient.Call(
-            (client, options) => client.GetFileInfo(
-                new GetFileInfoRequest
+            (client, options) => client.GetFileMetadata(
+                new GetFileMetadataRequest
                 {
                     Path = path,
-                    IncludeShellDetails = includeIcon,
+                    IncludeAnalysis = includeAnalysis,
                     IncludeIcon = includeIcon,
                     IconSize = checked((uint)iconSize),
                 },
                 options),
             path,
-            nameof(DharaSd.DharaSdClient.GetFileInfo));
-        var analysis = includeAnalysis ? AnalyzePath(path) : null;
-        return DaemonModelFactory.ToFileInformation(response, analysis);
+            nameof(DharaSd.DharaSdClient.GetFileMetadata));
+        AnalysisReport? analysis = null;
+        if (includeAnalysis && response.Analysis is not null)
+        {
+            analysis = DaemonModelFactory.ToAnalysisReport(response.Analysis, path);
+        }
+
+        return DaemonModelFactory.ToFileMetadata(response, analysis);
     }
 
     /// <summary>
-    /// Queries directory information immediately.
+    /// Queries directory metadata immediately.
     /// </summary>
-    /// <param name="path">The directory path to inspect.</param>
-    /// <param name="includeSummary"><see langword="true"/> to include recursive size and entry counts in the returned snapshot; otherwise, <see langword="false"/> to load metadata only.</param>
-    /// <param name="includeIcon"><see langword="true"/> to request shell icon pixels from the daemon.</param>
-    /// <param name="iconSize">Requested shell icon size in pixels when <paramref name="includeIcon"/> is <see langword="true"/>.</param>
-    /// <returns>A <see cref="DirectoryInformation"/> snapshot for <paramref name="path"/>.</returns>
-    /// <exception cref="PlatformNotSupportedException">Thrown when called on an unsupported operating system or process architecture.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the daemon cannot read directory information.</exception>
-    public static DirectoryInformation GetDirectoryInformation(
+    public static DirectoryMetadata GetDirectoryMetadata(
         string path,
         bool includeSummary = false,
         bool includeIcon = false,
         int iconSize = 32)
     {
         var response = DaemonClient.Call(
-            (client, options) => client.GetDirectoryInfo(
-                new GetDirectoryInfoRequest
+            (client, options) => client.GetDirectoryMetadata(
+                new GetDirectoryMetadataRequest
                 {
                     Path = path,
-                    IncludeShellDetails = includeIcon,
+                    IncludeSummary = includeSummary,
                     IncludeIcon = includeIcon,
                     IconSize = checked((uint)iconSize),
                 },
                 options),
             path,
-            nameof(DharaSd.DharaSdClient.GetDirectoryInfo));
-        var summary = includeSummary ? DaemonModelFactory.BuildDirectorySummary(path) : null;
-        return DaemonModelFactory.ToDirectoryInformation(response, summary);
+            nameof(DharaSd.DharaSdClient.GetDirectoryMetadata));
+        return DaemonModelFactory.ToDirectoryMetadata(response);
     }
 }

@@ -121,13 +121,17 @@ fn copy_directory_with_progress_preserves_tree() {
 fn file_storage_wraps_operations_without_eager_analysis() {
     let temp = tempdir().unwrap();
     let path = temp.path().join("story.txt");
-    let file = FileStorage::new(&path).unwrap();
+    let file = FileStorage::new(&path)
+        .unwrap()
+        .write_string("story body")
+        .unwrap();
 
-    file.write_string("story body").unwrap();
-    let info = file.info_with_analysis().unwrap();
+    assert!(file.metadata().unwrap().analysis().is_none());
+    file.analyze().unwrap();
+    let meta = file.metadata().unwrap();
 
-    assert_eq!(info.content_kind().unwrap(), ContentKind::Text);
-    assert_eq!(info.mime_type().unwrap(), Some("text/plain"));
+    assert_eq!(meta.analysis().unwrap().content_kind, ContentKind::Text);
+    assert_eq!(meta.file_type().mime_type.as_deref(), Some("text/plain"));
 }
 
 #[test]
@@ -140,7 +144,7 @@ fn file_storage_rename_returns_new_handle() {
     let renamed = file.rename("final.txt").unwrap();
 
     assert_eq!(renamed.name(), Some("final.txt"));
-    assert!(renamed.path().exists());
+    assert!(renamed.absolute_path().exists());
     assert!(!original.exists());
 }
 
@@ -343,7 +347,7 @@ async fn async_directory_copy_roundtrip() {
         .unwrap();
 
     assert_eq!(
-        fs::read_to_string(copied.path().join("nested").join("value.txt")).unwrap(),
+        fs::read_to_string(copied.absolute_path().join("nested").join("value.txt")).unwrap(),
         "value"
     );
 }

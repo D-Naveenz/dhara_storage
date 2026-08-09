@@ -13,7 +13,7 @@ internal static class ScenarioCatalog
     /// <summary>Rung-1 paired scenarios (FFI baseline vs daemon candidate).</summary>
     public static IReadOnlyList<ScenarioPair> Rung1Pairs { get; } =
     [
-        new("get-file-info", "GetFileInfo", "B1_GetFileInfo", "B2_GetFileInfo", MaxMeanOverhead: null),
+        new("get-file-metadata", "GetFileMetadata", "B1_GetFileMetadata", "B2_GetFileMetadata", MaxMeanOverhead: null),
         new("list-entries-100", "ListEntries / 100", "B1_ListEntries100", "B2_ListEntries100", MaxMeanOverhead: 0.15),
         new("analyze-path", "AnalyzePath", "B1_AnalyzePath", "B2_AnalyzePath", MaxMeanOverhead: 0.10),
         new("read-4k", "Read 4KB (handle dup)", "B1_Read4K", "B2_ReadHandleDup4K", MaxMeanOverhead: null),

@@ -51,7 +51,8 @@ DharaStorage.UseLoggerFactory(loggerFactory);
 using Dhara.Storage;
 
 var file = DharaStorage.File(@"C:\data\sample.pdf");
-var info = file.RefreshInformation(includeAnalysis: true);
+var report = file.Analyze();
+var metadata = file.Metadata; // enriched from the cached analysis
 var bytes = await file.ReadBytesAsync();
 ```
 
@@ -73,7 +74,7 @@ Add [`Dhara.Storage.Extensions.Hosting`](https://www.nuget.org/packages/Dhara.St
 builder.Services.AddDharaStorage();
 ```
 
-Shell icons and shell details are not available over the sidecar transport yet; `Icon` and `ShellDetails` are always `null`.
+Shell icons are available over the sidecar when requested (`includeIcon`); display name and type name are returned as metadata fields.
 
 ## Related
 

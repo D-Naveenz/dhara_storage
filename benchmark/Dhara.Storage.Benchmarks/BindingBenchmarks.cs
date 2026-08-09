@@ -86,13 +86,13 @@ public class BindingBenchmarks
     public async Task B2_Echo64K() =>
         _ = await Client.EchoAsync(new EchoRequest { Payload = _echo64K }, deadline: RpcDeadlineUtc()).ConfigureAwait(false);
 
-    [Benchmark(Description = "B1 GetFileInfo")]
-    public void B1_GetFileInfo() =>
-        FfiBaseline.GetFileInfo(_file4K);
+    [Benchmark(Description = "B1 GetFileMetadata")]
+    public void B1_GetFileMetadata() =>
+        FfiBaseline.GetFileMetadata(_file4K);
 
-    [Benchmark(Description = "B2 GetFileInfo")]
-    public async Task B2_GetFileInfo() =>
-        _ = await Client.GetFileInfoAsync(new GetFileInfoRequest { Path = _file4K }, deadline: RpcDeadlineUtc()).ConfigureAwait(false);
+    [Benchmark(Description = "B2 GetFileMetadata")]
+    public async Task B2_GetFileMetadata() =>
+        _ = await Client.GetFileMetadataAsync(new GetFileMetadataRequest { Path = _file4K }, deadline: RpcDeadlineUtc()).ConfigureAwait(false);
 
     [Benchmark(Description = "B1 ListEntries/100")]
     public void B1_ListEntries100() =>
@@ -266,10 +266,10 @@ public class BindingSmokeBenchmarks
         _ = await _host!.Client.PingAsync(new PingRequest()).ConfigureAwait(false);
 
     [Benchmark]
-    public void GetFileInfo_B1() =>
-        FfiBaseline.GetFileInfo(_file4K);
+    public void GetFileMetadata_B1() =>
+        FfiBaseline.GetFileMetadata(_file4K);
 
     [Benchmark]
-    public async Task GetFileInfo_B2() =>
-        _ = await _host!.Client.GetFileInfoAsync(new GetFileInfoRequest { Path = _file4K }).ConfigureAwait(false);
+    public async Task GetFileMetadata_B2() =>
+        _ = await _host!.Client.GetFileMetadataAsync(new GetFileMetadataRequest { Path = _file4K }).ConfigureAwait(false);
 }

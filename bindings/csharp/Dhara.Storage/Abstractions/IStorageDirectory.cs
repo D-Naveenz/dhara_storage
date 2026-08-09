@@ -1,4 +1,4 @@
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 using Dhara.Storage.Models.Watching;
 
@@ -13,11 +13,21 @@ namespace Dhara.Storage.Abstractions;
 public interface IStorageDirectory : IStorageItem
 {
     /// <summary>
-    /// Gets cached directory information, refreshing it on first use.
+    /// Measures the current directory size on demand.
     /// </summary>
-    /// <remarks>This property loads lightweight metadata only. Use <see cref="RefreshInformation(bool)"/> with
+    /// <remarks>Size is not part of a <see cref="DirectoryMetadata"/> snapshot; the daemon computes the
+    /// recursive total for each call rather than caching it alongside metadata.</remarks>
+    /// <returns>A <see cref="StorageSize"/> with raw bytes and a formatted label.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read the directory size.</exception>
+    StorageSize Size();
+
+    /// <summary>
+    /// Gets cached directory metadata, refreshing it on first use.
+    /// </summary>
+    /// <remarks>This property loads lightweight metadata only. Use <see cref="RefreshMetadata(bool)"/> with
     /// the method argument set to <see langword="true"/> when you need recursive counts and size totals.</remarks>
-    DirectoryInformation Information { get; }
+    DirectoryMetadata Metadata { get; }
 
     /// <summary>
     /// Occurs when a watched directory emits a debounced change notification.
@@ -33,14 +43,14 @@ public interface IStorageDirectory : IStorageItem
     bool IsWatching { get; }
 
     /// <summary>
-    /// Refreshes the cached directory information.
+    /// Refreshes the cached directory metadata.
     /// </summary>
     /// <param name="includeSummary"><see langword="true"/> to include recursive size and entry counts; otherwise,
     /// <see langword="false"/> to refresh metadata only.</param>
-    /// <returns>A new <see cref="DirectoryInformation"/> snapshot for the current directory path.</returns>
+    /// <returns>A new <see cref="DirectoryMetadata"/> snapshot for the current directory path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read directory information.</exception>
-    DirectoryInformation RefreshInformation(bool includeSummary = false);
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read directory metadata.</exception>
+    DirectoryMetadata RefreshMetadata(bool includeSummary = false);
 
     /// <summary>
     /// Enumerates child files.

@@ -4,7 +4,7 @@ use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 
 use dhara_storage::{
-    DirectoryInfo, FileInfo, analyze_path, copy_directory, copy_file, create_directory,
+    DirectoryMetadata, FileStorage, analyze_path, copy_directory, copy_file, create_directory,
     create_directory_all, delete_directory, delete_file, move_directory, move_file, read_file,
     read_file_to_string, rename_directory, rename_file, write_file, write_file_string,
 };
@@ -17,9 +17,9 @@ use crate::marshal::{
 };
 use crate::models::{EntryKind, list_entries, path_to_string};
 use crate::typed::{
-    NativeAnalysisReport, NativeDirectoryInformation, NativeFileInformation,
-    NativeStorageEntryList, analysis_report_to_native, directory_info_to_native,
-    file_info_to_native, storage_entries_to_native,
+    NativeAnalysisReport, NativeDirectoryMetadata, NativeFileMetadata, NativeStorageEntryList,
+    analysis_report_to_native, directory_metadata_to_native, file_metadata_to_native,
+    storage_entries_to_native,
 };
 
 #[unsafe(no_mangle)]
@@ -49,34 +49,34 @@ pub unsafe extern "C" fn dhara_analyze_path(
 }
 
 #[unsafe(no_mangle)]
-/// Reads file metadata and optionally analysis data, returning typed native file information.
+/// Reads file metadata and optionally analysis data, returning typed native file metadata.
 ///
 /// # Safety
 ///
-/// `path`, `out_info`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// `path`, `out_metadata`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
 /// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned file
-/// information must be freed with `dhara_file_info_free`.
-pub unsafe extern "C" fn dhara_get_file_info(
+/// metadata must be freed with `dhara_file_metadata_free`.
+pub unsafe extern "C" fn dhara_get_file_metadata(
     path: *const c_char,
     include_analysis: u8,
     include_icon: u8,
     icon_size: u32,
-    out_info: *mut *mut NativeFileInformation,
+    out_metadata: *mut *mut NativeFileMetadata,
     out_error_ptr: *mut *mut u8,
     out_error_len: *mut usize,
 ) -> DharaStatus {
     ffi_fn!(execute_result_handle(
-        out_info,
+        out_metadata,
         out_error_ptr,
         out_error_len,
         || {
             let path = parse_path_arg(path, "path")?;
-            let info = if include_analysis != 0 {
-                FileInfo::from_path_with_analysis(&path)
-            } else {
-                FileInfo::from_path(&path)
+            let storage = FileStorage::from_existing(&path).map_err(FfiFailure::from)?;
+            if include_analysis != 0 {
+                storage.analyze().map_err(FfiFailure::from)?;
             }
-            .map_err(FfiFailure::from)?;
+            let metadata = storage.metadata().map_err(FfiFailure::from)?;
+            let size = storage.size().map_err(FfiFailure::from)?;
 
             let icon_size = if icon_size == 0 {
                 dhara_storage::DEFAULT_SHELL_ICON_SIZE
@@ -84,40 +84,41 @@ pub unsafe extern "C" fn dhara_get_file_info(
                 icon_size
             };
 
-            file_info_to_native(info, include_analysis != 0, include_icon != 0, icon_size)
+            file_metadata_to_native(
+                metadata,
+                size,
+                include_analysis != 0,
+                include_icon != 0,
+                icon_size,
+            )
         }
     ))
 }
 
 #[unsafe(no_mangle)]
-/// Reads directory metadata and optionally summary data, returning typed native directory information.
+/// Reads directory metadata and optionally summary data, returning typed native directory metadata.
 ///
 /// # Safety
 ///
-/// `path`, `out_info`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
+/// `path`, `out_metadata`, `out_error_ptr`, and `out_error_len` must follow the Dhara Storage FFI
 /// pointer contracts. `path` must be a valid null-terminated UTF-8 string. The returned directory
-/// information must be freed with `dhara_directory_info_free`.
-pub unsafe extern "C" fn dhara_get_directory_info(
+/// metadata must be freed with `dhara_directory_metadata_free`.
+pub unsafe extern "C" fn dhara_get_directory_metadata(
     path: *const c_char,
     include_summary: u8,
     include_icon: u8,
     icon_size: u32,
-    out_info: *mut *mut NativeDirectoryInformation,
+    out_metadata: *mut *mut NativeDirectoryMetadata,
     out_error_ptr: *mut *mut u8,
     out_error_len: *mut usize,
 ) -> DharaStatus {
     ffi_fn!(execute_result_handle(
-        out_info,
+        out_metadata,
         out_error_ptr,
         out_error_len,
         || {
             let path = parse_path_arg(path, "path")?;
-            let info = if include_summary != 0 {
-                DirectoryInfo::from_path_with_summary(&path)
-            } else {
-                DirectoryInfo::from_path(&path)
-            }
-            .map_err(FfiFailure::from)?;
+            let metadata = DirectoryMetadata::load(&path).map_err(FfiFailure::from)?;
 
             let icon_size = if icon_size == 0 {
                 dhara_storage::DEFAULT_SHELL_ICON_SIZE
@@ -125,7 +126,12 @@ pub unsafe extern "C" fn dhara_get_directory_info(
                 icon_size
             };
 
-            directory_info_to_native(info, include_summary != 0, include_icon != 0, icon_size)
+            directory_metadata_to_native(
+                metadata,
+                include_summary != 0,
+                include_icon != 0,
+                icon_size,
+            )
         }
     ))
 }

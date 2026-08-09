@@ -40,7 +40,7 @@ pub(crate) fn list_entries(
             .into_iter()
             .map(|file| StorageEntryDto {
                 kind: "file",
-                path: path_to_string(file.path()),
+                path: path_to_string(file.absolute_path()),
                 name: file.name().unwrap_or_default().to_owned(),
             })
             .collect()),
@@ -50,7 +50,7 @@ pub(crate) fn list_entries(
             .into_iter()
             .map(|dir| StorageEntryDto {
                 kind: "directory",
-                path: path_to_string(dir.path()),
+                path: path_to_string(dir.absolute_path()),
                 name: dir.name().unwrap_or_default().to_owned(),
             })
             .collect()),
@@ -78,12 +78,12 @@ impl StorageEntryDto {
         match entry {
             StorageEntry::File(file) => Self {
                 kind: "file",
-                path: path_to_string(file.path()),
+                path: path_to_string(file.absolute_path()),
                 name: file.name().unwrap_or_default().to_owned(),
             },
             StorageEntry::Directory(directory) => Self {
                 kind: "directory",
-                path: path_to_string(directory.path()),
+                path: path_to_string(directory.absolute_path()),
                 name: directory.name().unwrap_or_default().to_owned(),
             },
         }

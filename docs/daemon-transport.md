@@ -29,7 +29,7 @@ Daemon logging is owned by **`dhara-sd`**: one `tracing_subscriber` captures **`
 
 ## Shell metadata
 
-`GetFileInfo` / `GetDirectoryInfo` accept `include_shell_details`, `include_icon`, and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory).
+`GetFileMetadata` / `GetDirectoryMetadata` accept `include_icon` and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory). Display name and type name are top-level fields on the metadata response (shell-backed on Windows when available).
 
 ## Product vs contrast RPCs
 

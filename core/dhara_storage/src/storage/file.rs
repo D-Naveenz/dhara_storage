@@ -1,92 +1,220 @@
 //! [`FileStorage`] — path-based file handle for I/O, transfers, and metadata.
 
+use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 
+use tracing::debug;
+
+use crate::analysis::{AnalysisReport, analyze_path};
 use crate::error::StorageError;
-use crate::info::FileInfo;
-use crate::operations::common::normalize_path;
+use crate::metadata::{
+    FileMetadata, StorageAttributes, StoragePermissions, StorageSize, is_temporary_path,
+};
+use crate::operations::common::{ResolvedPaths, resolve_storage_paths};
 use crate::operations::{
     ReadOptions, TransferOptions, WriteOptions, copy_file, copy_file_with_options, delete_file,
     move_file, move_file_with_options, read_file, read_file_to_string, rename_file, write_file,
     write_file_from_reader, write_file_string,
 };
 
-/// Rust-native handle for file operations and metadata lookups.
+/// Rust-native handle for file operations and on-demand metadata.
 ///
-/// The handle itself is lightweight and path-based. Expensive metadata and content
-/// analysis remain opt-in through [`FileInfo`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// Paths and [`Self::size`] live on the handle. [`Self::analyze`] runs content
+/// analysis and caches the report here; [`Self::metadata`] applies that cache when
+/// present. Metadata snapshots themselves are not otherwise cached on the handle.
+#[derive(Debug)]
 pub struct FileStorage {
-    path: PathBuf,
+    absolute_path: PathBuf,
+    relative_path: Option<PathBuf>,
+    analysis: Mutex<Option<AnalysisReport>>,
 }
 
+impl Clone for FileStorage {
+    fn clone(&self) -> Self {
+        Self {
+            absolute_path: self.absolute_path.clone(),
+            relative_path: self.relative_path.clone(),
+            analysis: Mutex::new(self.analysis.lock().map_or(None, |guard| guard.clone())),
+        }
+    }
+}
+
+impl PartialEq for FileStorage {
+    fn eq(&self, other: &Self) -> bool {
+        self.absolute_path == other.absolute_path && self.relative_path == other.relative_path
+    }
+}
+
+impl Eq for FileStorage {}
+
 impl FileStorage {
-    /// Create a path-based file handle without touching the file system.
+    fn from_resolved(resolved: ResolvedPaths) -> Self {
+        Self {
+            absolute_path: resolved.absolute,
+            relative_path: resolved.relative,
+            analysis: Mutex::new(None),
+        }
+    }
+
+    fn from_absolute(absolute: PathBuf) -> Self {
+        Self {
+            absolute_path: absolute,
+            relative_path: None,
+            analysis: Mutex::new(None),
+        }
+    }
+
+    fn from_destination(destination: &Path, absolute: PathBuf) -> Self {
+        Self {
+            absolute_path: absolute,
+            relative_path: if destination.is_absolute() {
+                None
+            } else {
+                Some(destination.to_path_buf())
+            },
+            analysis: Mutex::new(None),
+        }
+    }
+
+    /// Create a path-based file handle without requiring the file to exist yet.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        Ok(Self {
-            path: normalize_path(path)?,
-        })
+        Ok(Self::from_resolved(resolve_storage_paths(path)?))
     }
 
     /// Create a file handle for an existing file.
     pub fn from_existing(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = normalize_path(path)?;
-        if !path.exists() {
-            return Err(StorageError::NotFound { path });
+        let resolved = resolve_storage_paths(path)?;
+        if !resolved.absolute.exists() {
+            return Err(StorageError::NotFound {
+                path: resolved.absolute,
+            });
         }
-        if !path.is_file() {
-            return Err(StorageError::NotAFile { path });
+        if !resolved.absolute.is_file() {
+            return Err(StorageError::NotAFile {
+                path: resolved.absolute,
+            });
         }
-
-        Ok(Self { path })
+        Ok(Self::from_resolved(resolved))
     }
 
-    /// Absolute path represented by this handle.
-    pub fn path(&self) -> &Path {
-        &self.path
+    /// Create a named temporary file and return a handle for it.
+    ///
+    /// Delegates to the `tempfile` crate for portable TEMP / `O_TMPFILE` / `$TMPDIR` behavior.
+    pub fn create_temporary() -> Result<Self, StorageError> {
+        let file = tempfile::NamedTempFile::new().map_err(|err| {
+            StorageError::io("create temporary file in", std::env::temp_dir(), err)
+        })?;
+        let path = file.into_temp_path().keep().map_err(|err| {
+            StorageError::io(
+                "persist temporary file path in",
+                std::env::temp_dir(),
+                err.into(),
+            )
+        })?;
+        Self::from_existing(path)
+    }
+
+    /// Resolved absolute path used for I/O.
+    pub fn absolute_path(&self) -> &Path {
+        &self.absolute_path
+    }
+
+    /// Original relative path when this handle was initialized with a relative input.
+    pub fn relative_path(&self) -> Option<&Path> {
+        self.relative_path.as_deref()
     }
 
     /// File name including extension.
     pub fn name(&self) -> Option<&str> {
-        self.path.file_name().and_then(|value| value.to_str())
+        self.absolute_path
+            .file_name()
+            .and_then(|value| value.to_str())
     }
 
-    /// Load cheap file metadata without running content analysis.
-    pub fn info(&self) -> Result<FileInfo, StorageError> {
-        FileInfo::from_path(&self.path)
+    /// Measure current file size on the spot (not cached).
+    pub fn size(&self) -> Result<StorageSize, StorageError> {
+        let metadata = fs::metadata(&self.absolute_path)
+            .map_err(|err| StorageError::io("read metadata for", &self.absolute_path, err))?;
+        Ok(StorageSize::from_bytes(metadata.len()))
     }
 
-    /// Load file metadata and precompute content analysis in parallel.
-    pub fn info_with_analysis(&self) -> Result<FileInfo, StorageError> {
-        FileInfo::from_path_with_analysis(&self.path)
+    /// Run content analysis, cache the report on this handle, and return it.
+    ///
+    /// Subsequent [`Self::metadata`] calls enrich type/extension from this cache.
+    pub fn analyze(&self) -> Result<AnalysisReport, StorageError> {
+        debug!(
+            target: "dhara_storage::storage::file",
+            path = %self.absolute_path.display(),
+            "analyzing file content"
+        );
+        let report = analyze_path(&self.absolute_path)?;
+        if let Ok(mut guard) = self.analysis.lock() {
+            *guard = Some(report.clone());
+        }
+        Ok(report)
+    }
+
+    /// Returns the analysis report cached by a prior [`Self::analyze`], if any.
+    pub fn analysis(&self) -> Option<AnalysisReport> {
+        self.analysis.lock().ok().and_then(|guard| guard.clone())
+    }
+
+    /// Load on-demand file metadata, enriching from a prior [`Self::analyze`] when present.
+    pub fn metadata(&self) -> Result<FileMetadata, StorageError> {
+        let mut metadata = FileMetadata::load(&self.absolute_path)?;
+        if let Some(report) = self.analysis() {
+            metadata.apply_analysis(report);
+        }
+        Ok(metadata)
+    }
+
+    /// Read settable attributes for this file.
+    pub fn attributes(&self) -> Result<StorageAttributes, StorageError> {
+        StorageAttributes::from_path(&self.absolute_path)
+    }
+
+    /// Apply settable attributes to this file.
+    pub fn set_attributes(&self, attributes: StorageAttributes) -> Result<(), StorageError> {
+        attributes.apply_to(&self.absolute_path)
+    }
+
+    /// Effective permissions for the current process.
+    pub fn permissions(&self) -> Result<StoragePermissions, StorageError> {
+        StoragePermissions::from_path(&self.absolute_path)
+    }
+
+    /// Whether this path looks temporary by attribute and/or temp location.
+    pub fn is_temporary(&self) -> Result<bool, StorageError> {
+        is_temporary_path(&self.absolute_path)
     }
 
     /// Read the full file into memory.
     pub fn read(&self) -> Result<Vec<u8>, StorageError> {
-        read_file(&self.path)
+        read_file(&self.absolute_path)
     }
 
     /// Read the full file as UTF-8 text.
     pub fn read_to_string(&self) -> Result<String, StorageError> {
-        read_file_to_string(&self.path)
+        read_file_to_string(&self.absolute_path)
     }
 
     /// Read the full file into memory with progress reporting.
     pub fn read_with_options(&self, options: ReadOptions) -> Result<Vec<u8>, StorageError> {
-        crate::operations::file::read_file_with_options(&self.path, options)
+        crate::operations::file::read_file_with_options(&self.absolute_path, options)
     }
 
     /// Write raw bytes to the file.
     pub fn write(&self, bytes: impl AsRef<[u8]>) -> Result<Self, StorageError> {
-        let path = write_file(&self.path, bytes)?;
-        Ok(Self { path })
+        let path = write_file(&self.absolute_path, bytes)?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Write UTF-8 text to the file.
     pub fn write_string(&self, text: impl AsRef<str>) -> Result<Self, StorageError> {
-        let path = write_file_string(&self.path, text)?;
-        Ok(Self { path })
+        let path = write_file_string(&self.absolute_path, text)?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Stream bytes into the file using the supplied options.
@@ -95,14 +223,15 @@ impl FileStorage {
         reader: &mut impl Read,
         options: WriteOptions,
     ) -> Result<Self, StorageError> {
-        let path = write_file_from_reader(&self.path, reader, options)?;
-        Ok(Self { path })
+        let path = write_file_from_reader(&self.absolute_path, reader, options)?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Copy the file to an exact destination path.
     pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = copy_file(&self.path, destination)?;
-        Ok(Self { path })
+        let destination = destination.as_ref();
+        let path = copy_file(&self.absolute_path, destination)?;
+        Ok(Self::from_destination(destination, path))
     }
 
     /// Copy the file with overwrite and progress control.
@@ -111,16 +240,16 @@ impl FileStorage {
         destination: impl AsRef<Path>,
         options: TransferOptions,
     ) -> Result<Self, StorageError> {
-        let path = copy_file_with_options(&self.path, destination, options)?;
-        Ok(Self { path })
+        let destination = destination.as_ref();
+        let path = copy_file_with_options(&self.absolute_path, destination, options)?;
+        Ok(Self::from_destination(destination, path))
     }
 
     /// Move the file to an exact destination path.
-    ///
-    /// The original handle is not mutated; a new handle for the destination path is returned.
     pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = move_file(&self.path, destination)?;
-        Ok(Self { path })
+        let destination = destination.as_ref();
+        let path = move_file(&self.absolute_path, destination)?;
+        Ok(Self::from_destination(destination, path))
     }
 
     /// Move the file with overwrite and progress control.
@@ -129,21 +258,20 @@ impl FileStorage {
         destination: impl AsRef<Path>,
         options: TransferOptions,
     ) -> Result<Self, StorageError> {
-        let path = move_file_with_options(&self.path, destination, options)?;
-        Ok(Self { path })
+        let destination = destination.as_ref();
+        let path = move_file_with_options(&self.absolute_path, destination, options)?;
+        Ok(Self::from_destination(destination, path))
     }
 
     /// Rename the file inside its current parent directory.
-    ///
-    /// The original handle is not mutated; a new handle for the renamed path is returned.
     pub fn rename(&self, new_name: &str) -> Result<Self, StorageError> {
-        let path = rename_file(&self.path, new_name)?;
-        Ok(Self { path })
+        let path = rename_file(&self.absolute_path, new_name)?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Delete the file represented by this handle.
     pub fn delete(&self) -> Result<(), StorageError> {
-        delete_file(&self.path)
+        delete_file(&self.absolute_path)
     }
 }
 
@@ -155,8 +283,10 @@ impl FileStorage {
         destination: impl AsRef<Path>,
         options: TransferOptions,
     ) -> Result<Self, StorageError> {
-        let path = crate::operations::copy_file_async(&self.path, destination, options).await?;
-        Ok(Self { path })
+        let destination = destination.as_ref();
+        let path =
+            crate::operations::copy_file_async(&self.absolute_path, destination, options).await?;
+        Ok(Self::from_destination(destination, path))
     }
 
     /// Async variant of [`Self::move_to_with_options`].
@@ -165,29 +295,31 @@ impl FileStorage {
         destination: impl AsRef<Path>,
         options: TransferOptions,
     ) -> Result<Self, StorageError> {
-        let path = crate::operations::move_file_async(&self.path, destination, options).await?;
-        Ok(Self { path })
+        let destination = destination.as_ref();
+        let path =
+            crate::operations::move_file_async(&self.absolute_path, destination, options).await?;
+        Ok(Self::from_destination(destination, path))
     }
 
     /// Async variant of [`Self::rename`].
     pub async fn rename_async(&self, new_name: impl Into<String>) -> Result<Self, StorageError> {
-        let path = crate::operations::rename_file_async(&self.path, new_name).await?;
-        Ok(Self { path })
+        let path = crate::operations::rename_file_async(&self.absolute_path, new_name).await?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Async variant of [`Self::delete`].
     pub async fn delete_async(&self) -> Result<(), StorageError> {
-        crate::operations::delete_file_async(&self.path).await
+        crate::operations::delete_file_async(&self.absolute_path).await
     }
 
     /// Async variant of [`Self::read_with_options`].
     pub async fn read_async(&self, options: ReadOptions) -> Result<Vec<u8>, StorageError> {
-        crate::operations::read_file_async(&self.path, options).await
+        crate::operations::read_file_async(&self.absolute_path, options).await
     }
 
     /// Async variant of [`Self::read_to_string`].
     pub async fn read_to_string_async(&self) -> Result<String, StorageError> {
-        crate::operations::read_file_to_string_async(&self.path).await
+        crate::operations::read_file_to_string_async(&self.absolute_path).await
     }
 
     /// Async variant of [`Self::write_from_reader`], backed by a byte buffer.
@@ -196,8 +328,8 @@ impl FileStorage {
         bytes: impl AsRef<[u8]>,
         options: WriteOptions,
     ) -> Result<Self, StorageError> {
-        let path = crate::operations::write_file_async(&self.path, bytes, options).await?;
-        Ok(Self { path })
+        let path = crate::operations::write_file_async(&self.absolute_path, bytes, options).await?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Async variant of [`Self::write_string`].
@@ -206,7 +338,8 @@ impl FileStorage {
         text: impl Into<String>,
         options: WriteOptions,
     ) -> Result<Self, StorageError> {
-        let path = crate::operations::write_file_string_async(&self.path, text, options).await?;
-        Ok(Self { path })
+        let path =
+            crate::operations::write_file_string_async(&self.absolute_path, text, options).await?;
+        Ok(Self::from_absolute(path))
     }
 }

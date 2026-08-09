@@ -10,11 +10,11 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
-    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryInfo, DirectoryStorage,
-    FileInfo, SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
-    StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions, analyze_path,
-    copy_directory_with_options, copy_file_with_options, create_directory, create_directory_all,
-    delete_directory_with_options, delete_file, move_directory_with_options,
+    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileStorage,
+    SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
+    StorageMetadata, StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions,
+    analyze_path, copy_directory_with_options, copy_file_with_options, create_directory,
+    create_directory_all, delete_directory_with_options, delete_file, move_directory_with_options,
     move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
 };
 use futures::{Stream, StreamExt};
@@ -164,14 +164,14 @@ impl DharaSd for DharaSdService {
         }))
     }
 
-    async fn get_file_info(
+    async fn get_file_metadata(
         &self,
-        request: Request<GetFileInfoRequest>,
-    ) -> Result<Response<GetFileInfoResponse>, Status> {
+        request: Request<GetFileMetadataRequest>,
+    ) -> Result<Response<GetFileMetadataResponse>, Status> {
         let req = request.into_inner();
         let path = req.path;
-        let include_shell = req.include_shell_details;
         let include_icon = req.include_icon;
+        let include_analysis = req.include_analysis;
         let icon_size = if req.icon_size == 0 {
             DEFAULT_SHELL_ICON_SIZE
         } else {
@@ -179,28 +179,65 @@ impl DharaSd for DharaSdService {
         };
 
         let response = tokio::task::spawn_blocking(move || {
-            let info = FileInfo::from_path(&path)?;
-            let (shell_display_name, shell_type_name) = if include_shell {
-                info.shell_details()
-                    .map(|details| (details.display_name.clone(), details.type_name.clone()))
-                    .unwrap_or((None, None))
-            } else {
-                (None, None)
-            };
+            let storage = FileStorage::from_existing(&path)?;
+            if include_analysis {
+                storage.analyze()?;
+            }
+            let meta = storage.metadata()?;
+            let analysis = meta
+                .analysis()
+                .map(|report| analysis_report_to_proto(report.clone()));
+            let size = storage.size()?;
+            let attrs = meta.attributes();
+            let perms = meta.permissions();
+            let file_type = meta.file_type();
+            let extension = meta.extension();
             let icon = if include_icon {
-                info.load_icon_at(icon_size).map(shell_icon_to_proto)
+                meta.load_icon_at(icon_size).map(shell_icon_to_proto)
             } else {
                 None
             };
-            Ok::<_, dhara_storage::StorageError>(GetFileInfoResponse {
-                path: info.path().display().to_string(),
-                name: info.name().to_string(),
-                size: info.size(),
-                extension: info.filename_extension().map(str::to_string),
-                is_read_only: info.metadata().is_read_only(),
-                shell_display_name,
-                shell_type_name,
+
+            Ok::<_, dhara_storage::StorageError>(GetFileMetadataResponse {
+                absolute_path: storage.absolute_path().display().to_string(),
+                relative_path: storage
+                    .relative_path()
+                    .map(|value| value.display().to_string()),
+                name: meta.name().to_string(),
+                display_name: meta.display_name().to_string(),
+                size: Some(StorageSizePayload {
+                    bytes: size.bytes,
+                    formatted: size.formatted,
+                }),
+                attributes: Some(StorageAttributesPayload {
+                    read_only: attrs.read_only,
+                    hidden: attrs.hidden,
+                    system: attrs.system,
+                    archive: attrs.archive,
+                }),
+                permissions: Some(StoragePermissionsPayload {
+                    can_read: perms.can_read,
+                    can_write: perms.can_write,
+                    can_modify: perms.can_modify,
+                    can_execute: perms.can_execute,
+                }),
+                is_symbolic_link: meta.is_symbolic_link(),
+                link_target: meta.link_target().map(|value| value.display().to_string()),
+                is_temporary: meta.is_temporary(),
+                created_at_unix_ms: system_time_to_unix_ms(meta.created_at()),
+                modified_at_unix_ms: system_time_to_unix_ms(meta.modified_at()),
+                accessed_at_unix_ms: system_time_to_unix_ms(meta.accessed_at()),
+                file_type: Some(StorageTypePayload {
+                    name: file_type.name,
+                    mime_type: file_type.mime_type,
+                }),
+                extension: Some(FileExtensionPayload {
+                    source: extension.source().map(str::to_string),
+                    detected: extension.detected().map(str::to_string),
+                    display: extension.to_string(),
+                }),
                 icon,
+                analysis,
             })
         })
         .await
@@ -210,14 +247,14 @@ impl DharaSd for DharaSdService {
         Ok(Response::new(response))
     }
 
-    async fn get_directory_info(
+    async fn get_directory_metadata(
         &self,
-        request: Request<GetDirectoryInfoRequest>,
-    ) -> Result<Response<GetDirectoryInfoResponse>, Status> {
+        request: Request<GetDirectoryMetadataRequest>,
+    ) -> Result<Response<GetDirectoryMetadataResponse>, Status> {
         let req = request.into_inner();
         let path = req.path;
-        let include_shell = req.include_shell_details;
         let include_icon = req.include_icon;
+        let include_summary = req.include_summary;
         let icon_size = if req.icon_size == 0 {
             DEFAULT_SHELL_ICON_SIZE
         } else {
@@ -227,39 +264,84 @@ impl DharaSd for DharaSdService {
         let response = tokio::task::spawn_blocking(move || {
             let exists = std::path::Path::new(&path).is_dir();
             if !exists {
-                return Ok(GetDirectoryInfoResponse {
-                    path: path.clone(),
+                return Ok(GetDirectoryMetadataResponse {
+                    absolute_path: path.clone(),
+                    relative_path: None,
                     name: std::path::Path::new(&path)
                         .file_name()
                         .map(|value| value.to_string_lossy().into_owned())
                         .unwrap_or_default(),
+                    display_name: String::new(),
                     exists: false,
-                    shell_display_name: None,
-                    shell_type_name: None,
+                    attributes: None,
+                    permissions: None,
+                    is_symbolic_link: false,
+                    link_target: None,
+                    is_temporary: false,
+                    created_at_unix_ms: None,
+                    modified_at_unix_ms: None,
+                    accessed_at_unix_ms: None,
+                    type_name: String::new(),
+                    size: None,
+                    file_count: None,
+                    directory_count: None,
                     icon: None,
                 });
             }
 
-            let info = DirectoryInfo::from_path(&path)?;
-            let (shell_display_name, shell_type_name) = if include_shell {
-                info.shell_details()
-                    .map(|details| (details.display_name.clone(), details.type_name.clone()))
-                    .unwrap_or((None, None))
+            let storage = DirectoryStorage::from_existing(&path)?;
+            let meta = storage.metadata()?;
+            let attrs = meta.attributes();
+            let perms = meta.permissions();
+            let (size, file_count, directory_count) = if include_summary {
+                let summary = storage.summary()?;
+                (
+                    Some(StorageSizePayload {
+                        bytes: summary.total_size,
+                        formatted: summary.formatted_size(),
+                    }),
+                    Some(summary.file_count),
+                    Some(summary.directory_count),
+                )
             } else {
-                (None, None)
+                (None, None, None)
             };
             let icon = if include_icon {
-                info.load_icon_at(icon_size).map(shell_icon_to_proto)
+                meta.load_icon_at(icon_size).map(shell_icon_to_proto)
             } else {
                 None
             };
 
-            Ok(GetDirectoryInfoResponse {
-                path: info.path().display().to_string(),
-                name: info.name().to_string(),
+            Ok(GetDirectoryMetadataResponse {
+                absolute_path: storage.absolute_path().display().to_string(),
+                relative_path: storage
+                    .relative_path()
+                    .map(|value| value.display().to_string()),
+                name: meta.name().to_string(),
+                display_name: meta.display_name().to_string(),
                 exists: true,
-                shell_display_name,
-                shell_type_name,
+                attributes: Some(StorageAttributesPayload {
+                    read_only: attrs.read_only,
+                    hidden: attrs.hidden,
+                    system: attrs.system,
+                    archive: attrs.archive,
+                }),
+                permissions: Some(StoragePermissionsPayload {
+                    can_read: perms.can_read,
+                    can_write: perms.can_write,
+                    can_modify: perms.can_modify,
+                    can_execute: perms.can_execute,
+                }),
+                is_symbolic_link: meta.is_symbolic_link(),
+                link_target: meta.link_target().map(|value| value.display().to_string()),
+                is_temporary: meta.is_temporary(),
+                created_at_unix_ms: system_time_to_unix_ms(meta.created_at()),
+                modified_at_unix_ms: system_time_to_unix_ms(meta.modified_at()),
+                accessed_at_unix_ms: system_time_to_unix_ms(meta.accessed_at()),
+                type_name: meta.file_type_name(),
+                size,
+                file_count,
+                directory_count,
                 icon,
             })
         })
@@ -287,9 +369,9 @@ impl DharaSd for DharaSdService {
             .into_iter()
             .map(|entry| {
                 let is_directory = matches!(entry, StorageEntry::Directory(_));
-                let path = entry.path().display().to_string();
+                let path = entry.absolute_path().display().to_string();
                 let name = entry
-                    .path()
+                    .absolute_path()
                     .file_name()
                     .map(|value| value.to_string_lossy().into_owned())
                     .unwrap_or_default();
@@ -729,6 +811,34 @@ fn shell_icon_to_proto(icon: ShellIcon) -> ShellIconPayload {
         width: icon.width,
         height: icon.height,
         rgba_pixels: icon.rgba,
+    }
+}
+
+fn system_time_to_unix_ms(value: Option<SystemTime>) -> Option<i64> {
+    value.and_then(|time| {
+        time.duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|duration| duration.as_millis() as i64)
+    })
+}
+
+fn analysis_report_to_proto(report: dhara_storage::AnalysisReport) -> AnalyzePathResponse {
+    AnalyzePathResponse {
+        top_mime_type: report.top_mime_type,
+        top_detected_extension: report.top_detected_extension,
+        content_kind: content_kind_to_u32(report.content_kind),
+        bytes_scanned: report.bytes_scanned as u64,
+        file_size: report.file_size,
+        matches: report
+            .matches
+            .into_iter()
+            .map(|item| DetectedMatch {
+                file_type_label: item.file_type_label,
+                mime_type: item.mime_type,
+                confidence: item.confidence,
+                score: item.score,
+            })
+            .collect(),
     }
 }
 
