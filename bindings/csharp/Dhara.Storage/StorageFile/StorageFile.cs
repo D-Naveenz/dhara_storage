@@ -24,6 +24,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
 
     private FileMetadata? _cachedMetadata;
     private FileMetadata? _cachedMetadataWithAnalysis;
+    private AnalysisReport? _cachedAnalysis;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StorageFile"/> class.
@@ -51,24 +52,38 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public FileMetadata Metadata => _cachedMetadata ??= LoadMetadata(includeAnalysis: false);
+    public FileMetadata Metadata =>
+        _cachedMetadataWithAnalysis
+        ?? _cachedMetadata
+        ?? (_cachedMetadata = LoadMetadata(includeAnalysis: false));
 
     /// <inheritdoc />
     public FileMetadata RefreshMetadata(bool includeAnalysis = false)
     {
         EnsureNotDisposed();
         var info = LoadMetadata(includeAnalysis);
-        if (includeAnalysis)
+        if (info.Analysis is not null)
         {
+            _cachedAnalysis = info.Analysis;
             _cachedMetadataWithAnalysis = info;
             _cachedMetadata = info with { Analysis = null };
         }
         else
         {
             _cachedMetadata = info;
+            if (_cachedAnalysis is null)
+            {
+                _cachedMetadataWithAnalysis = null;
+            }
+            else
+            {
+                _cachedMetadataWithAnalysis = DaemonModelFactory.EnrichFileMetadata(info, _cachedAnalysis);
+            }
         }
 
-        return info;
+        return includeAnalysis || _cachedAnalysis is not null
+            ? _cachedMetadataWithAnalysis ?? info
+            : info;
     }
 
     /// <inheritdoc />
@@ -80,7 +95,11 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
             (client, options) => client.AnalyzePath(new AnalyzePathRequest { Path = path }, options),
             path,
             nameof(DharaSd.DharaSdClient.AnalyzePath));
-        return DaemonModelFactory.ToAnalysisReport(response, path);
+        var report = DaemonModelFactory.ToAnalysisReport(response, path);
+        _cachedAnalysis = report;
+        _cachedMetadata = null;
+        _cachedMetadataWithAnalysis = null;
+        return report;
     }
 
     /// <inheritdoc />
@@ -256,6 +275,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     {
         _cachedMetadata = null;
         _cachedMetadataWithAnalysis = null;
+        _cachedAnalysis = null;
     }
 
     private FileMetadata LoadMetadata(bool includeAnalysis)
@@ -272,13 +292,19 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
                 options),
             path,
             nameof(DharaSd.DharaSdClient.GetFileMetadata));
+
         AnalysisReport? analysis = null;
         if (includeAnalysis && response.Analysis is not null)
         {
             analysis = DaemonModelFactory.ToAnalysisReport(response.Analysis, path);
+            // Daemon already enriched type/extension when IncludeAnalysis was set.
+            return DaemonModelFactory.ToFileMetadata(response, analysis);
         }
 
-        return DaemonModelFactory.ToFileMetadata(response, analysis);
+        var metadata = DaemonModelFactory.ToFileMetadata(response, analysis: null);
+        return _cachedAnalysis is null
+            ? metadata
+            : DaemonModelFactory.EnrichFileMetadata(metadata, _cachedAnalysis);
     }
 
     private static SafeFileHandle OpenReadHandle(OpenReadHandleResponse response) =>

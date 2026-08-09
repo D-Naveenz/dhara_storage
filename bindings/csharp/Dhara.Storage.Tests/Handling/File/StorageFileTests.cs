@@ -19,6 +19,23 @@ public sealed class StorageFileTests
     }
 
     [Fact]
+    public void Analyze_CachesReport_AndEnrichesSubsequentMetadata()
+    {
+        using var temp = new TemporaryDirectory();
+        var path = temp.PathFor("sample.txt");
+        System.IO.File.WriteAllText(path, "typed analysis");
+        var file = DharaStorage.File(path);
+
+        var report = file.Analyze();
+        var metadata = file.Metadata;
+
+        Assert.True(report.BytesScanned > 0);
+        Assert.NotNull(metadata.Analysis);
+        Assert.Equal(report.TopMimeType, metadata.Analysis.TopMimeType);
+        Assert.False(string.IsNullOrWhiteSpace(metadata.FileType.Name));
+    }
+
+    [Fact]
     public void RefreshMetadata_WithAnalysis_ReturnsTypedAnalysis()
     {
         using var temp = new TemporaryDirectory();

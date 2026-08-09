@@ -32,6 +32,27 @@ internal static class DaemonModelFactory
             analysis,
             ToShellIcon(response.Icon));
 
+    /// <summary>
+    /// Enriches a metadata snapshot from a handle-cached <see cref="AnalysisReport"/>
+    /// (type name, MIME, and detected extension), matching native <c>FileMetadata::apply_analysis</c>.
+    /// </summary>
+    internal static FileMetadata EnrichFileMetadata(FileMetadata metadata, AnalysisReport analysis)
+    {
+        var topLabel = analysis.Matches.Count > 0 ? analysis.Matches[0].FileTypeLabel : null;
+        var typeName = string.IsNullOrEmpty(topLabel) ? metadata.FileType.Name : topLabel;
+        var fileType = new StorageType(typeName, analysis.TopMimeType ?? metadata.FileType.MimeType);
+        var extension = new FileExtension(
+            metadata.Extension.Source,
+            analysis.TopDetectedExtension,
+            FormatExtensionDisplay(metadata.Extension.Source, analysis.TopDetectedExtension));
+        return metadata with
+        {
+            FileType = fileType,
+            Extension = extension,
+            Analysis = analysis,
+        };
+    }
+
     /// <summary>Builds a <see cref="DirectoryMetadata"/> snapshot from a <c>GetDirectoryMetadata</c> response.</summary>
     internal static DirectoryMetadata ToDirectoryMetadata(GetDirectoryMetadataResponse response) =>
         new(
@@ -163,4 +184,21 @@ internal static class DaemonModelFactory
 
     private static string? NormalizeExtension(string? extension) =>
         string.IsNullOrEmpty(extension) ? null : extension.TrimStart('.');
+
+    private static string FormatExtensionDisplay(string? source, string? detected)
+    {
+        static string? Upper(string? value) =>
+            string.IsNullOrEmpty(value) ? null : value.ToUpperInvariant();
+
+        var src = Upper(source);
+        var det = Upper(detected);
+        return (src, det) switch
+        {
+            (null, null) => string.Empty,
+            (not null, null) => src,
+            (null, not null) => det,
+            (not null, not null) when src == det => src,
+            _ => $"{src} ({det})",
+        };
+    }
 }

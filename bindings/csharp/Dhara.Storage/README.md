@@ -51,7 +51,8 @@ DharaStorage.UseLoggerFactory(loggerFactory);
 using Dhara.Storage;
 
 var file = DharaStorage.File(@"C:\data\sample.pdf");
-var metadata = file.RefreshMetadata(includeAnalysis: true);
+var report = file.Analyze();
+var metadata = file.Metadata; // enriched from the cached analysis
 var bytes = await file.ReadBytesAsync();
 ```
 

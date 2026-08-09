@@ -15,16 +15,18 @@ public interface IStorageFile : IStorageItem
     /// <summary>
     /// Gets cached file metadata, refreshing it on first use.
     /// </summary>
-    /// <remarks>This property loads lightweight file metadata only. Use <see cref="RefreshMetadata(bool)"/>
-    /// with the method argument set to <see langword="true"/> when you also need content-analysis
-    /// results in the returned <see cref="FileMetadata"/> instance.</remarks>
+    /// <remarks>Loads lightweight file metadata. After <see cref="Analyze"/>, subsequent
+    /// metadata snapshots are enriched from the analysis cached on this wrapper. Use
+    /// <see cref="RefreshMetadata(bool)"/> with <see langword="true"/> to force a fresh
+    /// analysis as part of the metadata load.</remarks>
     FileMetadata Metadata { get; }
 
     /// <summary>
     /// Refreshes the cached file metadata.
     /// </summary>
-    /// <param name="includeAnalysis"><see langword="true"/> to include content-analysis results in the refreshed snapshot;
-    /// otherwise, <see langword="false"/> to refresh metadata only.</param>
+    /// <param name="includeAnalysis"><see langword="true"/> to run content analysis now and include
+    /// the report in the snapshot; otherwise, <see langword="false"/> to refresh metadata only
+    /// (still enriched from a prior <see cref="Analyze"/> when one is cached).</param>
     /// <returns>A new <see cref="FileMetadata"/> snapshot for the current file path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read file metadata.</exception>
@@ -41,9 +43,11 @@ public interface IStorageFile : IStorageItem
     StorageSize Size();
 
     /// <summary>
-    /// Runs content analysis for the current file.
+    /// Runs content analysis for the current file and caches the report on this wrapper.
     /// </summary>
     /// <returns>An <see cref="AnalysisReport"/> describing the strongest file-type matches for the current file.</returns>
+    /// <remarks>Subsequent <see cref="Metadata"/> / <see cref="RefreshMetadata"/> calls enrich type and
+    /// extension from this cached report.</remarks>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be analyzed by the native runtime.</exception>
     AnalysisReport Analyze();
