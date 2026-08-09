@@ -4,10 +4,9 @@ use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 
 use dhara_storage::{
-    DirectoryMetadata, FileMetadata, FileStorage, analyze_path, copy_directory, copy_file,
-    create_directory, create_directory_all, delete_directory, delete_file, move_directory,
-    move_file, read_file, read_file_to_string, rename_directory, rename_file, write_file,
-    write_file_string,
+    DirectoryMetadata, FileStorage, analyze_path, copy_directory, copy_file, create_directory,
+    create_directory_all, delete_directory, delete_file, move_directory, move_file, read_file,
+    read_file_to_string, rename_directory, rename_file, write_file, write_file_string,
 };
 
 use crate::abi::DharaStatus;
@@ -72,14 +71,12 @@ pub unsafe extern "C" fn dhara_get_file_metadata(
         out_error_len,
         || {
             let path = parse_path_arg(path, "path")?;
-            let mut metadata = FileMetadata::load(&path).map_err(FfiFailure::from)?;
+            let storage = FileStorage::from_existing(&path).map_err(FfiFailure::from)?;
             if include_analysis != 0 {
-                metadata.analyze().map_err(FfiFailure::from)?;
+                storage.analyze().map_err(FfiFailure::from)?;
             }
-            let size = FileStorage::from_existing(&path)
-                .map_err(FfiFailure::from)?
-                .size()
-                .map_err(FfiFailure::from)?;
+            let metadata = storage.metadata().map_err(FfiFailure::from)?;
+            let size = storage.size().map_err(FfiFailure::from)?;
 
             let icon_size = if icon_size == 0 {
                 dhara_storage::DEFAULT_SHELL_ICON_SIZE

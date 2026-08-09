@@ -180,12 +180,13 @@ impl DharaSd for DharaSdService {
 
         let response = tokio::task::spawn_blocking(move || {
             let storage = FileStorage::from_existing(&path)?;
-            let mut meta = storage.metadata()?;
-            let analysis = if include_analysis {
-                Some(analysis_report_to_proto(meta.analyze()?.clone()))
-            } else {
-                None
-            };
+            if include_analysis {
+                storage.analyze()?;
+            }
+            let meta = storage.metadata()?;
+            let analysis = meta
+                .analysis()
+                .map(|report| analysis_report_to_proto(report.clone()));
             let size = storage.size()?;
             let attrs = meta.attributes();
             let perms = meta.permissions();
