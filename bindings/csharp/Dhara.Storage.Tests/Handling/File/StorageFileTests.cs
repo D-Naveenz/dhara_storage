@@ -15,21 +15,21 @@ public sealed class StorageFileTests
 
         Assert.True(file.Exists);
         Assert.Equal("hello world", file.ReadText());
-        Assert.True(file.Information.Size > 0);
+        Assert.True(file.Size().Bytes > 0);
     }
 
     [Fact]
-    public void RefreshInformation_WithAnalysis_ReturnsTypedAnalysis()
+    public void RefreshMetadata_WithAnalysis_ReturnsTypedAnalysis()
     {
         using var temp = new TemporaryDirectory();
         var path = temp.PathFor("sample.txt");
         System.IO.File.WriteAllText(path, "typed analysis");
         var file = DharaStorage.File(path);
 
-        var info = file.RefreshInformation(includeAnalysis: true);
+        var metadata = file.RefreshMetadata(includeAnalysis: true);
 
-        Assert.NotNull(info.Analysis);
-        Assert.True(info.Analysis.BytesScanned > 0);
+        Assert.NotNull(metadata.Analysis);
+        Assert.True(metadata.Analysis.BytesScanned > 0);
     }
 
     [Fact]
@@ -45,7 +45,7 @@ public sealed class StorageFileTests
 
         var copy = await file.CopyAsync(temp.PathFor("copy.bin"), progress, overwrite: false, cancellationToken);
 
-        Assert.True(System.IO.File.Exists(copy.FullPath));
+        Assert.True(System.IO.File.Exists(copy.AbsolutePath));
         Assert.NotEmpty(reported);
         Assert.True(reported[^1].BytesTransferred > 0);
     }
