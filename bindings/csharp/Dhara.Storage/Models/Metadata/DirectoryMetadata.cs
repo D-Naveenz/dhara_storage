@@ -1,37 +1,33 @@
-namespace Dhara.Storage.Models.Information;
+namespace Dhara.Storage.Models.Metadata;
 
 /// <summary>
 /// Represents directory-specific metadata returned from the native runtime.
 /// </summary>
-/// <param name="Path">Absolute or normalized directory path.</param>
 /// <param name="Name">Leaf directory name.</param>
-/// <param name="IsReadOnly">Whether the directory is marked read-only.</param>
-/// <param name="IsHidden">Whether the directory is marked hidden.</param>
-/// <param name="IsSystem">Whether the directory is marked as a system entry.</param>
-/// <param name="IsTemporary">Whether the directory is marked temporary.</param>
+/// <param name="DisplayName">Shell display name when available; otherwise a name-based fallback.</param>
+/// <param name="Attributes">Settable filesystem attributes snapshot.</param>
+/// <param name="Permissions">Effective permissions snapshot for the current process.</param>
 /// <param name="IsSymbolicLink">Whether the path is a symbolic link.</param>
 /// <param name="LinkTarget">Resolved link target when <paramref name="IsSymbolicLink"/> is <see langword="true"/>.</param>
+/// <param name="IsTemporary">Whether the directory is marked temporary or lives in a temp location.</param>
 /// <param name="CreatedAtUtc">Creation time in UTC, when available.</param>
 /// <param name="ModifiedAtUtc">Last modification time in UTC, when available.</param>
 /// <param name="AccessedAtUtc">Last access time in UTC, when available.</param>
-/// <param name="DisplayName">Shell or platform display name for the directory.</param>
+/// <param name="TypeName">Content/identity type label (shell-backed on Windows when available; for example a localized "File folder").</param>
 /// <param name="Summary">Optional recursive size and entry counts when requested by the caller.</param>
 /// <param name="Icon">Optional OS shell icon pixels when requested by the caller.</param>
-/// <param name="ShellDetails">Optional Windows shell display fields when available.</param>
-public sealed record DirectoryInformation(
-    string Path,
+public sealed record DirectoryMetadata(
     string Name,
-    bool IsReadOnly,
-    bool IsHidden,
-    bool IsSystem,
-    bool IsTemporary,
+    string DisplayName,
+    StorageAttributes Attributes,
+    StoragePermissions Permissions,
     bool IsSymbolicLink,
     string? LinkTarget,
+    bool IsTemporary,
     DateTimeOffset? CreatedAtUtc,
     DateTimeOffset? ModifiedAtUtc,
     DateTimeOffset? AccessedAtUtc,
-    string DisplayName,
+    string TypeName,
     DirectorySummary? Summary,
-    ShellIcon? Icon,
-    ShellDetails? ShellDetails)
-    : StorageInformation(Path, Name, IsReadOnly, IsHidden, IsSystem, IsTemporary, IsSymbolicLink, LinkTarget, CreatedAtUtc, ModifiedAtUtc, AccessedAtUtc);
+    ShellIcon? Icon)
+    : StorageMetadata(Name, DisplayName, Attributes, Permissions, IsSymbolicLink, LinkTarget, IsTemporary, CreatedAtUtc, ModifiedAtUtc, AccessedAtUtc);

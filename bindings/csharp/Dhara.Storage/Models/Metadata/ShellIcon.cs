@@ -1,4 +1,4 @@
-namespace Dhara.Storage.Models.Information;
+namespace Dhara.Storage.Models.Metadata;
 
 /// <summary>
 /// OS shell icon pixels in uncompressed row-major RGBA layout (not PNG).

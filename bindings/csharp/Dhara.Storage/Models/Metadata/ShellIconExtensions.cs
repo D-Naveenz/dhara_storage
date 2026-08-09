@@ -1,4 +1,4 @@
-namespace Dhara.Storage.Models.Information;
+namespace Dhara.Storage.Models.Metadata;
 
 /// <summary>
 /// Helpers for turning <see cref="ShellIcon"/> RGBA buffers into common GUI image forms.

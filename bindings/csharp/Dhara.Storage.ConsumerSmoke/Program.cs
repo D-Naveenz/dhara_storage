@@ -18,9 +18,9 @@ try
 
     storageFile.WriteText("native aot check");
     var text = storageFile.ReadText();
-    var info = storageFile.RefreshInformation();
+    var size = storageFile.Size();
 
-    Console.WriteLine($"{Path.GetFileName(filePath)}|{text}|{info.Size}");
+    Console.WriteLine($"{Path.GetFileName(filePath)}|{text}|{size.Bytes}");
     return 0;
 }
 finally

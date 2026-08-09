@@ -1,7 +1,7 @@
 using Dhara.Storage.Abstractions;
 using Dhara.Storage.Core;
 using Dhara.Storage.Models.Analysis;
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 using Dhara.Storage.Runtime;
 using Dhara.Storage.Sd.V1;
@@ -14,7 +14,7 @@ namespace Dhara.Storage;
 /// </summary>
 /// <remarks>
 /// Prefer <see cref="DharaStorage.File"/> from application code. The wrapper caches
-/// metadata snapshots; call <see cref="RefreshInformation"/> after external changes. Reads and
+/// metadata snapshots; call <see cref="RefreshMetadata"/> after external changes. Reads and
 /// writes use OS handle transfer (the daemon duplicates a native file handle into this process)
 /// rather than sending bytes over gRPC.
 /// </remarks>
@@ -22,8 +22,8 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
 {
     private const int StreamBufferSize = 64 * 1024;
 
-    private FileInformation? _cachedInformation;
-    private FileInformation? _cachedInformationWithAnalysis;
+    private FileMetadata? _cachedMetadata;
+    private FileMetadata? _cachedMetadataWithAnalysis;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StorageFile"/> class.
@@ -34,24 +34,38 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public override bool Exists => File.Exists(FullPath);
+    public override bool Exists => File.Exists(AbsolutePath);
 
     /// <inheritdoc />
-    public FileInformation Information => _cachedInformation ??= LoadInformation(includeAnalysis: false);
-
-    /// <inheritdoc />
-    public FileInformation RefreshInformation(bool includeAnalysis = false)
+    public StorageSize Size()
     {
         EnsureNotDisposed();
-        var info = LoadInformation(includeAnalysis);
+        var path = AbsolutePath;
+        var response = DaemonClient.Call(
+            (client, options) => client.GetFileMetadata(new GetFileMetadataRequest { Path = path }, options),
+            path,
+            nameof(DharaSd.DharaSdClient.GetFileMetadata));
+        return response.Size is null
+            ? new StorageSize(0, "0 B")
+            : DaemonModelFactory.ToStorageSize(response.Size);
+    }
+
+    /// <inheritdoc />
+    public FileMetadata Metadata => _cachedMetadata ??= LoadMetadata(includeAnalysis: false);
+
+    /// <inheritdoc />
+    public FileMetadata RefreshMetadata(bool includeAnalysis = false)
+    {
+        EnsureNotDisposed();
+        var info = LoadMetadata(includeAnalysis);
         if (includeAnalysis)
         {
-            _cachedInformationWithAnalysis = info;
-            _cachedInformation = info with { Analysis = null };
+            _cachedMetadataWithAnalysis = info;
+            _cachedMetadata = info with { Analysis = null };
         }
         else
         {
-            _cachedInformation = info;
+            _cachedMetadata = info;
         }
 
         return info;
@@ -61,7 +75,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public AnalysisReport Analyze()
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = DaemonClient.Call(
             (client, options) => client.AnalyzePath(new AnalyzePathRequest { Path = path }, options),
             path,
@@ -73,7 +87,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public byte[] ReadBytes()
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = DaemonClient.Call(
             (client, options) => client.OpenReadHandle(new OpenReadHandleRequest { Path = path }, options),
             path,
@@ -90,7 +104,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task<byte[]> ReadBytesAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = await DaemonClient.CallAsync(
             (client, options) => client.OpenReadHandleAsync(new OpenReadHandleRequest { Path = path }, options),
             cancellationToken,
@@ -146,7 +160,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
         EnsureNotDisposed();
         ArgumentNullException.ThrowIfNull(stream);
 
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = await DaemonClient.CallAsync(
             (client, options) => client.OpenWriteHandleAsync(
                 new OpenWriteHandleRequest
@@ -177,7 +191,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var source = FullPath;
+        var source = AbsolutePath;
         var newPath = await DaemonClient.ConsumeCopyProgressAsync(
             (client, options) => client.CopyFile(new CopyFileRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
             progress,
@@ -195,14 +209,14 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var source = FullPath;
+        var source = AbsolutePath;
         var response = await DaemonClient.CallAsync(
             (client, options) => client.MovePathAsync(new MovePathRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
             cancellationToken,
             source,
             nameof(DharaSd.DharaSdClient.MovePath)).ConfigureAwait(false);
 
-        UpdatePath(response.Path);
+        UpdatePathFromDestination(destination, response.Path);
     }
 
     /// <inheritdoc />
@@ -212,13 +226,13 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task RenameAsync(string newName, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = await DaemonClient.CallAsync(
             (client, options) => client.RenamePathAsync(new RenamePathRequest { Path = path, NewName = newName }, options),
             cancellationToken,
             path,
             nameof(DharaSd.DharaSdClient.RenamePath)).ConfigureAwait(false);
-        UpdatePath(response.Path);
+        UpdatePathAbsolute(response.Path);
     }
 
     /// <inheritdoc />
@@ -228,7 +242,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     public async Task DeleteAsync(CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         await DaemonClient.CallAsync(
             (client, options) => client.DeletePathAsync(new DeletePathRequest { Path = path, Recursive = false }, options),
             cancellationToken,
@@ -240,25 +254,31 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     /// <inheritdoc />
     protected override void InvalidateCaches()
     {
-        _cachedInformation = null;
-        _cachedInformationWithAnalysis = null;
+        _cachedMetadata = null;
+        _cachedMetadataWithAnalysis = null;
     }
 
-    private FileInformation LoadInformation(bool includeAnalysis)
+    private FileMetadata LoadMetadata(bool includeAnalysis)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = DaemonClient.Call(
-            (client, options) => client.GetFileInfo(new GetFileInfoRequest { Path = path }, options),
+            (client, options) => client.GetFileMetadata(
+                new GetFileMetadataRequest
+                {
+                    Path = path,
+                    IncludeAnalysis = includeAnalysis,
+                },
+                options),
             path,
-            nameof(DharaSd.DharaSdClient.GetFileInfo));
-        var analysis = includeAnalysis ? DaemonModelFactory.ToAnalysisReport(
-            DaemonClient.Call(
-                (client, options) => client.AnalyzePath(new AnalyzePathRequest { Path = path }, options),
-                path,
-                nameof(DharaSd.DharaSdClient.AnalyzePath)),
-            path) : null;
-        return DaemonModelFactory.ToFileInformation(response, analysis);
+            nameof(DharaSd.DharaSdClient.GetFileMetadata));
+        AnalysisReport? analysis = null;
+        if (includeAnalysis && response.Analysis is not null)
+        {
+            analysis = DaemonModelFactory.ToAnalysisReport(response.Analysis, path);
+        }
+
+        return DaemonModelFactory.ToFileMetadata(response, analysis);
     }
 
     private static SafeFileHandle OpenReadHandle(OpenReadHandleResponse response) =>

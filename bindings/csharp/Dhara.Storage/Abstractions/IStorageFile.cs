@@ -1,5 +1,5 @@
 using Dhara.Storage.Models.Analysis;
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 
 namespace Dhara.Storage.Abstractions;
@@ -13,22 +13,32 @@ namespace Dhara.Storage.Abstractions;
 public interface IStorageFile : IStorageItem
 {
     /// <summary>
-    /// Gets cached file information, refreshing it on first use.
+    /// Gets cached file metadata, refreshing it on first use.
     /// </summary>
-    /// <remarks>This property loads lightweight file information only. Use <see cref="RefreshInformation(bool)"/>
+    /// <remarks>This property loads lightweight file metadata only. Use <see cref="RefreshMetadata(bool)"/>
     /// with the method argument set to <see langword="true"/> when you also need content-analysis
-    /// results in the returned <see cref="FileInformation"/> instance.</remarks>
-    FileInformation Information { get; }
+    /// results in the returned <see cref="FileMetadata"/> instance.</remarks>
+    FileMetadata Metadata { get; }
 
     /// <summary>
-    /// Refreshes the cached file information.
+    /// Refreshes the cached file metadata.
     /// </summary>
     /// <param name="includeAnalysis"><see langword="true"/> to include content-analysis results in the refreshed snapshot;
     /// otherwise, <see langword="false"/> to refresh metadata only.</param>
-    /// <returns>A new <see cref="FileInformation"/> snapshot for the current file path.</returns>
+    /// <returns>A new <see cref="FileMetadata"/> snapshot for the current file path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read file information.</exception>
-    FileInformation RefreshInformation(bool includeAnalysis = false);
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read file metadata.</exception>
+    FileMetadata RefreshMetadata(bool includeAnalysis = false);
+
+    /// <summary>
+    /// Measures the current file size on demand.
+    /// </summary>
+    /// <returns>A <see cref="StorageSize"/> snapshot for the current file path.</returns>
+    /// <remarks>Size is measured by the daemon rather than cached as part of <see cref="Metadata"/>, since
+    /// paths and size live on the storage wrapper, not on a metadata snapshot.</remarks>
+    /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read the file size.</exception>
+    StorageSize Size();
 
     /// <summary>
     /// Runs content analysis for the current file.
