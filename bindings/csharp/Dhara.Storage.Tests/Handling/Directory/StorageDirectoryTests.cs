@@ -43,8 +43,8 @@ public sealed class StorageDirectoryTests
         System.IO.Directory.CreateDirectory(temp.PathFor("source", "nested"));
         System.IO.File.WriteAllText(temp.PathFor("source", "nested", "file.txt"), "payload");
         var directory = DharaStorage.Directory(temp.PathFor("source"));
-        var progressValues = new List<StorageProgress>();
-        var progress = new SynchronousProgress<StorageProgress>(progressValues.Add);
+        var progressValues = new List<StorageProcessEvent>();
+        var progress = new SynchronousProgress<StorageProcessEvent>(progressValues.Add);
 
         var copy = await directory.CopyAsync(temp.PathFor("copy"), progress, overwrite: false, cancellationToken);
 

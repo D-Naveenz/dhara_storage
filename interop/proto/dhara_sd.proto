@@ -25,8 +25,8 @@ service DharaSd {
   rpc MovePath(MovePathRequest) returns (MovePathResponse);
   rpc RenamePath(RenamePathRequest) returns (RenamePathResponse);
 
-  rpc CopyFile(CopyFileRequest) returns (stream CopyFileProgress);
-  rpc CopyDirectory(CopyDirectoryRequest) returns (stream CopyFileProgress);
+  rpc CopyFile(CopyFileRequest) returns (stream StorageProcessEventMessage);
+  rpc CopyDirectory(CopyDirectoryRequest) returns (stream StorageProcessEventMessage);
 
   rpc WatchDirectory(WatchDirectoryRequest) returns (stream WatchEvent);
 
@@ -218,19 +218,47 @@ message CopyFileRequest {
   string source = 1;
   string destination = 2;
   bool overwrite = 3;
+  bool analyze_content = 4;
 }
 message CopyDirectoryRequest {
   string source = 1;
   string destination = 2;
   bool overwrite = 3;
+  bool analyze_content = 4;
 }
-message CopyFileProgress {
+
+message ProcessStarted {
+  uint64 total_bytes = 1;
+  uint64 total_files = 2;
+}
+message ProcessCurrentItem {
+  string path = 1;
+  uint64 file_size = 2;
+  uint64 file_index = 3;
+}
+message ProcessBytes {
   uint64 bytes_transferred = 1;
-  optional uint64 total_bytes = 2;
-  double bytes_per_second = 3;
-  bool completed = 4;
-  optional string destination = 5;
-  optional string error_message = 6;
+}
+message ProcessCompleted {
+  optional string destination = 1;
+}
+message ProcessFailed {
+  string message = 1;
+}
+message ProcessCancelled {
+  string operation = 1;
+}
+
+/// Windows-copy-dialog style process event stream for copy operations.
+message StorageProcessEventMessage {
+  oneof kind {
+    ProcessStarted started = 1;
+    ProcessCurrentItem current_item = 2;
+    ProcessBytes bytes = 3;
+    ProcessCompleted completed = 4;
+    ProcessFailed failed = 5;
+    ProcessCancelled cancelled = 6;
+  }
 }
 
 message WatchDirectoryRequest {

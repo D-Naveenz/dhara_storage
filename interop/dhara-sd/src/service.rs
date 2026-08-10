@@ -636,7 +636,7 @@ impl DharaSd for DharaSdService {
         }))
     }
 
-    type CopyFileStream = ResponseStream<CopyFileProgress>;
+    type CopyFileStream = ResponseStream<StorageProcessEventMessage>;
 
     async fn copy_file(
         &self,
@@ -647,13 +647,14 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
+                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
             copy_file_with_options(&req.source, &req.destination, options)
         })))
     }
 
-    type CopyDirectoryStream = ResponseStream<CopyFileProgress>;
+    type CopyDirectoryStream = ResponseStream<StorageProcessEventMessage>;
 
     async fn copy_directory(
         &self,
@@ -664,6 +665,7 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
+                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
             copy_directory_with_options(&req.source, &req.destination, options)
@@ -842,81 +844,86 @@ fn analysis_report_to_proto(report: dhara_storage::AnalysisReport) -> AnalyzePat
     }
 }
 
-fn spawn_copy_progress<F>(work: F) -> ResponseStream<CopyFileProgress>
+fn spawn_copy_progress<F>(work: F) -> ResponseStream<StorageProcessEventMessage>
 where
     F: FnOnce(SharedProcessEventReporter) -> Result<PathBuf, dhara_storage::StorageError>
         + Send
         + 'static,
 {
-    let (tx, rx) = mpsc::channel::<Result<CopyFileProgress, Status>>(256);
+    let (tx, rx) = mpsc::channel::<Result<StorageProcessEventMessage, Status>>(256);
     tokio::task::spawn_blocking(move || {
         let progress_tx = tx.clone();
-        let started = std::sync::Mutex::new(None::<std::time::Instant>);
-        let total = std::sync::Mutex::new(None::<u64>);
         let reporter: SharedProcessEventReporter = Arc::new(move |event: StorageProcessEvent| {
-            match event {
-                StorageProcessEvent::Started { total_bytes, .. } => {
-                    *started.lock().unwrap_or_else(|p| p.into_inner()) =
-                        Some(std::time::Instant::now());
-                    *total.lock().unwrap_or_else(|p| p.into_inner()) = Some(total_bytes);
-                    let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
-                        bytes_transferred: 0,
-                        total_bytes: Some(total_bytes),
-                        bytes_per_second: 0.0,
-                        completed: false,
-                        destination: None,
-                        error_message: None,
-                    }));
-                }
-                StorageProcessEvent::Bytes { bytes_transferred } => {
-                    let elapsed = started
-                        .lock()
-                        .unwrap_or_else(|p| p.into_inner())
-                        .map(|t| t.elapsed().as_secs_f64())
-                        .unwrap_or(0.0);
-                    let bytes_per_second = if elapsed > 0.0 {
-                        bytes_transferred as f64 / elapsed
-                    } else {
-                        0.0
-                    };
-                    let total_bytes = *total.lock().unwrap_or_else(|p| p.into_inner());
-                    let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
-                        bytes_transferred,
+            let message = match event {
+                StorageProcessEvent::Started {
+                    total_bytes,
+                    total_files,
+                } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Started(ProcessStarted {
                         total_bytes,
-                        bytes_per_second,
-                        completed: false,
-                        destination: None,
-                        error_message: None,
-                    }));
-                }
-                StorageProcessEvent::CurrentItem { .. }
-                | StorageProcessEvent::Completed { .. }
-                | StorageProcessEvent::Failed { .. }
-                | StorageProcessEvent::Cancelled { .. } => {}
-            }
+                        total_files,
+                    })),
+                },
+                StorageProcessEvent::CurrentItem {
+                    path,
+                    file_size,
+                    file_index,
+                } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::CurrentItem(
+                        ProcessCurrentItem {
+                            path: path.display().to_string(),
+                            file_size,
+                            file_index,
+                        },
+                    )),
+                },
+                StorageProcessEvent::Bytes { bytes_transferred } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Bytes(ProcessBytes {
+                        bytes_transferred,
+                    })),
+                },
+                StorageProcessEvent::Completed { destination } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Completed(
+                        ProcessCompleted {
+                            destination: destination.map(|path| path.display().to_string()),
+                        },
+                    )),
+                },
+                StorageProcessEvent::Failed { message } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Failed(ProcessFailed {
+                        message,
+                    })),
+                },
+                StorageProcessEvent::Cancelled { operation } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Cancelled(
+                        ProcessCancelled {
+                            operation: operation.to_owned(),
+                        },
+                    )),
+                },
+            };
+            let _ = progress_tx.blocking_send(Ok(message));
         });
 
-        match work(reporter) {
-            Ok(destination) => {
-                let _ = tx.blocking_send(Ok(CopyFileProgress {
-                    bytes_transferred: 0,
-                    total_bytes: None,
-                    bytes_per_second: 0.0,
-                    completed: true,
-                    destination: Some(destination.display().to_string()),
-                    error_message: None,
-                }));
-            }
-            Err(err) => {
-                let _ = tx.blocking_send(Ok(CopyFileProgress {
-                    bytes_transferred: 0,
-                    total_bytes: None,
-                    bytes_per_second: 0.0,
-                    completed: true,
-                    destination: None,
-                    error_message: Some(err.to_string()),
-                }));
-            }
+        // Runtime emits Completed on success. On early failures (before a process
+        // terminal event) surface a Failed/Cancelled so the stream always ends cleanly.
+        if let Err(err) = work(reporter) {
+            let message = if matches!(err, dhara_storage::StorageError::Cancelled { .. }) {
+                StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Cancelled(
+                        ProcessCancelled {
+                            operation: "copy".into(),
+                        },
+                    )),
+                }
+            } else {
+                StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Failed(ProcessFailed {
+                        message: err.to_string(),
+                    })),
+                }
+            };
+            let _ = tx.blocking_send(Ok(message));
         }
     });
     Box::pin(ReceiverStream::new(rx))

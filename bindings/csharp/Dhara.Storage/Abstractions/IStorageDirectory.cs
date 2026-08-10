@@ -140,7 +140,7 @@ public interface IStorageDirectory : IStorageItem
     /// <returns>A new directory wrapper pointing at the copied destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be copied.</exception>
-    IStorageDirectory Copy(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false);
+    IStorageDirectory Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
     /// Copies the current directory tree to the provided destination path asynchronously.
@@ -153,7 +153,7 @@ public interface IStorageDirectory : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be copied.</exception>
-    Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves the current directory tree to the provided destination path.
@@ -163,7 +163,7 @@ public interface IStorageDirectory : IStorageItem
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination tree; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be moved.</exception>
-    void Move(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false);
+    void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
     /// Moves the current directory tree to the provided destination path asynchronously.
@@ -176,7 +176,7 @@ public interface IStorageDirectory : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be moved.</exception>
-    Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    Task MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Renames the current directory within its existing parent directory.

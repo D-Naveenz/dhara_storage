@@ -69,7 +69,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be opened or read.</exception>
-    Task<byte[]> ReadBytesAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default);
+    Task<byte[]> ReadBytesAsync(IProgress<StorageProcessEvent>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Reads the current file as UTF-8 text.
@@ -88,7 +88,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be read or does not contain valid UTF-8 text.</exception>
-    Task<string> ReadTextAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default);
+    Task<string> ReadTextAsync(IProgress<StorageProcessEvent>? progress = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Writes raw bytes to the current file.
@@ -99,7 +99,7 @@ public interface IStorageFile : IStorageItem
     /// <param name="createParentDirectories"><see langword="true"/> to create missing parent directories before writing.</param>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be written.</exception>
-    void Write(byte[] content, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true);
+    void Write(byte[] content, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true);
 
     /// <summary>
     /// Writes raw bytes to the current file asynchronously.
@@ -113,7 +113,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be written.</exception>
-    Task WriteAsync(byte[] content, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default);
+    Task WriteAsync(byte[] content, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Writes UTF-8 text to the current file.
@@ -124,7 +124,7 @@ public interface IStorageFile : IStorageItem
     /// <param name="createParentDirectories"><see langword="true"/> to create missing parent directories before writing.</param>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be written.</exception>
-    void WriteText(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true);
+    void WriteText(string text, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true);
 
     /// <summary>
     /// Writes UTF-8 text to the current file asynchronously.
@@ -138,7 +138,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be written.</exception>
-    Task WriteTextAsync(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default);
+    Task WriteTextAsync(string text, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Streams content into the current file asynchronously.
@@ -153,7 +153,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the native write session cannot be created or finalized.</exception>
-    Task WriteAsync(Stream stream, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default);
+    Task WriteAsync(Stream stream, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Copies the current file to the provided destination path.
@@ -164,7 +164,7 @@ public interface IStorageFile : IStorageItem
     /// <returns>A new file wrapper pointing at the copied destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be copied.</exception>
-    IStorageFile Copy(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false);
+    IStorageFile Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
     /// Copies the current file to the provided destination path asynchronously.
@@ -177,7 +177,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be copied.</exception>
-    Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves the current file to the provided destination path.
@@ -187,7 +187,7 @@ public interface IStorageFile : IStorageItem
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination file; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be moved.</exception>
-    void Move(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false);
+    void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
     /// Moves the current file to the provided destination path asynchronously.
@@ -200,7 +200,7 @@ public interface IStorageFile : IStorageItem
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be moved.</exception>
-    Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    Task MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Renames the current file within its existing parent directory.

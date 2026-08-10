@@ -104,9 +104,27 @@ internal static class DaemonModelFactory
             ToChangeType(watchEvent.ChangeType),
             DateTimeOffset.FromUnixTimeMilliseconds(watchEvent.ObservedUnixMillis));
 
-    /// <summary>Converts a streamed <c>CopyFileProgress</c> update into the public <see cref="StorageProgress"/> model.</summary>
-    internal static StorageProgress ToProgress(CopyFileProgress progress) =>
-        new(progress.HasTotalBytes ? progress.TotalBytes : null, progress.BytesTransferred, progress.BytesPerSecond);
+    /// <summary>Converts a streamed <c>StorageProcessEventMessage</c> into the public process event model.</summary>
+    internal static StorageProcessEvent? ToProcessEvent(StorageProcessEventMessage message) =>
+        message.KindCase switch
+        {
+            StorageProcessEventMessage.KindOneofCase.Started =>
+                new StorageProcessStarted(message.Started.TotalBytes, message.Started.TotalFiles),
+            StorageProcessEventMessage.KindOneofCase.CurrentItem =>
+                new StorageProcessCurrentItem(
+                    message.CurrentItem.Path,
+                    message.CurrentItem.FileSize,
+                    message.CurrentItem.FileIndex),
+            StorageProcessEventMessage.KindOneofCase.Bytes =>
+                new StorageProcessBytes(message.Bytes.BytesTransferred),
+            StorageProcessEventMessage.KindOneofCase.Completed =>
+                new StorageProcessCompleted(message.Completed.HasDestination ? message.Completed.Destination : null),
+            StorageProcessEventMessage.KindOneofCase.Failed =>
+                new StorageProcessFailed(message.Failed.Message),
+            StorageProcessEventMessage.KindOneofCase.Cancelled =>
+                new StorageProcessCancelled(message.Cancelled.Operation),
+            _ => null,
+        };
 
     /// <summary>Maps a wire size payload onto the public <see cref="StorageSize"/> model.</summary>
     /// <remarks>Byte counts and formatted labels are computed natively; this factory does not
