@@ -42,7 +42,6 @@ pub fn copy_file_with_options(
         overwrite = options.overwrite,
         progress = options.progress.is_some(),
         cancellable = options.cancellation_token.is_some(),
-        analyze_content = options.analyze_content,
         "copying file"
     );
     if source == destination {
@@ -58,10 +57,7 @@ pub fn copy_file_with_options(
             .ensure_not_cancelled("copy file")
             .map_err(StorageError::from)?;
 
-        if options.progress.is_none()
-            && options.cancellation_token.is_none()
-            && !options.analyze_content
-        {
+        if options.progress.is_none() && options.cancellation_token.is_none() {
             prepare_destination_file(&destination, options.overwrite, true)?;
             if options.overwrite && destination.exists() {
                 fs::remove_file(&destination).map_err(|err| {
@@ -79,7 +75,7 @@ pub fn copy_file_with_options(
             return Ok(destination.clone());
         }
 
-        let task = build_transfer_task(&source, &destination, 0, options.analyze_content)?;
+        let task = build_transfer_task(&source, &destination, 0)?;
         process.emit(StorageProcessEvent::Started {
             total_bytes: task.file_size,
             total_files: 1,

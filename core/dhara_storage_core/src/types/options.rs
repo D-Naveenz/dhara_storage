@@ -13,10 +13,6 @@ pub struct TransferOptions {
     pub progress: Option<SharedProcessEventReporter>,
     /// Optional cancellation token for cooperative cancellation.
     pub cancellation_token: Option<StorageCancellationToken>,
-    /// When true, producers run content-based analysis while preparing transfer tasks.
-    ///
-    /// Default is false so copy throughput is not gated on signature matching.
-    pub analyze_content: bool,
 }
 
 /// Common options for byte-oriented read operations.

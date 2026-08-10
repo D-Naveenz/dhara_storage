@@ -12,28 +12,11 @@ use dhara_storage_core::{
     StorageProcessEvent, TransferOptions,
 };
 
-use crate::analysis::{AnalysisReport, ContentKind, analyze_path};
 use crate::error::StorageError;
 
 use super::common::{
     choose_buffer_size, open_destination_file, open_source_file, prepare_destination_file,
 };
-
-/// Slim content profile attached when `analyze_content` is enabled.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ContentProfile {
-    pub top_mime_type: Option<String>,
-    pub content_kind: ContentKind,
-}
-
-impl From<&AnalysisReport> for ContentProfile {
-    fn from(report: &AnalysisReport) -> Self {
-        Self {
-            top_mime_type: report.top_mime_type.clone(),
-            content_kind: report.content_kind,
-        }
-    }
-}
 
 /// One file transfer unit queued for the single writer consumer.
 #[derive(Debug, Clone)]
@@ -42,7 +25,6 @@ pub(crate) struct TransferTask {
     pub dest_path: PathBuf,
     pub file_size: u64,
     pub file_index: u64,
-    pub content: Option<ContentProfile>,
 }
 
 /// Mutable byte-progress state shared by a process writer.
@@ -104,23 +86,16 @@ pub(crate) fn build_transfer_task(
     source: &Path,
     destination: &Path,
     file_index: u64,
-    analyze_content: bool,
 ) -> Result<TransferTask, StorageError> {
     let file_size = fs::metadata(source)
         .map_err(|err| StorageError::io("read metadata for", source, err))?
         .len();
-    let content = if analyze_content {
-        Some(ContentProfile::from(&analyze_path(source)?))
-    } else {
-        None
-    };
 
     Ok(TransferTask {
         source_path: source.to_path_buf(),
         dest_path: destination.to_path_buf(),
         file_size,
         file_index,
-        content,
     })
 }
 
@@ -136,15 +111,6 @@ pub(crate) fn write_transfer_task(
         .ensure_not_cancelled(operation)
         .map_err(StorageError::from)?;
     state.begin_item(task);
-    if let Some(content) = task.content.as_ref() {
-        tracing::debug!(
-            target: "dhara_storage::operations::transfer",
-            path = %task.source_path.display(),
-            mime = ?content.top_mime_type,
-            content_kind = ?content.content_kind,
-            "transfer task includes content profile"
-        );
-    }
 
     prepare_destination_file(&task.dest_path, overwrite, true)?;
     let chosen = choose_buffer_size(Some(task.file_size), buffer_size);

@@ -218,13 +218,11 @@ message CopyFileRequest {
   string source = 1;
   string destination = 2;
   bool overwrite = 3;
-  bool analyze_content = 4;
 }
 message CopyDirectoryRequest {
   string source = 1;
   string destination = 2;
   bool overwrite = 3;
-  bool analyze_content = 4;
 }
 
 message ProcessStarted {

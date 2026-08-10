@@ -62,7 +62,6 @@ fn copy_file_with_progress_reports_completion() {
             buffer_size: Some(8 * 1024),
             progress: Some(reporter),
             cancellation_token: None,
-            analyze_content: false,
         },
     )
     .unwrap();
@@ -133,7 +132,6 @@ fn copy_directory_with_progress_preserves_tree() {
             buffer_size: Some(4 * 1024),
             progress: Some(reporter),
             cancellation_token: None,
-            analyze_content: false,
         },
     )
     .unwrap();

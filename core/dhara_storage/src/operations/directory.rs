@@ -66,7 +66,6 @@ pub fn copy_directory_with_options(
         overwrite = options.overwrite,
         progress = options.progress.is_some(),
         cancellable = options.cancellation_token.is_some(),
-        analyze_content = options.analyze_content,
         "copying directory"
     );
 
@@ -109,7 +108,6 @@ pub fn copy_directory_with_options(
         let producer_count = recommended_producer_count();
         let (task_tx, task_rx) = process.task_queue::<TransferTask>();
         let index = FileIndexCounter::new();
-        let analyze = options.analyze_content;
         let cancel = process.cancellation_token().clone();
 
         let result = thread::scope(|scope| -> Result<(), StorageError> {
@@ -129,8 +127,7 @@ pub fn copy_directory_with_options(
                     slots.push(scope.spawn(move || -> Result<(), StorageError> {
                         while let Ok((source_path, dest_path)) = raw_rx.recv() {
                             let file_index = index.next();
-                            let task =
-                                build_transfer_task(&source_path, &dest_path, file_index, analyze)?;
+                            let task = build_transfer_task(&source_path, &dest_path, file_index)?;
                             task_tx
                                 .send(task, &cancel, "copy directory")
                                 .map_err(StorageError::from)?;

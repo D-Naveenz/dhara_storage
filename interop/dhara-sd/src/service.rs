@@ -647,7 +647,6 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
-                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
             copy_file_with_options(&req.source, &req.destination, options)
@@ -665,7 +664,6 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
-                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
             copy_directory_with_options(&req.source, &req.destination, options)

@@ -273,7 +273,6 @@ pub(crate) fn transfer_options(
         buffer_size: None,
         progress: Some(progress_reporter(handle)),
         cancellation_token: Some(handle.cancellation_token.clone()),
-        analyze_content: false,
     }
 }
 
