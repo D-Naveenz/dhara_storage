@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+- Added `StorageProcess` and bounded `TaskQueue` to `dhara_storage_core::process` for long-running storage sessions (single consumer over discrete transfer tasks).
+- Added `StorageProcessEvent` progress model (`Started` / `CurrentItem` / `Bytes` / `Completed` / `Failed` / `Cancelled`) across Rust, `dhara-sd` gRPC streams, and .NET `IProgress<StorageProcessEvent>`.
+
+### Changed
+- Runtime copy/move transfers enqueue prepared tasks on a `TaskQueue` and write with a single consumer to avoid destination write thrashing.
+- Replaced snapshot `StorageProgress` / `ProgressReporter` with `StorageProcessEvent` / `ProcessEventReporter` (clean-cut on managed APIs and daemon stream messages).
+- `TransferOptions.analyze_content` (default off) optionally runs content intelligence while preparing transfer tasks.
+
 ## v0.9.24 - 2026-08-10
 
 ### Changed

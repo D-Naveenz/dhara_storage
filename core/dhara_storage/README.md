@@ -67,19 +67,20 @@ let files = DirectoryStorage::from_existing(".")?.files()?;
 
 ```rust
 use std::sync::Arc;
-use dhara_storage::{FileStorage, StorageProgress, TransferOptions};
+use dhara_storage::{FileStorage, StorageProcessEvent, TransferOptions};
 
-let progress = Arc::new(|update: StorageProgress| {
-    println!("{} bytes", update.bytes_transferred);
+let progress = Arc::new(|event: StorageProcessEvent| {
+    if let StorageProcessEvent::Bytes { bytes_transferred } = event {
+        println!("{bytes_transferred} bytes");
+    }
 });
 
 FileStorage::from_existing("input.bin")?.copy_to_with_options(
     "output.bin",
     TransferOptions {
         overwrite: true,
-        buffer_size: None,
         progress: Some(progress),
-        cancellation_token: None,
+        ..TransferOptions::default()
     },
 )?;
 # Ok::<(), dhara_storage::StorageError>(())
