@@ -4,19 +4,16 @@
 //!
 //! This crate ships reusable framework primitives:
 //! - **definitions** — DSFD schema, owned model, and encode/decode
-//! - **process** — progress reporting and cooperative cancellation
+//! - **process** — cancellation, task queues, process sessions, and event streams
 //! - **types** — operation options and portable metadata value shapes
 //!
 //! The business runtime (`dhara_storage`) embeds `filedefs.dat` and owns analysis,
 //! path-based handles, filesystem I/O, watching, and shell metadata. Extension
 //! crates may depend on the runtime and compose its concrete handles.
-//!
-//! Higher-level process orchestration (`StorageProcess`, `ProcessingQueue`) is
-//! planned as a later core slice on top of [`process`].
 
 /// File-definition package support (DSFD).
 pub mod definitions;
-/// Progress and cancellation primitives for long-running work.
+/// Progress events, task queues, and cooperative cancellation.
 pub mod process;
 /// Portable value types and operation option bundles.
 pub mod types;
@@ -29,7 +26,10 @@ pub use definitions::{
     root_definition_package,
 };
 pub use process::{
-    ProgressReporter, SharedProgressReporter, StorageCancellationToken, StorageProgress,
+    BytesEventThrottle, DEFAULT_BYTES_EVENT_DELTA, DEFAULT_BYTES_EVENT_INTERVAL,
+    DEFAULT_TASK_QUEUE_CAPACITY, ProcessError, ProcessEventReporter, SharedProcessEventReporter,
+    StorageCancellationToken, StorageProcess, StorageProcessEvent, TaskQueue, TaskQueueReceiver,
+    TaskQueueSender,
 };
 pub use types::{
     DirectoryDeleteOptions, ReadOptions, SizeUnit, StorageAttributes, StoragePermissions,
