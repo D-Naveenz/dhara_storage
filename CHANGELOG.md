@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.9.24 - 2026-08-10
+
+### Changed
+- Expanded `dhara_storage_core` beyond DSFD: shared process primitives (progress, cancellation, reporters) and portable types (transfer/read/write options, size, attributes, permissions).
+- Runtime keeps concrete path handles and filesystem I/O; API-facing core types remain re-exported from `dhara_storage` for the usual app dependency path.
+
+### Technical
+- Bumped workspace / NuGet product line to **0.9.24**.
+
 ## v0.9.23 - 2026-08-08
 
 ### Changed
