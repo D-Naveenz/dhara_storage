@@ -5,7 +5,7 @@
 
 use std::path::PathBuf;
 
-/// Event emitted by a [`super::StorageProcess`] during long-running work.
+/// Event emitted by a process session / public storage process during long-running work.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StorageProcessEvent {
     /// Planning finished; totals are known and transfer has not started writing.

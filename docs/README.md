@@ -17,6 +17,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Workspace architecture][architecture] | Agents, contributors | Storage layout, bindings, publish split; DROT pointer |
 | [Daemon transport][daemon-transport] | Implementers | `dhara-sd` named pipes / UDS plan, handle transfer |
 | [Binding benchmarks][binding-benchmarks] | Implementers | FFI vs daemon ladder, BenchmarkDotNet harness |
+| [Transfer pipeline next][transfer-pipeline-next] | Implementers | Post-pipeline findings; RAM read-ahead next cycle |
 | [Windows code signing][windows-signing] | Release engineers | winresource vs Authenticode / SAC |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
@@ -62,6 +63,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [architecture]: architecture.md
 [daemon-transport]: daemon-transport.md
 [binding-benchmarks]: binding-benchmarks.md
+[transfer-pipeline-next]: transfer-pipeline-next.md
 [windows-signing]: windows-code-signing.md
 [native-packaging]: native-packaging.md
 [agents]: ../AGENTS.md

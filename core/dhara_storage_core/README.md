@@ -12,7 +12,7 @@ Most applications depend on the runtime. Use this crate when you need framework 
 
 - Shared foundation for the storage runtime (not a thin rename of a data-access layer)
 - Definition packages: DSFD on-disk layout, encode / decode, owned model
-- Process primitives: `StorageProcess`, bounded `TaskQueue`, `StorageProcessEvent` streams, cooperative cancellation
+- Process primitives: `ProcessSession`, bounded `TaskQueue`, `StorageProcessEvent` streams, cooperative cancellation
 - Portable types: transfer/read/write options, size helpers, attribute and permission value shapes
 - Packaging authority semver (`PACKAGE_VERSION`) for tooling
 
@@ -44,7 +44,7 @@ Binary layout details: [filedefs.dat / DSFD][filedefs-dat].
 
 ### 3. Use process and type primitives
 
-- `StorageProcess`, `TaskQueue`, `StorageProcessEvent`, `StorageCancellationToken`, `ProcessEventReporter`
+- `ProcessSession`, `TaskQueue`, `StorageProcessEvent`, `StorageCancellationToken`, `ProcessEventReporter`
 - `TransferOptions`, `ReadOptions`, `WriteOptions`, `DirectoryDeleteOptions`
 - `StorageSize`, `StorageAttributes`, `StoragePermissions` (value shapes; filesystem apply/load stays in the runtime)
 

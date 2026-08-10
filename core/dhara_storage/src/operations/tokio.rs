@@ -7,35 +7,7 @@ use tokio::task;
 
 use crate::error::StorageError;
 
-use dhara_storage_core::{DirectoryDeleteOptions, ReadOptions, TransferOptions, WriteOptions};
-
-/// Async wrapper for [`super::copy_file`]. Runs on Tokio's blocking pool.
-pub async fn copy_file_async(
-    source: impl AsRef<Path>,
-    destination: impl AsRef<Path>,
-    options: TransferOptions,
-) -> Result<PathBuf, StorageError> {
-    let source = source.as_ref().to_path_buf();
-    let destination = destination.as_ref().to_path_buf();
-    run_blocking("copy file", move || {
-        super::copy_file_with_options(source, destination, options)
-    })
-    .await
-}
-
-/// Async wrapper for [`super::move_file`]. Runs on Tokio's blocking pool.
-pub async fn move_file_async(
-    source: impl AsRef<Path>,
-    destination: impl AsRef<Path>,
-    options: TransferOptions,
-) -> Result<PathBuf, StorageError> {
-    let source = source.as_ref().to_path_buf();
-    let destination = destination.as_ref().to_path_buf();
-    run_blocking("move file", move || {
-        super::move_file_with_options(source, destination, options)
-    })
-    .await
-}
+use dhara_storage_core::{DirectoryDeleteOptions, ReadOptions, WriteOptions};
 
 /// Async wrapper for [`super::rename_file`]. Runs on Tokio's blocking pool.
 pub async fn rename_file_async(
@@ -125,34 +97,6 @@ pub async fn create_directory_all_async(path: impl AsRef<Path>) -> Result<PathBu
     let path = path.as_ref().to_path_buf();
     run_blocking("create directory tree", move || {
         super::create_directory_all(path)
-    })
-    .await
-}
-
-/// Async wrapper for [`super::copy_directory`]. Runs on Tokio's blocking pool.
-pub async fn copy_directory_async(
-    source: impl AsRef<Path>,
-    destination: impl AsRef<Path>,
-    options: TransferOptions,
-) -> Result<PathBuf, StorageError> {
-    let source = source.as_ref().to_path_buf();
-    let destination = destination.as_ref().to_path_buf();
-    run_blocking("copy directory", move || {
-        super::copy_directory_with_options(source, destination, options)
-    })
-    .await
-}
-
-/// Async wrapper for [`super::move_directory`]. Runs on Tokio's blocking pool.
-pub async fn move_directory_async(
-    source: impl AsRef<Path>,
-    destination: impl AsRef<Path>,
-    options: TransferOptions,
-) -> Result<PathBuf, StorageError> {
-    let source = source.as_ref().to_path_buf();
-    let destination = destination.as_ref().to_path_buf();
-    run_blocking("move directory", move || {
-        super::move_directory_with_options(source, destination, options)
     })
     .await
 }

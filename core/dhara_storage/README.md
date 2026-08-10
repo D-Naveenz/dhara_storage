@@ -12,7 +12,7 @@ Use this crate when you want those capabilities from Rust—with memory safety, 
 
 - Signature-based typing via bundled `filedefs.dat` (not extension-only guessing)
 - `FileStorage` / `DirectoryStorage` handles for navigation and I/O
-- Sync-first copy / move / delete with optional progress and cancellation
+- Sync-first copy / move / delete; copy/move start a `StorageProcess` (await or wait) with optional progress and cancellation
 - Debounced directory change events
 - Shell icons (RGBA) and Windows shell details where supported
 - Optional Tokio wrappers (`async-tokio`)
@@ -75,6 +75,7 @@ let progress = Arc::new(|event: StorageProcessEvent| {
     }
 });
 
+// Sync: starts a process and waits inside (returns ()).
 FileStorage::from_existing("input.bin")?.copy_to_with_options(
     "output.bin",
     TransferOptions {
@@ -83,6 +84,11 @@ FileStorage::from_existing("input.bin")?.copy_to_with_options(
         ..TransferOptions::default()
     },
 )?;
+
+// Or start and await the process (destination on ProcessOutcome).
+// let outcome = FileStorage::from_existing("input.bin")?
+//     .start_copy_to_with_options("output.bin", TransferOptions { overwrite: true, ..Default::default() })
+//     .await?;
 # Ok::<(), dhara_storage::StorageError>(())
 ```
 

@@ -369,13 +369,14 @@ async fn async_directory_copy_roundtrip() {
     fs::write(source.join("nested").join("value.txt"), b"value").unwrap();
 
     let storage = DirectoryStorage::from_existing(&source).unwrap();
-    let copied = storage
-        .copy_to_async(&destination, TransferOptions::default())
+    let outcome = storage
+        .start_copy_to_with_options(&destination, TransferOptions::default())
         .await
         .unwrap();
 
+    let copied = outcome.destination.expect("copy should report destination");
     assert_eq!(
-        fs::read_to_string(copied.absolute_path().join("nested").join("value.txt")).unwrap(),
+        fs::read_to_string(copied.join("nested").join("value.txt")).unwrap(),
         "value"
     );
 }

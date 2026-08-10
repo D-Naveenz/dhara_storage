@@ -67,10 +67,23 @@ internal static class DaemonClient
     }
 
     /// <summary>
+    /// Starts a copy stream immediately and returns a <see cref="StorageProcess"/> completed from terminal events.
+    /// </summary>
+    internal static StorageProcess StartCopyProcess(
+        Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<StorageProcessEventMessage>> call,
+        IProgress<StorageProcessEvent>? progress,
+        string? path,
+        string? operation,
+        CancellationToken cancellationToken) =>
+        StorageProcess.Start(
+            ct => ConsumeCopyProgressAsync(call, progress, path, operation, ct),
+            cancellationToken);
+
+    /// <summary>
     /// Consumes a <c>CopyFile</c> / <c>CopyDirectory</c> progress stream, reporting each update and
     /// returning the final destination path once the daemon reports completion.
     /// </summary>
-    internal static async Task<string> ConsumeCopyProgressAsync(
+    internal static async Task<string?> ConsumeCopyProgressAsync(
         Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<StorageProcessEventMessage>> call,
         IProgress<StorageProcessEvent>? progress,
         string? path,

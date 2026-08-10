@@ -16,19 +16,69 @@ use super::common::{
     validate_single_path_name,
 };
 use super::transfer::{
-    ProcessWriteState, build_transfer_task, storage_process_from_options, write_transfer_task,
+    ProcessWriteState, bind_process_cancellation, build_transfer_task,
+    process_session_from_options, write_transfer_task,
 };
+use crate::process::{ProcessOutcome, StorageProcess};
 
 /// Copy a file to an exact destination path.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn copy_file(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
-) -> Result<PathBuf, StorageError> {
-    copy_file_with_options(source, destination, TransferOptions::default())
+) -> Result<(), StorageError> {
+    start_copy_file(source, destination).wait_unit()
 }
 
-/// Copy a file to an exact destination path with overwrite and progress control.
+/// Copy a file with overwrite and progress control.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn copy_file_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    options: TransferOptions,
+) -> Result<(), StorageError> {
+    start_copy_file_with_options(source, destination, options).wait_unit()
+}
+
+/// Start a file copy and return the running [`StorageProcess`] immediately.
+pub fn start_copy_file(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+) -> StorageProcess {
+    start_copy_file_with_options(source, destination, TransferOptions::default())
+}
+
+/// Start a file copy with options and return the running [`StorageProcess`] immediately.
+pub fn start_copy_file_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    mut options: TransferOptions,
+) -> StorageProcess {
+    let source = source.as_ref().to_path_buf();
+    let destination = destination.as_ref().to_path_buf();
+    let user_cancel = options.cancellation_token.is_some();
+    let user_progress = options.progress.is_some();
+    let cancellation = bind_process_cancellation(&mut options);
+    StorageProcess::spawn(cancellation, move || {
+        // Auto-bound cancel is for the handle only; keep the direct fs::copy fast path
+        // unless the caller asked for progress or cooperative cancellation.
+        if !user_progress && !user_cancel {
+            options.cancellation_token = None;
+        }
+        execute_copy_file_with_options(source, destination, options).map(|path| ProcessOutcome {
+            destination: Some(path),
+        })
+    })
+}
+
+/// Run a file copy on the calling thread (no process spawn).
+///
+/// Prefer [`start_copy_file_with_options`] / [`copy_file_with_options`] for the
+/// process-first public API. Interop hosts that already own a worker thread may
+/// call this engine entry directly.
+pub fn execute_copy_file_with_options(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
     options: TransferOptions,
@@ -52,8 +102,8 @@ pub fn copy_file_with_options(
     }
 
     lock_write_targets(&[&source, &destination], || {
-        let process = storage_process_from_options(&options);
-        process
+        let session = process_session_from_options(&options);
+        session
             .ensure_not_cancelled("copy file")
             .map_err(StorageError::from)?;
 
@@ -76,12 +126,12 @@ pub fn copy_file_with_options(
         }
 
         let task = build_transfer_task(&source, &destination, 0)?;
-        process.emit(StorageProcessEvent::Started {
+        session.emit(StorageProcessEvent::Started {
             total_bytes: task.file_size,
             total_files: 1,
         });
 
-        let mut state = ProcessWriteState::new(process.clone());
+        let mut state = ProcessWriteState::new(session.clone());
         match write_transfer_task(
             &task,
             options.overwrite,
@@ -90,7 +140,7 @@ pub fn copy_file_with_options(
             "copy file",
         ) {
             Ok(()) => {
-                process.emit(StorageProcessEvent::Completed {
+                session.emit(StorageProcessEvent::Completed {
                     destination: Some(destination.clone()),
                 });
                 info!(
@@ -103,11 +153,11 @@ pub fn copy_file_with_options(
             }
             Err(err) => {
                 if matches!(err, StorageError::Cancelled { .. }) {
-                    process.emit(StorageProcessEvent::Cancelled {
+                    session.emit(StorageProcessEvent::Cancelled {
                         operation: "copy file",
                     });
                 } else {
-                    process.emit(StorageProcessEvent::Failed {
+                    session.emit(StorageProcessEvent::Failed {
                         message: err.to_string(),
                     });
                 }
@@ -118,15 +168,60 @@ pub fn copy_file_with_options(
 }
 
 /// Move a file to an exact destination path.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn move_file(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
-) -> Result<PathBuf, StorageError> {
-    move_file_with_options(source, destination, TransferOptions::default())
+) -> Result<(), StorageError> {
+    start_move_file(source, destination).wait_unit()
 }
 
-/// Move a file to an exact destination path with overwrite and progress control.
+/// Move a file with overwrite and progress control.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn move_file_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    options: TransferOptions,
+) -> Result<(), StorageError> {
+    start_move_file_with_options(source, destination, options).wait_unit()
+}
+
+/// Start a file move and return the running [`StorageProcess`] immediately.
+pub fn start_move_file(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+) -> StorageProcess {
+    start_move_file_with_options(source, destination, TransferOptions::default())
+}
+
+/// Start a file move with options and return the running [`StorageProcess`] immediately.
+pub fn start_move_file_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    mut options: TransferOptions,
+) -> StorageProcess {
+    let source = source.as_ref().to_path_buf();
+    let destination = destination.as_ref().to_path_buf();
+    let user_cancel = options.cancellation_token.is_some();
+    let user_progress = options.progress.is_some();
+    let cancellation = bind_process_cancellation(&mut options);
+    StorageProcess::spawn(cancellation, move || {
+        if !user_progress && !user_cancel {
+            options.cancellation_token = None;
+        }
+        execute_move_file_with_options(source, destination, options).map(|path| ProcessOutcome {
+            destination: Some(path),
+        })
+    })
+}
+
+/// Run a file move on the calling thread (no process spawn).
+///
+/// Prefer [`start_move_file_with_options`] / [`move_file_with_options`] for the
+/// process-first public API.
+pub fn execute_move_file_with_options(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
     options: TransferOptions,
@@ -179,7 +274,7 @@ pub fn move_file_with_options(
             return Ok(destination.clone());
         }
 
-        copy_file_with_options(&source, &destination, options.clone())?;
+        execute_copy_file_with_options(&source, &destination, options.clone())?;
         fs::remove_file(&source)
             .map_err(|err| StorageError::io("delete source file after move", &source, err))?;
         info!(
@@ -204,7 +299,7 @@ pub fn rename_file(source: impl AsRef<Path>, new_name: &str) -> Result<PathBuf, 
             StorageError::path_conflict(source.clone(), "file has no parent directory")
         })?;
 
-    move_file(&source, &destination)
+    execute_move_file_with_options(source, destination, TransferOptions::default())
 }
 
 /// Delete a file from disk.

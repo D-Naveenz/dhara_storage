@@ -5,9 +5,10 @@ use std::io::Cursor;
 use std::sync::Arc;
 
 use dhara_storage::{
-    FileStorage, ReadOptions, copy_directory_with_options, copy_file_with_options,
-    create_directory, create_directory_all, delete_directory_with_options, delete_file,
-    move_directory_with_options, move_file_with_options, rename_directory, rename_file,
+    FileStorage, ReadOptions, create_directory, create_directory_all, delete_directory_with_options,
+    delete_file, execute_copy_directory_with_options, execute_copy_file_with_options,
+    execute_move_directory_with_options, execute_move_file_with_options, rename_directory,
+    rename_file,
 };
 
 use crate::abi::{
@@ -45,7 +46,7 @@ pub unsafe extern "C" fn dhara_operation_start_copy_file(
             let source = parse_path_arg(source, "source")?;
             let destination = parse_path_arg(destination, "destination")?;
             Ok(spawn_path_operation(move |handle| {
-                copy_file_with_options(
+                execute_copy_file_with_options(
                     &source,
                     &destination,
                     transfer_options(&handle, overwrite != 0),
@@ -81,7 +82,7 @@ pub unsafe extern "C" fn dhara_operation_start_move_file(
             let source = parse_path_arg(source, "source")?;
             let destination = parse_path_arg(destination, "destination")?;
             Ok(spawn_path_operation(move |handle| {
-                move_file_with_options(
+                execute_move_file_with_options(
                     &source,
                     &destination,
                     transfer_options(&handle, overwrite != 0),
@@ -388,7 +389,7 @@ pub unsafe extern "C" fn dhara_operation_start_copy_directory(
             let source = parse_path_arg(source, "source")?;
             let destination = parse_path_arg(destination, "destination")?;
             Ok(spawn_path_operation(move |handle| {
-                copy_directory_with_options(
+                execute_copy_directory_with_options(
                     &source,
                     &destination,
                     transfer_options(&handle, overwrite != 0),
@@ -423,7 +424,7 @@ pub unsafe extern "C" fn dhara_operation_start_move_directory(
             let source = parse_path_arg(source, "source")?;
             let destination = parse_path_arg(destination, "destination")?;
             Ok(spawn_path_operation(move |handle| {
-                move_directory_with_options(
+                execute_move_directory_with_options(
                     &source,
                     &destination,
                     transfer_options(&handle, overwrite != 0),

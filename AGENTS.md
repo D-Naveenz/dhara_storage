@@ -79,7 +79,7 @@ Agents editing READMEs must **not** add:
 | Path | Role |
 |------|------|
 | `core/dhara_storage` | Business runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
-| `core/dhara_storage_core` | Framework layer — DSFD, process (`StorageProcess` / `TaskQueue` / `StorageProcessEvent`, cancel), portable types/options |
+| `core/dhara_storage_core` | Framework layer — DSFD, process (`ProcessSession` / `TaskQueue` / `StorageProcessEvent`, cancel), portable types/options |
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`) — gRPC control + handle transfer for foreign bindings |
 | `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) — **benchmark / evidence only**; not shipped via NuGet |
 | `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — managed API over `dhara-sd` |
@@ -90,7 +90,7 @@ Agents editing READMEs must **not** add:
 
 **Design choices**
 
-- `dhara_storage_core` is the framework; `dhara_storage` holds business process. Shipped core slices: **DSFD**, **process** (`StorageProcess`, bounded `TaskQueue`, `StorageProcessEvent` stream, cancel/reporter), and **types** (options + portable attribute/permission/size shapes). Transfers run a single-writer consumer over the task queue so destination writes do not thrash HDDs; progress is an event stream (`Started` / `CurrentItem` / `Bytes` / terminal), not percentage snapshots.
+- `dhara_storage_core` is the framework; `dhara_storage` holds business process. Shipped core slices: **DSFD**, **process** (`ProcessSession`, bounded `TaskQueue`, `StorageProcessEvent` stream, cancel/reporter), and **types** (options + portable attribute/permission/size shapes). The runtime’s public **`StorageProcess`** is the awaitable copy/move executioner (start immediately; sync waits inside). Transfers run a single-writer consumer over the task queue so destination writes do not thrash HDDs; progress is an event stream (`Started` / `CurrentItem` / `Bytes` / terminal), not percentage snapshots. Next-cycle transfer work (RAM read-ahead): [docs/transfer-pipeline-next.md](docs/transfer-pipeline-next.md).
 - Concrete `FileStorage` / `DirectoryStorage` stay in the runtime. Extension crates (for example a future archives crate) may depend on `dhara_storage`, compose those handles, and define their own types. No product-level storage-object enum or `dyn` handle trait in core — closed mixed collections are consumer-owned enums.
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).

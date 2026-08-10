@@ -13,9 +13,10 @@ use dhara_storage::{
     ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileStorage,
     SearchScope, SharedProcessEventReporter, ShellIcon, StorageChangeType, StorageEntry,
     StorageMetadata, StorageProcessEvent, StorageWatchConfig, TransferOptions, WriteOptions,
-    analyze_path, copy_directory_with_options, copy_file_with_options, create_directory,
-    create_directory_all, delete_directory_with_options, delete_file, move_directory_with_options,
-    move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
+    analyze_path, create_directory, create_directory_all, delete_directory_with_options,
+    delete_file, execute_copy_directory_with_options, execute_copy_file_with_options,
+    execute_move_directory_with_options, execute_move_file_with_options, read_file,
+    rename_directory, rename_file, write_file_from_reader,
 };
 use futures::{Stream, StreamExt};
 use tokio::sync::broadcast;
@@ -566,9 +567,9 @@ impl DharaSd for DharaSdService {
                 ..TransferOptions::default()
             };
             if source.is_dir() {
-                move_directory_with_options(&source, &req.destination, options)
+                execute_move_directory_with_options(&source, &req.destination, options)
             } else {
-                move_file_with_options(&source, &req.destination, options)
+                execute_move_file_with_options(&source, &req.destination, options)
             }
         })
         .await
@@ -649,7 +650,7 @@ impl DharaSd for DharaSdService {
                 progress: Some(reporter),
                 ..TransferOptions::default()
             };
-            copy_file_with_options(&req.source, &req.destination, options)
+            execute_copy_file_with_options(&req.source, &req.destination, options)
         })))
     }
 
@@ -666,7 +667,7 @@ impl DharaSd for DharaSdService {
                 progress: Some(reporter),
                 ..TransferOptions::default()
             };
-            copy_directory_with_options(&req.source, &req.destination, options)
+            execute_copy_directory_with_options(&req.source, &req.destination, options)
         })))
     }
 

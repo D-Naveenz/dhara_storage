@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use super::events::StorageProcessEvent;
 
-/// Receives process events from an in-flight [`super::StorageProcess`].
+/// Receives process events from an in-flight transfer session.
 pub trait ProcessEventReporter: Send + Sync + 'static {
     /// Receives one process event.
     fn report(&self, event: StorageProcessEvent);

@@ -15,10 +15,11 @@ use crate::metadata::{
 };
 use crate::operations::common::{ResolvedPaths, resolve_storage_paths};
 use crate::operations::{
-    ReadOptions, TransferOptions, WriteOptions, copy_file, copy_file_with_options, delete_file,
-    move_file, move_file_with_options, read_file, read_file_to_string, rename_file, write_file,
-    write_file_from_reader, write_file_string,
+    ReadOptions, TransferOptions, WriteOptions, delete_file, read_file, read_file_to_string,
+    rename_file, start_copy_file, start_copy_file_with_options, start_move_file,
+    start_move_file_with_options, write_file, write_file_from_reader, write_file_string,
 };
+use crate::process::StorageProcess;
 
 /// Rust-native handle for file operations and on-demand metadata.
 ///
@@ -63,18 +64,6 @@ impl FileStorage {
         Self {
             absolute_path: absolute,
             relative_path: None,
-            analysis: Mutex::new(None),
-        }
-    }
-
-    fn from_destination(destination: &Path, absolute: PathBuf) -> Self {
-        Self {
-            absolute_path: absolute,
-            relative_path: if destination.is_absolute() {
-                None
-            } else {
-                Some(destination.to_path_buf())
-            },
             analysis: Mutex::new(None),
         }
     }
@@ -229,39 +218,67 @@ impl FileStorage {
     }
 
     /// Copy the file to an exact destination path.
-    pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = copy_file(&self.absolute_path, destination)?;
-        Ok(Self::from_destination(destination, path))
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
+    pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<(), StorageError> {
+        start_copy_file(&self.absolute_path, destination).wait_unit()
     }
 
     /// Copy the file with overwrite and progress control.
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
     pub fn copy_to_with_options(
         &self,
         destination: impl AsRef<Path>,
         options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = copy_file_with_options(&self.absolute_path, destination, options)?;
-        Ok(Self::from_destination(destination, path))
+    ) -> Result<(), StorageError> {
+        start_copy_file_with_options(&self.absolute_path, destination, options).wait_unit()
+    }
+
+    /// Start a copy and return the running [`StorageProcess`] immediately.
+    pub fn start_copy_to(&self, destination: impl AsRef<Path>) -> StorageProcess {
+        start_copy_file(&self.absolute_path, destination)
+    }
+
+    /// Start a copy with options and return the running [`StorageProcess`] immediately.
+    pub fn start_copy_to_with_options(
+        &self,
+        destination: impl AsRef<Path>,
+        options: TransferOptions,
+    ) -> StorageProcess {
+        start_copy_file_with_options(&self.absolute_path, destination, options)
     }
 
     /// Move the file to an exact destination path.
-    pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = move_file(&self.absolute_path, destination)?;
-        Ok(Self::from_destination(destination, path))
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
+    pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<(), StorageError> {
+        start_move_file(&self.absolute_path, destination).wait_unit()
     }
 
     /// Move the file with overwrite and progress control.
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
     pub fn move_to_with_options(
         &self,
         destination: impl AsRef<Path>,
         options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = move_file_with_options(&self.absolute_path, destination, options)?;
-        Ok(Self::from_destination(destination, path))
+    ) -> Result<(), StorageError> {
+        start_move_file_with_options(&self.absolute_path, destination, options).wait_unit()
+    }
+
+    /// Start a move and return the running [`StorageProcess`] immediately.
+    pub fn start_move_to(&self, destination: impl AsRef<Path>) -> StorageProcess {
+        start_move_file(&self.absolute_path, destination)
+    }
+
+    /// Start a move with options and return the running [`StorageProcess`] immediately.
+    pub fn start_move_to_with_options(
+        &self,
+        destination: impl AsRef<Path>,
+        options: TransferOptions,
+    ) -> StorageProcess {
+        start_move_file_with_options(&self.absolute_path, destination, options)
     }
 
     /// Rename the file inside its current parent directory.
@@ -278,30 +295,6 @@ impl FileStorage {
 
 #[cfg(feature = "async-tokio")]
 impl FileStorage {
-    /// Async variant of [`Self::copy_to_with_options`].
-    pub async fn copy_to_async(
-        &self,
-        destination: impl AsRef<Path>,
-        options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path =
-            crate::operations::copy_file_async(&self.absolute_path, destination, options).await?;
-        Ok(Self::from_destination(destination, path))
-    }
-
-    /// Async variant of [`Self::move_to_with_options`].
-    pub async fn move_to_async(
-        &self,
-        destination: impl AsRef<Path>,
-        options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path =
-            crate::operations::move_file_async(&self.absolute_path, destination, options).await?;
-        Ok(Self::from_destination(destination, path))
-    }
-
     /// Async variant of [`Self::rename`].
     pub async fn rename_async(&self, new_name: impl Into<String>) -> Result<Self, StorageError> {
         let path = crate::operations::rename_file_async(&self.absolute_path, new_name).await?;

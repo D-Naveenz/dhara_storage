@@ -8,12 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
-- Added `StorageProcess` and bounded `TaskQueue` to `dhara_storage_core::process` for long-running storage sessions (single consumer over discrete transfer tasks).
+- Added public awaitable `StorageProcess` (Rust `Future` / .NET `Completion` + `GetAwaiter`) as the copy/move executioner; sync APIs wait inside and return void / `Result<()>`.
+- Added `ProcessSession` in `dhara_storage_core::process` for engine cancel/events/`TaskQueue` helpers (session is not the public awaitable handle).
+- Added bounded `TaskQueue` for long-running transfer sessions (single consumer over discrete path/size tasks).
 - Added `StorageProcessEvent` progress model (`Started` / `CurrentItem` / `Bytes` / `Completed` / `Failed` / `Cancelled`) across Rust, `dhara-sd` gRPC streams, and .NET `IProgress<StorageProcessEvent>`.
+- Documented deferred transfer work (RAM read-ahead pool, verify, broader process-first ops) in `docs/transfer-pipeline-next.md`.
 
 ### Changed
+- Copy/move are process-first: work starts immediately; `CopyAsync` / `start_*` return `StorageProcess`; sync `Copy` / `copy_*` wait and return void / `Result<()>`.
 - Runtime copy/move transfers enqueue prepared tasks on a `TaskQueue` and write with a single consumer to avoid destination write thrashing.
 - Replaced snapshot `StorageProgress` / `ProgressReporter` with `StorageProcessEvent` / `ProcessEventReporter` (clean-cut on managed APIs and daemon stream messages).
+- Removed analyze-during-copy (`TransferOptions.analyze_content`); content intelligence stays on analyze/metadata APIs only.
+- Removed thin Tokio `spawn_blocking` wrappers for copy/move (await `StorageProcess` instead).
+
+### Removed
+- Sync copy/move no longer return destination handles/`PathBuf` from the public sugar APIs (use `start_*` / `ProcessOutcome` / await destination when needed).
 
 ## v0.9.24 - 2026-08-10
 

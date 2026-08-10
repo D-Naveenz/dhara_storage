@@ -66,7 +66,20 @@ directory.StartWatching();
 directory.Changed += (_, change) => Console.WriteLine(change.Path);
 ```
 
-### 4. Host lifetime (ASP.NET Core, worker services)
+### 4. Copy (process-first)
+
+```csharp
+using Dhara.Storage;
+
+var file = DharaStorage.File(@"C:\data\input.bin");
+// Sync: starts immediately and waits inside.
+file.Copy(@"C:\data\copy.bin", overwrite: true);
+
+// Async: starts immediately; await the StorageProcess for the destination path.
+var destination = await file.CopyAsync(@"C:\data\copy2.bin", overwrite: true);
+```
+
+### 5. Host lifetime (ASP.NET Core, worker services)
 
 Add [`Dhara.Storage.Extensions.Hosting`](https://www.nuget.org/packages/Dhara.Storage.Extensions.Hosting) to start and stop the sidecar with your application's `IHost`:
 

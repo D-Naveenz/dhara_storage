@@ -60,9 +60,10 @@ public sealed class StorageFileTests
         var reported = new List<StorageProcessEvent>();
         var progress = new SynchronousProgress<StorageProcessEvent>(reported.Add);
 
-        var copy = await file.CopyAsync(temp.PathFor("copy.bin"), progress, overwrite: false, cancellationToken);
+        var destination = await file.CopyAsync(temp.PathFor("copy.bin"), progress, overwrite: false, cancellationToken);
 
-        Assert.True(System.IO.File.Exists(copy.AbsolutePath));
+        Assert.NotNull(destination);
+        Assert.True(System.IO.File.Exists(destination));
         Assert.NotEmpty(reported);
         Assert.Contains(reported, e => e is StorageProcessStarted);
         Assert.Contains(reported, e => e is StorageProcessBytes { BytesTransferred: > 0 });

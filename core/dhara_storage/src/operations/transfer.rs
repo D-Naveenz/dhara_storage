@@ -1,4 +1,4 @@
-//! Transfer tasks and StorageProcess-backed copy helpers.
+//! Transfer tasks and ProcessSession-backed copy helpers.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use dhara_storage_core::{
-    BytesEventThrottle, SharedProcessEventReporter, StorageCancellationToken, StorageProcess,
+    BytesEventThrottle, ProcessSession, SharedProcessEventReporter, StorageCancellationToken,
     StorageProcessEvent, TransferOptions,
 };
 
@@ -29,15 +29,15 @@ pub(crate) struct TransferTask {
 
 /// Mutable byte-progress state shared by a process writer.
 pub(crate) struct ProcessWriteState {
-    pub process: StorageProcess,
+    pub session: ProcessSession,
     pub throttle: BytesEventThrottle,
     pub bytes_transferred: u64,
 }
 
 impl ProcessWriteState {
-    pub fn new(process: StorageProcess) -> Self {
+    pub fn new(session: ProcessSession) -> Self {
         Self {
-            process,
+            session,
             throttle: BytesEventThrottle::default(),
             bytes_transferred: 0,
         }
@@ -46,7 +46,7 @@ impl ProcessWriteState {
     pub fn emit_bytes_if_due(&mut self) {
         let now = Instant::now();
         if self.throttle.should_emit(self.bytes_transferred, now) {
-            self.process.emit(StorageProcessEvent::Bytes {
+            self.session.emit(StorageProcessEvent::Bytes {
                 bytes_transferred: self.bytes_transferred,
             });
             self.throttle.mark_emitted(self.bytes_transferred, now);
@@ -54,7 +54,7 @@ impl ProcessWriteState {
     }
 
     pub fn flush_bytes(&mut self) {
-        self.process.emit(StorageProcessEvent::Bytes {
+        self.session.emit(StorageProcessEvent::Bytes {
             bytes_transferred: self.bytes_transferred,
         });
         self.throttle
@@ -64,7 +64,7 @@ impl ProcessWriteState {
     pub fn begin_item(&mut self, task: &TransferTask) {
         self.flush_bytes_if_any();
         self.throttle.force_next();
-        self.process.emit(StorageProcessEvent::CurrentItem {
+        self.session.emit(StorageProcessEvent::CurrentItem {
             path: task.dest_path.clone(),
             file_size: task.file_size,
             file_index: task.file_index,
@@ -78,8 +78,11 @@ impl ProcessWriteState {
     }
 }
 
-pub(crate) fn storage_process_from_options(options: &TransferOptions) -> StorageProcess {
-    StorageProcess::new(options.cancellation_token.clone(), options.progress.clone())
+pub(crate) fn process_session_from_options(options: &TransferOptions) -> ProcessSession {
+    ProcessSession::new(
+        options.cancellation_token.clone(),
+        options.progress.clone(),
+    )
 }
 
 pub(crate) fn build_transfer_task(
@@ -107,7 +110,7 @@ pub(crate) fn write_transfer_task(
     operation: &'static str,
 ) -> Result<(), StorageError> {
     state
-        .process
+        .session
         .ensure_not_cancelled(operation)
         .map_err(StorageError::from)?;
     state.begin_item(task);
@@ -149,7 +152,7 @@ where
 
     loop {
         state
-            .process
+            .session
             .ensure_not_cancelled(operation)
             .map_err(StorageError::from)?;
         let read = reader
@@ -189,7 +192,7 @@ where
             .map_err(|err| StorageError::reader_io("copy from", err));
     }
 
-    let process = StorageProcess::new(cancellation_token.cloned(), progress.cloned());
+    let process = ProcessSession::new(cancellation_token.cloned(), progress.cloned());
     if let Some(total) = total_bytes {
         process.emit(StorageProcessEvent::Started {
             total_bytes: total,
@@ -207,6 +210,19 @@ where
         copy_reader_to_process_writer(reader, writer, buffer_size, &mut state, operation)?;
     state.flush_bytes();
     Ok(transferred)
+}
+
+/// Ensure transfer options carry a cancellation token shared with a spawned process.
+pub(crate) fn bind_process_cancellation(
+    options: &mut TransferOptions,
+) -> StorageCancellationToken {
+    if let Some(token) = options.cancellation_token.clone() {
+        token
+    } else {
+        let token = StorageCancellationToken::default();
+        options.cancellation_token = Some(token.clone());
+        token
+    }
 }
 
 /// Shared atomic file index allocator for producer pools.
