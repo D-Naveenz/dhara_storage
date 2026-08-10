@@ -11,8 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
     ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileStorage,
-    SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
-    StorageMetadata, StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions,
+    SearchScope, SharedProcessEventReporter, ShellIcon, StorageChangeType, StorageEntry,
+    StorageMetadata, StorageProcessEvent, StorageWatchConfig, TransferOptions, WriteOptions,
     analyze_path, copy_directory_with_options, copy_file_with_options, create_directory,
     create_directory_all, delete_directory_with_options, delete_file, move_directory_with_options,
     move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
@@ -636,7 +636,7 @@ impl DharaSd for DharaSdService {
         }))
     }
 
-    type CopyFileStream = ResponseStream<CopyFileProgress>;
+    type CopyFileStream = ResponseStream<StorageProcessEventMessage>;
 
     async fn copy_file(
         &self,
@@ -647,13 +647,14 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
+                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
             copy_file_with_options(&req.source, &req.destination, options)
         })))
     }
 
-    type CopyDirectoryStream = ResponseStream<CopyFileProgress>;
+    type CopyDirectoryStream = ResponseStream<StorageProcessEventMessage>;
 
     async fn copy_directory(
         &self,
@@ -664,6 +665,7 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
+                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
             copy_directory_with_options(&req.source, &req.destination, options)
@@ -842,47 +844,88 @@ fn analysis_report_to_proto(report: dhara_storage::AnalysisReport) -> AnalyzePat
     }
 }
 
-fn spawn_copy_progress<F>(work: F) -> ResponseStream<CopyFileProgress>
+fn spawn_copy_progress<F>(work: F) -> ResponseStream<StorageProcessEventMessage>
 where
-    F: FnOnce(SharedProgressReporter) -> Result<PathBuf, dhara_storage::StorageError>
+    F: FnOnce(SharedProcessEventReporter) -> Result<PathBuf, dhara_storage::StorageError>
         + Send
         + 'static,
 {
-    let (tx, rx) = mpsc::channel::<Result<CopyFileProgress, Status>>(256);
+    let (tx, rx) = mpsc::channel::<Result<StorageProcessEventMessage, Status>>(256);
     tokio::task::spawn_blocking(move || {
         let progress_tx = tx.clone();
-        let reporter: SharedProgressReporter = Arc::new(move |progress: StorageProgress| {
-            let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
-                bytes_transferred: progress.bytes_transferred,
-                total_bytes: progress.total_bytes,
-                bytes_per_second: progress.bytes_per_second,
-                completed: false,
-                destination: None,
-                error_message: None,
-            }));
+        let reporter: SharedProcessEventReporter = Arc::new(move |event: StorageProcessEvent| {
+            let message = match event {
+                StorageProcessEvent::Started {
+                    total_bytes,
+                    total_files,
+                } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Started(
+                        ProcessStarted {
+                            total_bytes,
+                            total_files,
+                        },
+                    )),
+                },
+                StorageProcessEvent::CurrentItem {
+                    path,
+                    file_size,
+                    file_index,
+                } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::CurrentItem(
+                        ProcessCurrentItem {
+                            path: path.display().to_string(),
+                            file_size,
+                            file_index,
+                        },
+                    )),
+                },
+                StorageProcessEvent::Bytes { bytes_transferred } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Bytes(ProcessBytes {
+                        bytes_transferred,
+                    })),
+                },
+                StorageProcessEvent::Completed { destination } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Completed(
+                        ProcessCompleted {
+                            destination: destination.map(|path| path.display().to_string()),
+                        },
+                    )),
+                },
+                StorageProcessEvent::Failed { message } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Failed(ProcessFailed {
+                        message,
+                    })),
+                },
+                StorageProcessEvent::Cancelled { operation } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Cancelled(
+                        ProcessCancelled {
+                            operation: operation.to_owned(),
+                        },
+                    )),
+                },
+            };
+            let _ = progress_tx.blocking_send(Ok(message));
         });
 
-        match work(reporter) {
-            Ok(destination) => {
-                let _ = tx.blocking_send(Ok(CopyFileProgress {
-                    bytes_transferred: 0,
-                    total_bytes: None,
-                    bytes_per_second: 0.0,
-                    completed: true,
-                    destination: Some(destination.display().to_string()),
-                    error_message: None,
-                }));
-            }
-            Err(err) => {
-                let _ = tx.blocking_send(Ok(CopyFileProgress {
-                    bytes_transferred: 0,
-                    total_bytes: None,
-                    bytes_per_second: 0.0,
-                    completed: true,
-                    destination: None,
-                    error_message: Some(err.to_string()),
-                }));
-            }
+        // Runtime emits Completed on success. On early failures (before a process
+        // terminal event) surface a Failed/Cancelled so the stream always ends cleanly.
+        if let Err(err) = work(reporter) {
+            let message = if matches!(err, dhara_storage::StorageError::Cancelled { .. }) {
+                StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Cancelled(
+                        ProcessCancelled {
+                            operation: "copy".into(),
+                        },
+                    )),
+                }
+            } else {
+                StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Failed(ProcessFailed {
+                        message: err.to_string(),
+                    })),
+                }
+            };
+            let _ = tx.blocking_send(Ok(message));
         }
     });
     Box::pin(ReceiverStream::new(rx))

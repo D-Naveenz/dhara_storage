@@ -3,6 +3,7 @@
 use std::io;
 use std::path::PathBuf;
 
+use dhara_storage_core::ProcessError;
 use thiserror::Error;
 
 /// Errors produced by Dhara storage analysis and metadata operations.
@@ -99,6 +100,15 @@ pub enum StorageError {
         message: String,
     },
 
+    /// Task-queue / process orchestration failed unexpectedly.
+    #[error("process orchestration failed while attempting to {operation}: {message}")]
+    Process {
+        /// The high-level operation that depended on the process queue.
+        operation: &'static str,
+        /// Framework-level failure details.
+        message: String,
+    },
+
     /// A storage watcher failed to initialize or deliver events.
     #[error("watch error while attempting to {operation}: {message}")]
     Watch {
@@ -157,5 +167,21 @@ impl StorageError {
             operation,
             message: message.into(),
         }
+    }
+
+    pub(crate) fn from_process(err: ProcessError) -> Self {
+        match err {
+            ProcessError::Cancelled { operation } => Self::cancelled(operation),
+            ProcessError::Disconnected => Self::Process {
+                operation: "process queue",
+                message: "task queue disconnected unexpectedly".into(),
+            },
+        }
+    }
+}
+
+impl From<ProcessError> for StorageError {
+    fn from(value: ProcessError) -> Self {
+        Self::from_process(value)
     }
 }

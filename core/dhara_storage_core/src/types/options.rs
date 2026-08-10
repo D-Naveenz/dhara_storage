@@ -1,6 +1,6 @@
 //! Option bundles for transfer, read, write, and directory-delete operations.
 
-use crate::process::{SharedProgressReporter, StorageCancellationToken};
+use crate::process::{SharedProcessEventReporter, StorageCancellationToken};
 
 /// Common options for copy and move style operations.
 #[derive(Clone, Default)]
@@ -9,10 +9,14 @@ pub struct TransferOptions {
     pub overwrite: bool,
     /// Override the buffered copy size when progress reporting is enabled.
     pub buffer_size: Option<usize>,
-    /// Optional progress callback. When omitted, the fastest available path is used.
-    pub progress: Option<SharedProgressReporter>,
+    /// Optional process event sink (Windows-copy-dialog style stream).
+    pub progress: Option<SharedProcessEventReporter>,
     /// Optional cancellation token for cooperative cancellation.
     pub cancellation_token: Option<StorageCancellationToken>,
+    /// When true, producers run content-based analysis while preparing transfer tasks.
+    ///
+    /// Default is false so copy throughput is not gated on signature matching.
+    pub analyze_content: bool,
 }
 
 /// Common options for byte-oriented read operations.
@@ -20,8 +24,8 @@ pub struct TransferOptions {
 pub struct ReadOptions {
     /// Override the buffered read size when progress reporting is enabled.
     pub buffer_size: Option<usize>,
-    /// Optional progress callback. When omitted, the fastest available path is used.
-    pub progress: Option<SharedProgressReporter>,
+    /// Optional process event sink for long reads.
+    pub progress: Option<SharedProcessEventReporter>,
     /// Optional cancellation token for cooperative cancellation.
     pub cancellation_token: Option<StorageCancellationToken>,
 }
@@ -35,8 +39,8 @@ pub struct WriteOptions {
     pub create_parent_directories: bool,
     /// Override the buffered copy size when progress reporting is enabled.
     pub buffer_size: Option<usize>,
-    /// Optional progress callback. When omitted, the fastest available path is used.
-    pub progress: Option<SharedProgressReporter>,
+    /// Optional process event sink for long writes.
+    pub progress: Option<SharedProcessEventReporter>,
     /// Optional cancellation token for cooperative cancellation.
     pub cancellation_token: Option<StorageCancellationToken>,
 }

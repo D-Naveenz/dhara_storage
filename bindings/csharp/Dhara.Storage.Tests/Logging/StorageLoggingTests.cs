@@ -20,7 +20,7 @@ public sealed class StorageLoggingTests
         try
         {
             var file = DharaStorage.File(path);
-            var progress = new SynchronousProgress<StorageProgress>(_ => { });
+            var progress = new SynchronousProgress<StorageProcessEvent>(_ => { });
             await file.ReadBytesAsync(progress, cancellationToken);
         }
         finally

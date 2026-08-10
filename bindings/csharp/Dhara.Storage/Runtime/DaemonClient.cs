@@ -71,8 +71,8 @@ internal static class DaemonClient
     /// returning the final destination path once the daemon reports completion.
     /// </summary>
     internal static async Task<string> ConsumeCopyProgressAsync(
-        Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<CopyFileProgress>> call,
-        IProgress<StorageProgress>? progress,
+        Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<StorageProcessEventMessage>> call,
+        IProgress<StorageProcessEvent>? progress,
         string? path,
         string? operation,
         CancellationToken cancellationToken)
@@ -84,18 +84,37 @@ internal static class DaemonClient
             using var streamingCall = call(Client, new CallOptions(cancellationToken: cancellationToken));
             string? destination = null;
             string? errorMessage = null;
+            string? cancelledOperation = null;
 
             while (await streamingCall.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
                 var update = streamingCall.ResponseStream.Current;
-                if (update.Completed)
+                var processEvent = DaemonModelFactory.ToProcessEvent(update);
+                if (processEvent is null)
                 {
-                    destination = update.HasDestination ? update.Destination : null;
-                    errorMessage = update.HasErrorMessage ? update.ErrorMessage : null;
-                    break;
+                    continue;
                 }
 
-                progress?.Report(DaemonModelFactory.ToProgress(update));
+                progress?.Report(processEvent);
+
+                switch (processEvent)
+                {
+                    case StorageProcessCompleted completed:
+                        destination = completed.Destination;
+                        goto Done;
+                    case StorageProcessFailed failed:
+                        errorMessage = failed.Message;
+                        goto Done;
+                    case StorageProcessCancelled cancelled:
+                        cancelledOperation = cancelled.Operation;
+                        goto Done;
+                }
+            }
+
+        Done:
+            if (cancelledOperation is not null)
+            {
+                throw new OperationCanceledException($"{label} was cancelled ({cancelledOperation}).");
             }
 
             if (errorMessage is not null)

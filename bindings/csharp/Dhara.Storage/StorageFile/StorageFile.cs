@@ -120,7 +120,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public async Task<byte[]> ReadBytesAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
+    public async Task<byte[]> ReadBytesAsync(IProgress<StorageProcessEvent>? progress = null, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var path = AbsolutePath;
@@ -146,7 +146,7 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public async Task<string> ReadTextAsync(IProgress<StorageProgress>? progress = null, CancellationToken cancellationToken = default)
+    public async Task<string> ReadTextAsync(IProgress<StorageProcessEvent>? progress = null, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var bytes = await ReadBytesAsync(progress, cancellationToken).ConfigureAwait(false);
@@ -154,11 +154,11 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public void Write(byte[] content, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true) =>
+    public void Write(byte[] content, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true) =>
         WriteAsync(content, progress, overwrite, createParentDirectories).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task WriteAsync(byte[] content, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
+    public async Task WriteAsync(byte[] content, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(content);
         using var stream = new MemoryStream(content, writable: false);
@@ -166,15 +166,15 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public void WriteText(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true) =>
+    public void WriteText(string text, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true) =>
         Write(System.Text.Encoding.UTF8.GetBytes(text), progress, overwrite, createParentDirectories);
 
     /// <inheritdoc />
-    public Task WriteTextAsync(string text, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default) =>
+    public Task WriteTextAsync(string text, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default) =>
         WriteAsync(System.Text.Encoding.UTF8.GetBytes(text), progress, overwrite, createParentDirectories, cancellationToken);
 
     /// <inheritdoc />
-    public async Task WriteAsync(Stream stream, IProgress<StorageProgress>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
+    public async Task WriteAsync(Stream stream, IProgress<StorageProcessEvent>? progress = null, bool overwrite = true, bool createParentDirectories = true, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         ArgumentNullException.ThrowIfNull(stream);
@@ -203,11 +203,11 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public IStorageFile Copy(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false) =>
+    public IStorageFile Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         CopyAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public async Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var source = AbsolutePath;
@@ -221,11 +221,11 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
     }
 
     /// <inheritdoc />
-    public void Move(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false) =>
+    public void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         MoveAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public async Task MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var source = AbsolutePath;
@@ -321,12 +321,14 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
         Stream source,
         Stream destination,
         ulong? totalBytes,
-        IProgress<StorageProgress>? progress,
+        IProgress<StorageProcessEvent>? progress,
         CancellationToken cancellationToken)
     {
         var buffer = new byte[StreamBufferSize];
         ulong transferred = 0;
-        var started = DateTime.UtcNow;
+
+        progress?.Report(new StorageProcessStarted(totalBytes ?? 0, 1));
+        progress?.Report(new StorageProcessCurrentItem(string.Empty, totalBytes ?? 0, 0));
 
         while (true)
         {
@@ -338,13 +340,9 @@ public sealed class StorageFile : StorageItemBase, IStorageFile
 
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
             transferred += (ulong)read;
-            progress?.Report(new StorageProgress(totalBytes, transferred, ComputeRate(started, transferred)));
+            progress?.Report(new StorageProcessBytes(transferred));
         }
-    }
 
-    private static double ComputeRate(DateTime startedUtc, ulong bytesTransferred)
-    {
-        var elapsedSeconds = (DateTime.UtcNow - startedUtc).TotalSeconds;
-        return elapsedSeconds > 0 ? bytesTransferred / elapsedSeconds : 0;
+        progress?.Report(new StorageProcessCompleted(null));
     }
 }

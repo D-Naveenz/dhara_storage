@@ -119,11 +119,11 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         CreateCoreAsync(createParents: true, cancellationToken);
 
     /// <inheritdoc />
-    public IStorageDirectory Copy(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false) =>
+    public IStorageDirectory Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         CopyAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public async Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var source = AbsolutePath;
@@ -137,11 +137,11 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     }
 
     /// <inheritdoc />
-    public void Move(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false) =>
+    public void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         MoveAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public async Task MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var source = AbsolutePath;

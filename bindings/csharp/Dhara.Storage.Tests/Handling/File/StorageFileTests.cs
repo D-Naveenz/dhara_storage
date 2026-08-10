@@ -57,14 +57,16 @@ public sealed class StorageFileTests
         var sourcePath = temp.PathFor("source.bin");
         await System.IO.File.WriteAllBytesAsync(sourcePath, Enumerable.Repeat((byte)42, 512 * 1024).ToArray(), cancellationToken);
         var file = DharaStorage.File(sourcePath);
-        var reported = new List<StorageProgress>();
-        var progress = new SynchronousProgress<StorageProgress>(reported.Add);
+        var reported = new List<StorageProcessEvent>();
+        var progress = new SynchronousProgress<StorageProcessEvent>(reported.Add);
 
         var copy = await file.CopyAsync(temp.PathFor("copy.bin"), progress, overwrite: false, cancellationToken);
 
         Assert.True(System.IO.File.Exists(copy.AbsolutePath));
         Assert.NotEmpty(reported);
-        Assert.True(reported[^1].BytesTransferred > 0);
+        Assert.Contains(reported, e => e is StorageProcessStarted);
+        Assert.Contains(reported, e => e is StorageProcessBytes { BytesTransferred: > 0 });
+        Assert.Contains(reported, e => e is StorageProcessCompleted);
     }
 
     [Fact]

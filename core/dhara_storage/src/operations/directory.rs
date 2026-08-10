@@ -1,9 +1,8 @@
 //! Sync directory create/copy/move/delete helpers.
 
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::thread;
 
 use tracing::{debug, info};
 
@@ -11,16 +10,17 @@ use crate::error::StorageError;
 use crate::metadata::scan_directory_summary;
 
 use dhara_storage_core::{
-    DirectoryDeleteOptions, SharedProgressReporter, StorageCancellationToken, StorageProgress,
-    TransferOptions,
+    DirectoryDeleteOptions, StorageCancellationToken, StorageProcessEvent, TransferOptions,
 };
 
 use super::common::{
-    choose_buffer_size, lock_write_targets, normalize_existing_directory, normalize_path,
-    open_destination_file, open_source_file, prepare_destination_directory,
-    prepare_destination_file, report_progress, same_volume, validate_single_path_name,
+    lock_write_targets, normalize_existing_directory, normalize_path,
+    prepare_destination_directory, same_volume, validate_single_path_name,
 };
-use super::file::copy_file_with_options;
+use super::transfer::{
+    FileIndexCounter, ProcessWriteState, TransferTask, build_transfer_task,
+    storage_process_from_options, write_transfer_task,
+};
 
 /// Create a single directory level.
 pub fn create_directory(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
@@ -66,6 +66,7 @@ pub fn copy_directory_with_options(
         overwrite = options.overwrite,
         progress = options.progress.is_some(),
         cancellable = options.cancellation_token.is_some(),
+        analyze_content = options.analyze_content,
         "copying directory"
     );
 
@@ -77,7 +78,10 @@ pub fn copy_directory_with_options(
     }
 
     lock_write_targets(&[&source, &destination], || {
-        super::common::ensure_not_cancelled(options.cancellation_token.as_ref(), "copy directory")?;
+        let process = storage_process_from_options(&options);
+        process
+            .ensure_not_cancelled("copy directory")
+            .map_err(StorageError::from)?;
         prepare_destination_directory(&destination, options.overwrite)?;
 
         if options.overwrite && destination.exists() {
@@ -89,25 +93,113 @@ pub fn copy_directory_with_options(
         fs::create_dir_all(&destination)
             .map_err(|err| StorageError::io("create destination directory", &destination, err))?;
 
-        let total_bytes = if options.progress.is_some() {
-            Some(scan_directory_summary(&source)?.total_size)
+        let summary = if process.has_reporter() {
+            Some(scan_directory_summary(&source)?)
         } else {
             None
         };
-        let mut progress = DirectoryProgress::new(
-            total_bytes,
-            options.progress.clone(),
-            options.cancellation_token.clone(),
-        );
-        copy_directory_recursive(&source, &destination, &options, &mut progress)?;
-        info!(
-            target: "dhara_storage::operations::directory",
-            source = %source.display(),
-            destination = %destination.display(),
-            total_bytes = total_bytes.unwrap_or_default(),
-            "completed directory copy"
-        );
-        Ok(destination.clone())
+
+        if let Some(summary) = summary.as_ref() {
+            process.emit(StorageProcessEvent::Started {
+                total_bytes: summary.total_size,
+                total_files: summary.file_count,
+            });
+        }
+
+        let producer_count = recommended_producer_count();
+        let (task_tx, task_rx) = process.task_queue::<TransferTask>();
+        let index = FileIndexCounter::new();
+        let analyze = options.analyze_content;
+        let cancel = process.cancellation_token().clone();
+
+        let result = thread::scope(|scope| -> Result<(), StorageError> {
+            let task_tx_for_walk = task_tx.clone();
+            drop(task_tx);
+            let source_for_walk = source.clone();
+            let destination_for_walk = destination.clone();
+            let walk_result = scope.spawn(move || -> Result<(), StorageError> {
+                let mut senders = Vec::with_capacity(producer_count);
+                let mut slots = Vec::with_capacity(producer_count);
+                for _ in 0..producer_count {
+                    let (raw_tx, raw_rx) = std::sync::mpsc::sync_channel::<(PathBuf, PathBuf)>(64);
+                    senders.push(raw_tx);
+                    let task_tx = task_tx_for_walk.clone();
+                    let cancel = cancel.clone();
+                    let index = index.clone();
+                    slots.push(scope.spawn(move || -> Result<(), StorageError> {
+                        while let Ok((source_path, dest_path)) = raw_rx.recv() {
+                            let file_index = index.next();
+                            let task =
+                                build_transfer_task(&source_path, &dest_path, file_index, analyze)?;
+                            task_tx
+                                .send(task, &cancel, "copy directory")
+                                .map_err(StorageError::from)?;
+                        }
+                        Ok(())
+                    }));
+                }
+                drop(task_tx_for_walk);
+
+                walk_enqueue_files(&source_for_walk, &destination_for_walk, &senders, &cancel)?;
+                drop(senders);
+
+                for slot in slots {
+                    slot.join().expect("producer worker panicked")?;
+                }
+                Ok(())
+            });
+
+            let mut state = ProcessWriteState::new(process.clone());
+            let consume_result = process.consume_tasks(
+                task_rx,
+                "copy directory",
+                |task| {
+                    write_transfer_task(
+                        &task,
+                        true,
+                        options.buffer_size,
+                        &mut state,
+                        "copy directory",
+                    )
+                },
+                StorageError::from,
+            );
+
+            let produce_result: Result<(), StorageError> =
+                walk_result.join().expect("directory walk panicked");
+            produce_result?;
+            consume_result?;
+            state.flush_bytes();
+            Ok(())
+        });
+
+        match result {
+            Ok(()) => {
+                process.emit(StorageProcessEvent::Completed {
+                    destination: Some(destination.clone()),
+                });
+                info!(
+                    target: "dhara_storage::operations::directory",
+                    source = %source.display(),
+                    destination = %destination.display(),
+                    total_bytes = summary.map(|s| s.total_size).unwrap_or_default(),
+                    "completed directory copy"
+                );
+                Ok(destination.clone())
+            }
+            Err(err) => {
+                if matches!(err, StorageError::Cancelled { .. }) {
+                    process.emit(StorageProcessEvent::Cancelled {
+                        operation: "copy directory",
+                    });
+                } else {
+                    process.emit(StorageProcessEvent::Failed {
+                        message: err.to_string(),
+                    });
+                }
+                Err(err)
+            }
+        }
     })
 }
 
@@ -156,10 +248,12 @@ pub fn move_directory_with_options(
                 .map_err(|err| StorageError::io("move directory to", &destination, err))?;
 
             if let Some(progress) = options.progress.as_ref() {
-                progress.report(StorageProgress {
-                    total_bytes: Some(1),
-                    bytes_transferred: 1,
-                    bytes_per_second: 0.0,
+                progress.report(StorageProcessEvent::Started {
+                    total_bytes: 1,
+                    total_files: 1,
+                });
+                progress.report(StorageProcessEvent::Completed {
+                    destination: Some(destination.clone()),
                 });
             }
 
@@ -232,22 +326,42 @@ pub fn delete_directory_with_options(
     })
 }
 
-fn copy_directory_recursive(
+fn recommended_producer_count() -> usize {
+    thread::available_parallelism()
+        .map(|n| n.get().clamp(2, 8))
+        .unwrap_or(4)
+}
+
+fn walk_enqueue_files(
     source: &Path,
     destination: &Path,
-    options: &TransferOptions,
-    progress: &mut DirectoryProgress,
+    senders: &[std::sync::mpsc::SyncSender<(PathBuf, PathBuf)>],
+    cancellation: &StorageCancellationToken,
 ) -> Result<(), StorageError> {
     debug!(
         target: "dhara_storage::operations::directory",
         source = %source.display(),
         destination = %destination.display(),
-        "walking directory for copy"
+        "walking directory for copy enqueue"
     );
+
+    let mut next_sender = 0usize;
+    walk_enqueue_recursive(source, destination, senders, &mut next_sender, cancellation)
+}
+
+fn walk_enqueue_recursive(
+    source: &Path,
+    destination: &Path,
+    senders: &[std::sync::mpsc::SyncSender<(PathBuf, PathBuf)>],
+    next_sender: &mut usize,
+    cancellation: &StorageCancellationToken,
+) -> Result<(), StorageError> {
+    super::common::ensure_not_cancelled(Some(cancellation), "copy directory")?;
+
     for entry in fs::read_dir(source)
         .map_err(|err| StorageError::io("read directory for copy", source, err))?
     {
-        super::common::ensure_not_cancelled(options.cancellation_token.as_ref(), "copy directory")?;
+        super::common::ensure_not_cancelled(Some(cancellation), "copy directory")?;
         let entry = entry
             .map_err(|err| StorageError::io("enumerate directory entries for copy", source, err))?;
         let file_type = entry
@@ -264,111 +378,26 @@ fn copy_directory_recursive(
                     err,
                 )
             })?;
-            copy_directory_recursive(&source_path, &destination_path, options, progress)?;
+            walk_enqueue_recursive(
+                &source_path,
+                &destination_path,
+                senders,
+                next_sender,
+                cancellation,
+            )?;
             continue;
         }
 
         if file_type.is_file() {
-            if progress.reporter.is_none() {
-                copy_file_with_options(
-                    &source_path,
-                    &destination_path,
-                    TransferOptions {
-                        overwrite: true,
-                        buffer_size: options.buffer_size,
-                        progress: None,
-                        cancellation_token: options.cancellation_token.clone(),
-                    },
-                )?;
-                continue;
-            }
-
-            copy_file_with_progress(
-                &source_path,
-                &destination_path,
-                options.overwrite,
-                options.buffer_size,
-                progress,
-            )?;
+            let sender = &senders[*next_sender % senders.len()];
+            *next_sender += 1;
+            sender
+                .send((source_path, destination_path))
+                .map_err(|_| StorageError::from(dhara_storage_core::ProcessError::Disconnected))?;
         }
     }
 
     Ok(())
-}
-
-fn copy_file_with_progress(
-    source: &Path,
-    destination: &Path,
-    overwrite: bool,
-    requested_buffer_size: Option<usize>,
-    progress: &mut DirectoryProgress,
-) -> Result<(), StorageError> {
-    prepare_destination_file(destination, overwrite, true)?;
-    let file_size = fs::metadata(source)
-        .map_err(|err| StorageError::io("read metadata for", source, err))?
-        .len();
-    let buffer_size = choose_buffer_size(Some(file_size), requested_buffer_size);
-    let mut source_file = open_source_file(source)?;
-    let mut destination_file = open_destination_file(destination, overwrite)?;
-    let mut buffer = vec![0u8; buffer_size];
-
-    loop {
-        super::common::ensure_not_cancelled(
-            progress.cancellation_token.as_ref(),
-            "copy directory",
-        )?;
-        let bytes_read = source_file
-            .read(&mut buffer)
-            .map_err(|err| StorageError::io("read file during directory copy", source, err))?;
-        if bytes_read == 0 {
-            break;
-        }
-
-        destination_file
-            .write_all(&buffer[..bytes_read])
-            .map_err(|err| {
-                StorageError::io("write file during directory copy", destination, err)
-            })?;
-        progress.advance(bytes_read as u64);
-    }
-
-    Ok(())
-}
-
-struct DirectoryProgress {
-    total_bytes: Option<u64>,
-    bytes_transferred: u64,
-    started_at: Instant,
-    reporter: Option<SharedProgressReporter>,
-    cancellation_token: Option<StorageCancellationToken>,
-}
-
-impl DirectoryProgress {
-    fn new(
-        total_bytes: Option<u64>,
-        reporter: Option<SharedProgressReporter>,
-        cancellation_token: Option<StorageCancellationToken>,
-    ) -> Self {
-        Self {
-            total_bytes,
-            bytes_transferred: 0,
-            started_at: Instant::now(),
-            reporter,
-            cancellation_token,
-        }
-    }
-
-    fn advance(&mut self, delta: u64) {
-        self.bytes_transferred += delta;
-        if let Some(reporter) = self.reporter.as_ref() {
-            report_progress(
-                reporter,
-                self.bytes_transferred,
-                self.total_bytes,
-                self.started_at,
-            );
-        }
-    }
 }
 
 fn delete_directory_recursive(
