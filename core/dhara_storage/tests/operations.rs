@@ -5,11 +5,30 @@ use std::time::Duration;
 
 use dhara_storage::{
     ContentKind, DirectoryDeleteOptions, DirectoryStorage, FileStorage, SearchScope,
-    StorageChangeType, StorageEntry, StorageError, StorageWatchConfig, TransferOptions,
-    WriteOptions, copy_directory_with_options, copy_file_with_options, move_file_with_options,
-    read_file_to_string, write_file,
+    StorageChangeType, StorageEntry, StorageError, StorageProcessEvent, StorageWatchConfig,
+    TransferOptions, WriteOptions, copy_directory_with_options, copy_file_with_options,
+    move_file_with_options, read_file_to_string, write_file,
 };
 use tempfile::tempdir;
+
+fn last_bytes_transferred(events: &[StorageProcessEvent]) -> Option<u64> {
+    events.iter().rev().find_map(|event| match event {
+        StorageProcessEvent::Bytes { bytes_transferred } => Some(*bytes_transferred),
+        StorageProcessEvent::Completed { .. } => None,
+        _ => None,
+    })
+}
+
+fn max_bytes_transferred(events: &[StorageProcessEvent]) -> u64 {
+    events
+        .iter()
+        .filter_map(|event| match event {
+            StorageProcessEvent::Bytes { bytes_transferred } => Some(*bytes_transferred),
+            _ => None,
+        })
+        .max()
+        .unwrap_or(0)
+}
 
 #[test]
 fn write_and_read_file_roundtrip() {
@@ -43,13 +62,25 @@ fn copy_file_with_progress_reports_completion() {
             buffer_size: Some(8 * 1024),
             progress: Some(reporter),
             cancellation_token: None,
+            analyze_content: false,
         },
     )
     .unwrap();
 
     let updates = updates.lock().unwrap();
     assert!(!updates.is_empty());
-    assert_eq!(updates.last().unwrap().bytes_transferred, 32 * 1024);
+    assert!(matches!(
+        updates.first().unwrap(),
+        StorageProcessEvent::Started {
+            total_bytes: 32768,
+            total_files: 1
+        }
+    ));
+    assert_eq!(max_bytes_transferred(&updates), 32 * 1024);
+    assert!(matches!(
+        updates.last().unwrap(),
+        StorageProcessEvent::Completed { .. }
+    ));
     assert_eq!(fs::read(&destination).unwrap().len(), 32 * 1024);
 }
 
@@ -102,6 +133,7 @@ fn copy_directory_with_progress_preserves_tree() {
             buffer_size: Some(4 * 1024),
             progress: Some(reporter),
             cancellation_token: None,
+            analyze_content: false,
         },
     )
     .unwrap();
@@ -114,7 +146,7 @@ fn copy_directory_with_progress_preserves_tree() {
         fs::read_to_string(destination.join("nested").join("child.txt")).unwrap(),
         "child"
     );
-    assert!(updates.lock().unwrap().last().unwrap().bytes_transferred >= 9);
+    assert!(max_bytes_transferred(&updates.lock().unwrap()) >= 9);
 }
 
 #[test]
@@ -209,18 +241,16 @@ fn write_from_reader_supports_progress_reporting() {
 
     assert_eq!(fs::read(&path).unwrap().len(), 10 * 1024);
     assert_eq!(
-        updates.lock().unwrap().last().unwrap().bytes_transferred,
-        10 * 1024
+        last_bytes_transferred(&updates.lock().unwrap()),
+        Some(10 * 1024)
     );
-    assert!(
-        updates
-            .lock()
-            .unwrap()
-            .last()
-            .unwrap()
-            .total_bytes
-            .is_none()
-    );
+    assert!(matches!(
+        updates.lock().unwrap().first().unwrap(),
+        StorageProcessEvent::Started {
+            total_bytes: 0,
+            total_files: 1
+        }
+    ));
 }
 
 #[test]

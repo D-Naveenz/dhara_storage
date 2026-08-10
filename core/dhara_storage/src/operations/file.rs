@@ -8,12 +8,17 @@ use tracing::{debug, info};
 
 use crate::error::StorageError;
 
-use dhara_storage_core::{ReadOptions, StorageProgress, TransferOptions, WriteOptions};
+use dhara_storage_core::{
+    ReadOptions, StorageProcessEvent, TransferOptions, WriteOptions,
+};
 
 use super::common::{
     choose_buffer_size, copy_reader_to_writer, lock_write_targets, normalize_existing_file,
     normalize_path, open_destination_file, open_source_file, prepare_destination_file, same_volume,
     validate_single_path_name,
+};
+use super::transfer::{
+    build_transfer_task, storage_process_from_options, write_transfer_task, ProcessWriteState,
 };
 
 /// Copy a file to an exact destination path.
@@ -39,6 +44,7 @@ pub fn copy_file_with_options(
         overwrite = options.overwrite,
         progress = options.progress.is_some(),
         cancellable = options.cancellation_token.is_some(),
+        analyze_content = options.analyze_content,
         "copying file"
     );
     if source == destination {
@@ -49,9 +55,16 @@ pub fn copy_file_with_options(
     }
 
     lock_write_targets(&[&source, &destination], || {
-        prepare_destination_file(&destination, options.overwrite, true)?;
+        let process = storage_process_from_options(&options);
+        process
+            .ensure_not_cancelled("copy file")
+            .map_err(StorageError::from)?;
 
-        if options.progress.is_none() && options.cancellation_token.is_none() {
+        if options.progress.is_none()
+            && options.cancellation_token.is_none()
+            && !options.analyze_content
+        {
+            prepare_destination_file(&destination, options.overwrite, true)?;
             if options.overwrite && destination.exists() {
                 fs::remove_file(&destination).map_err(|err| {
                     StorageError::io("remove file before overwrite", &destination, err)
@@ -68,30 +81,45 @@ pub fn copy_file_with_options(
             return Ok(destination.clone());
         }
 
-        let total_bytes = fs::metadata(&source)
-            .map_err(|err| StorageError::io("read metadata for", &source, err))?
-            .len();
-        let buffer_size = choose_buffer_size(Some(total_bytes), options.buffer_size);
-        let mut source_file = open_source_file(&source)?;
-        let mut destination_file = open_destination_file(&destination, options.overwrite)?;
-        copy_reader_to_writer(
-            &mut source_file,
-            &mut destination_file,
-            Some(total_bytes),
-            buffer_size,
-            options.progress.as_ref(),
-            options.cancellation_token.as_ref(),
-            "copy file",
-        )?;
+        let task = build_transfer_task(&source, &destination, 0, options.analyze_content)?;
+        process.emit(StorageProcessEvent::Started {
+            total_bytes: task.file_size,
+            total_files: 1,
+        });
 
-        info!(
-            target: "dhara_storage::operations::file",
-            destination = %destination.display(),
-            total_bytes,
-            buffer_size,
-            "copied file with buffered transfer"
-        );
-        Ok(destination.clone())
+        let mut state = ProcessWriteState::new(process.clone());
+        match write_transfer_task(
+            &task,
+            options.overwrite,
+            options.buffer_size,
+            &mut state,
+            "copy file",
+        ) {
+            Ok(()) => {
+                process.emit(StorageProcessEvent::Completed {
+                    destination: Some(destination.clone()),
+                });
+                info!(
+                    target: "dhara_storage::operations::file",
+                    destination = %destination.display(),
+                    total_bytes = task.file_size,
+                    "copied file with storage process"
+                );
+                Ok(destination.clone())
+            }
+            Err(err) => {
+                if matches!(err, StorageError::Cancelled { .. }) {
+                    process.emit(StorageProcessEvent::Cancelled {
+                        operation: "copy file",
+                    });
+                } else {
+                    process.emit(StorageProcessEvent::Failed {
+                        message: err.to_string(),
+                    });
+                }
+                Err(err)
+            }
+        }
     })
 }
 
@@ -140,10 +168,12 @@ pub fn move_file_with_options(
                 .map_err(|err| StorageError::io("move file to", &destination, err))?;
 
             if let Some(progress) = options.progress.as_ref() {
-                progress.report(StorageProgress {
-                    total_bytes: Some(1),
-                    bytes_transferred: 1,
-                    bytes_per_second: 0.0,
+                progress.report(StorageProcessEvent::Started {
+                    total_bytes: 1,
+                    total_files: 1,
+                });
+                progress.report(StorageProcessEvent::Completed {
+                    destination: Some(destination.clone()),
                 });
             }
 

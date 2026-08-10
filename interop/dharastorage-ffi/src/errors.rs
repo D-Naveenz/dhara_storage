@@ -211,6 +211,17 @@ impl From<StorageError> for FfiFailure {
                     value: None,
                 },
             },
+            StorageError::Process { operation, message } => Self {
+                status: DharaStatus::Error,
+                payload: ErrorPayload {
+                    code: "process",
+                    message,
+                    path: None,
+                    operation: Some(operation.to_owned()),
+                    kind: None,
+                    value: None,
+                },
+            },
             StorageError::Watch { operation, message } => Self {
                 status: DharaStatus::Error,
                 payload: ErrorPayload {

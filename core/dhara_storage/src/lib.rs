@@ -36,13 +36,13 @@ pub use metadata::{
     StorageType, apply_storage_attributes, format_size, is_temporary_path, scan_directory_summary,
 };
 pub use operations::{
-    DirectoryDeleteOptions, ProgressReporter, ReadOptions, SharedProgressReporter,
-    StorageCancellationToken, StorageProgress, TransferOptions, WriteOptions, copy_directory,
-    copy_directory_with_options, copy_file, copy_file_with_options, create_directory,
-    create_directory_all, delete_directory, delete_directory_with_options, delete_file,
-    move_directory, move_directory_with_options, move_file, move_file_with_options, read_file,
-    read_file_to_string, rename_directory, rename_file, write_file, write_file_from_reader,
-    write_file_string,
+    DirectoryDeleteOptions, ProcessEventReporter, ReadOptions, SharedProcessEventReporter,
+    StorageCancellationToken, StorageProcess, StorageProcessEvent, TransferOptions, WriteOptions,
+    copy_directory, copy_directory_with_options, copy_file, copy_file_with_options,
+    create_directory, create_directory_all, delete_directory, delete_directory_with_options,
+    delete_file, move_directory, move_directory_with_options, move_file, move_file_with_options,
+    read_file, read_file_to_string, rename_directory, rename_file, write_file,
+    write_file_from_reader, write_file_string,
 };
 #[cfg(feature = "async-tokio")]
 pub use operations::{

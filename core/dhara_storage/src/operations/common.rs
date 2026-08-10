@@ -1,20 +1,21 @@
 //! Path utilities, locks, and buffered copy helpers for storage operations.
 //!
-//! Progress, cancellation, and option bundles live in `dhara_storage_core` and
+//! Progress events, cancellation, and option bundles live in `dhara_storage_core` and
 //! are re-exported from [`crate::operations`].
 
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
-use std::time::Instant;
 
 use once_cell::sync::Lazy;
 
-use dhara_storage_core::{SharedProgressReporter, StorageCancellationToken, StorageProgress};
+use dhara_storage_core::{SharedProcessEventReporter, StorageCancellationToken};
 
 use crate::error::StorageError;
+
+use super::transfer::copy_reader_to_writer_events;
 
 const MIN_BUFFER_SIZE: usize = 8 * 1024;
 const MAX_BUFFER_SIZE: usize = 8 * 1024 * 1024;
@@ -217,7 +218,7 @@ pub(crate) fn copy_reader_to_writer<R, W>(
     writer: &mut W,
     total_bytes: Option<u64>,
     buffer_size: usize,
-    progress: Option<&SharedProgressReporter>,
+    progress: Option<&SharedProcessEventReporter>,
     cancellation_token: Option<&StorageCancellationToken>,
     operation: &'static str,
 ) -> Result<u64, StorageError>
@@ -225,54 +226,16 @@ where
     R: Read,
     W: Write,
 {
-    if progress.is_none() && cancellation_token.is_none() {
-        return io::copy(reader, writer).map_err(|err| StorageError::reader_io("copy from", err));
-    }
-
-    let mut buffer = vec![0u8; buffer_size];
-    let mut transferred = 0u64;
-    let start = Instant::now();
-
-    loop {
-        ensure_not_cancelled(cancellation_token, operation)?;
-        let read = reader
-            .read(&mut buffer)
-            .map_err(|err| StorageError::reader_io("read from", err))?;
-        if read == 0 {
-            break;
-        }
-
-        writer
-            .write_all(&buffer[..read])
-            .map_err(|err| StorageError::reader_io("write to", err))?;
-        transferred += read as u64;
-
-        if let Some(progress) = progress {
-            report_progress(progress, transferred, total_bytes, start);
-        }
-    }
-
-    Ok(transferred)
-}
-
-pub(crate) fn report_progress(
-    progress: &SharedProgressReporter,
-    bytes_transferred: u64,
-    total_bytes: Option<u64>,
-    started_at: Instant,
-) {
-    let elapsed = started_at.elapsed().as_secs_f64();
-    let bytes_per_second = if elapsed > 0.0 {
-        bytes_transferred as f64 / elapsed
-    } else {
-        0.0
-    };
-
-    progress.report(StorageProgress {
+    copy_reader_to_writer_events(
+        reader,
+        writer,
         total_bytes,
-        bytes_transferred,
-        bytes_per_second,
-    });
+        buffer_size,
+        progress,
+        cancellation_token,
+        None,
+        operation,
+    )
 }
 
 pub(crate) fn ensure_not_cancelled(

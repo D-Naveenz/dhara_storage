@@ -11,8 +11,8 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
     ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileStorage,
-    SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
-    StorageMetadata, StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions,
+    SearchScope, SharedProcessEventReporter, ShellIcon, StorageChangeType, StorageEntry,
+    StorageMetadata, StorageProcessEvent, StorageWatchConfig, TransferOptions, WriteOptions,
     analyze_path, copy_directory_with_options, copy_file_with_options, create_directory,
     create_directory_all, delete_directory_with_options, delete_file, move_directory_with_options,
     move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
@@ -844,22 +844,56 @@ fn analysis_report_to_proto(report: dhara_storage::AnalysisReport) -> AnalyzePat
 
 fn spawn_copy_progress<F>(work: F) -> ResponseStream<CopyFileProgress>
 where
-    F: FnOnce(SharedProgressReporter) -> Result<PathBuf, dhara_storage::StorageError>
+    F: FnOnce(SharedProcessEventReporter) -> Result<PathBuf, dhara_storage::StorageError>
         + Send
         + 'static,
 {
     let (tx, rx) = mpsc::channel::<Result<CopyFileProgress, Status>>(256);
     tokio::task::spawn_blocking(move || {
         let progress_tx = tx.clone();
-        let reporter: SharedProgressReporter = Arc::new(move |progress: StorageProgress| {
-            let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
-                bytes_transferred: progress.bytes_transferred,
-                total_bytes: progress.total_bytes,
-                bytes_per_second: progress.bytes_per_second,
-                completed: false,
-                destination: None,
-                error_message: None,
-            }));
+        let started = std::sync::Mutex::new(None::<std::time::Instant>);
+        let total = std::sync::Mutex::new(None::<u64>);
+        let reporter: SharedProcessEventReporter = Arc::new(move |event: StorageProcessEvent| {
+            match event {
+                StorageProcessEvent::Started { total_bytes, .. } => {
+                    *started.lock().unwrap_or_else(|p| p.into_inner()) =
+                        Some(std::time::Instant::now());
+                    *total.lock().unwrap_or_else(|p| p.into_inner()) = Some(total_bytes);
+                    let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
+                        bytes_transferred: 0,
+                        total_bytes: Some(total_bytes),
+                        bytes_per_second: 0.0,
+                        completed: false,
+                        destination: None,
+                        error_message: None,
+                    }));
+                }
+                StorageProcessEvent::Bytes { bytes_transferred } => {
+                    let elapsed = started
+                        .lock()
+                        .unwrap_or_else(|p| p.into_inner())
+                        .map(|t| t.elapsed().as_secs_f64())
+                        .unwrap_or(0.0);
+                    let bytes_per_second = if elapsed > 0.0 {
+                        bytes_transferred as f64 / elapsed
+                    } else {
+                        0.0
+                    };
+                    let total_bytes = *total.lock().unwrap_or_else(|p| p.into_inner());
+                    let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
+                        bytes_transferred,
+                        total_bytes,
+                        bytes_per_second,
+                        completed: false,
+                        destination: None,
+                        error_message: None,
+                    }));
+                }
+                StorageProcessEvent::CurrentItem { .. }
+                | StorageProcessEvent::Completed { .. }
+                | StorageProcessEvent::Failed { .. }
+                | StorageProcessEvent::Cancelled { .. } => {}
+            }
         });
 
         match work(reporter) {
