@@ -97,10 +97,7 @@ impl ProcessWriteState {
 }
 
 pub(crate) fn storage_process_from_options(options: &TransferOptions) -> StorageProcess {
-    StorageProcess::new(
-        options.cancellation_token.clone(),
-        options.progress.clone(),
-    )
+    StorageProcess::new(options.cancellation_token.clone(), options.progress.clone())
 }
 
 pub(crate) fn build_transfer_task(
@@ -215,7 +212,6 @@ pub(crate) fn copy_reader_to_writer_events<R, W>(
     buffer_size: usize,
     progress: Option<&SharedProcessEventReporter>,
     cancellation_token: Option<&StorageCancellationToken>,
-    path_for_item: Option<&Path>,
     operation: &'static str,
 ) -> Result<u64, StorageError>
 where
@@ -227,10 +223,7 @@ where
             .map_err(|err| StorageError::reader_io("copy from", err));
     }
 
-    let process = StorageProcess::new(
-        cancellation_token.cloned(),
-        progress.cloned(),
-    );
+    let process = StorageProcess::new(cancellation_token.cloned(), progress.cloned());
     if let Some(total) = total_bytes {
         process.emit(StorageProcessEvent::Started {
             total_bytes: total,
@@ -240,14 +233,6 @@ where
         process.emit(StorageProcessEvent::Started {
             total_bytes: 0,
             total_files: 1,
-        });
-    }
-
-    if let Some(path) = path_for_item {
-        process.emit(StorageProcessEvent::CurrentItem {
-            path: path.to_path_buf(),
-            file_size: total_bytes.unwrap_or(0),
-            file_index: 0,
         });
     }
 

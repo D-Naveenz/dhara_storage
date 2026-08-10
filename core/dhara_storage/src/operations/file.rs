@@ -8,9 +8,7 @@ use tracing::{debug, info};
 
 use crate::error::StorageError;
 
-use dhara_storage_core::{
-    ReadOptions, StorageProcessEvent, TransferOptions, WriteOptions,
-};
+use dhara_storage_core::{ReadOptions, StorageProcessEvent, TransferOptions, WriteOptions};
 
 use super::common::{
     choose_buffer_size, copy_reader_to_writer, lock_write_targets, normalize_existing_file,
@@ -18,7 +16,7 @@ use super::common::{
     validate_single_path_name,
 };
 use super::transfer::{
-    build_transfer_task, storage_process_from_options, write_transfer_task, ProcessWriteState,
+    ProcessWriteState, build_transfer_task, storage_process_from_options, write_transfer_task,
 };
 
 /// Copy a file to an exact destination path.

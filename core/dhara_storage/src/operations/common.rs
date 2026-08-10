@@ -233,7 +233,6 @@ where
         buffer_size,
         progress,
         cancellation_token,
-        None,
         operation,
     )
 }

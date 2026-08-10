@@ -18,8 +18,8 @@ use super::common::{
     prepare_destination_directory, same_volume, validate_single_path_name,
 };
 use super::transfer::{
-    build_transfer_task, storage_process_from_options, write_transfer_task, FileIndexCounter,
-    ProcessWriteState, TransferTask,
+    FileIndexCounter, ProcessWriteState, TransferTask, build_transfer_task,
+    storage_process_from_options, write_transfer_task,
 };
 
 /// Create a single directory level.
@@ -129,12 +129,8 @@ pub fn copy_directory_with_options(
                     slots.push(scope.spawn(move || -> Result<(), StorageError> {
                         while let Ok((source_path, dest_path)) = raw_rx.recv() {
                             let file_index = index.next();
-                            let task = build_transfer_task(
-                                &source_path,
-                                &dest_path,
-                                file_index,
-                                analyze,
-                            )?;
+                            let task =
+                                build_transfer_task(&source_path, &dest_path, file_index, analyze)?;
                             task_tx
                                 .send(task, &cancel, "copy directory")
                                 .map_err(StorageError::from)?;

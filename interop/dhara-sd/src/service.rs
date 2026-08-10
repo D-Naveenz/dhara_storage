@@ -859,10 +859,12 @@ where
                     total_bytes,
                     total_files,
                 } => StorageProcessEventMessage {
-                    kind: Some(storage_process_event_message::Kind::Started(ProcessStarted {
-                        total_bytes,
-                        total_files,
-                    })),
+                    kind: Some(storage_process_event_message::Kind::Started(
+                        ProcessStarted {
+                            total_bytes,
+                            total_files,
+                        },
+                    )),
                 },
                 StorageProcessEvent::CurrentItem {
                     path,

@@ -3,9 +3,7 @@
 use super::cancel::StorageCancellationToken;
 use super::error::ProcessError;
 use super::events::StorageProcessEvent;
-use super::queue::{
-    DEFAULT_TASK_QUEUE_CAPACITY, TaskQueue, TaskQueueReceiver, TaskQueueSender,
-};
+use super::queue::{DEFAULT_TASK_QUEUE_CAPACITY, TaskQueue, TaskQueueReceiver, TaskQueueSender};
 use super::reporter::SharedProcessEventReporter;
 
 /// Owns cancellation and the optional event sink for one storage operation.

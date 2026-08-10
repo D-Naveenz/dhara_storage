@@ -40,7 +40,8 @@ impl BytesEventThrottle {
             None => true,
             Some(last) => {
                 let elapsed = now.saturating_duration_since(last) >= self.min_interval;
-                let delta = bytes_transferred.saturating_sub(self.last_emitted_bytes) >= self.min_delta;
+                let delta =
+                    bytes_transferred.saturating_sub(self.last_emitted_bytes) >= self.min_delta;
                 elapsed || delta
             }
         }
