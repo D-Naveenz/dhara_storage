@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Added
+- Added engine/interop `open_for_read` / `open_for_write` with `FileShareMode`, optional `lock_timeout` (retry only on sharing/busy), and OS access errors mapped to `StorageError` (including `LockTimeout`).
 - Added public awaitable `StorageProcess` (Rust `Future` / .NET `Completion` + `GetAwaiter`) as the copy/move executioner; sync APIs wait inside and return void / `Result<()>`.
 - Added `ProcessSession` in `dhara_storage_core::process` for engine cancel/events/`TaskQueue` helpers (session is not the public awaitable handle).
 - Added bounded `TaskQueue` for long-running transfer sessions (single consumer over discrete path/size tasks).
@@ -15,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documented deferred transfer work (RAM read-ahead pool, verify, broader process-first ops) in `docs/transfer-pipeline-next.md`.
 
 ### Changed
+- Daemon `OpenReadHandle` / `OpenWriteHandle` open via the runtime APIs then dup/FD-pass; proto carries optional `ShareMode` and `lock_timeout_ms` (0 = fail immediately on busy).
+- Write-handle default share is **exclusive** (clean-cut vs prior share-all daemon write); read-handle default remains shared.
 - Copy/move are process-first: work starts immediately; `CopyAsync` / `start_*` return `StorageProcess`; sync `Copy` / `copy_*` wait and return void / `Result<()>`.
 - Runtime copy/move transfers enqueue prepared tasks on a `TaskQueue` and write with a single consumer to avoid destination write thrashing.
 - Replaced snapshot `StorageProgress` / `ProgressReporter` with `StorageProcessEvent` / `ProcessEventReporter` (clean-cut on managed APIs and daemon stream messages).

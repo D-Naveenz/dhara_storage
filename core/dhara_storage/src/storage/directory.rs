@@ -22,6 +22,9 @@ use super::{FileStorage, SearchScope, StorageEntry};
 
 /// Rust-native handle for directory operations and on-demand metadata.
 ///
+/// Paths are resolved at construction ([`Self::new`] / [`Self::from_existing`]).
+/// Engine file opens use that absolute path and do not re-resolve.
+///
 /// Paths and [`Self::size`] live on the handle. Recursive size walks block until
 /// complete when measured. Metadata is loaded via [`Self::metadata`].
 #[derive(Debug, Clone, PartialEq, Eq)]

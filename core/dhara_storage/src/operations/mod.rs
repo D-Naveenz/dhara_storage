@@ -9,6 +9,7 @@
 pub(crate) mod common;
 mod directory;
 pub(crate) mod file;
+pub mod open;
 pub(crate) mod transfer;
 
 #[cfg(feature = "async-tokio")]
@@ -16,9 +17,11 @@ mod tokio;
 
 pub use crate::process::{ProcessOutcome, StorageProcess};
 pub use dhara_storage_core::{
-    DirectoryDeleteOptions, ProcessEventReporter, ReadOptions, SharedProcessEventReporter,
-    StorageCancellationToken, StorageProcessEvent, TransferOptions, WriteOptions,
+    DirectoryDeleteOptions, FileShareMode, OpenReadOptions, OpenWriteOptions, ProcessEventReporter,
+    ReadOptions, SharedProcessEventReporter, StorageCancellationToken, StorageProcessEvent,
+    TransferOptions, WriteOptions,
 };
+pub use open::{open_for_read, open_for_write};
 pub use directory::{
     copy_directory, copy_directory_with_options, create_directory, create_directory_all,
     delete_directory, delete_directory_with_options, execute_copy_directory_with_options,

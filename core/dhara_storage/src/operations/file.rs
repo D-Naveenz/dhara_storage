@@ -8,12 +8,14 @@ use tracing::{debug, info};
 
 use crate::error::StorageError;
 
-use dhara_storage_core::{ReadOptions, StorageProcessEvent, TransferOptions, WriteOptions};
-
 use super::common::{
     choose_buffer_size, copy_reader_to_writer, lock_write_targets, normalize_existing_file,
-    normalize_path, open_destination_file, open_source_file, prepare_destination_file, same_volume,
-    validate_single_path_name,
+    normalize_path, prepare_destination_file, same_volume, validate_single_path_name,
+};
+use super::open::{open_for_read, open_for_write};
+use dhara_storage_core::{
+    OpenReadOptions, OpenWriteOptions, ReadOptions, StorageProcessEvent, TransferOptions,
+    WriteOptions,
 };
 use super::transfer::{
     ProcessWriteState, bind_process_cancellation, build_transfer_task,
@@ -379,7 +381,14 @@ pub fn write_file_from_reader(
         )?;
 
         if options.progress.is_none() && options.cancellation_token.is_none() {
-            let mut file = open_destination_file(&destination, options.overwrite)?;
+            let mut file = open_for_write(
+                &destination,
+                OpenWriteOptions {
+                    overwrite: options.overwrite,
+                    create_parent_directories: false,
+                    ..OpenWriteOptions::default()
+                },
+            )?;
             std::io::copy(reader, &mut file)
                 .map_err(|err| StorageError::reader_io("write file from reader", err))?;
             info!(
@@ -391,7 +400,14 @@ pub fn write_file_from_reader(
         }
 
         let buffer_size = choose_buffer_size(None, options.buffer_size);
-        let mut destination_file = open_destination_file(&destination, options.overwrite)?;
+        let mut destination_file = open_for_write(
+            &destination,
+            OpenWriteOptions {
+                overwrite: options.overwrite,
+                create_parent_directories: false,
+                ..OpenWriteOptions::default()
+            },
+        )?;
         copy_reader_to_writer(
             reader,
             &mut destination_file,
@@ -433,7 +449,7 @@ pub(crate) fn read_file_with_options(
         .map_err(|err| StorageError::io("read metadata for", &path, err))?
         .len();
     let buffer_size = choose_buffer_size(Some(total_bytes), options.buffer_size);
-    let mut source = open_source_file(&path)?;
+    let mut source = open_for_read(&path, OpenReadOptions::default())?;
     let mut buffer = Vec::with_capacity(total_bytes as usize);
     copy_reader_to_writer(
         &mut source,

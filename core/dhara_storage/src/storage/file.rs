@@ -23,6 +23,10 @@ use crate::process::StorageProcess;
 
 /// Rust-native handle for file operations and on-demand metadata.
 ///
+/// Paths are resolved at construction ([`Self::new`] / [`Self::from_existing`]).
+/// Engine opens ([`crate::open_for_read`] / [`crate::open_for_write`]) assume that
+/// absolute path and do not re-resolve.
+///
 /// Paths and [`Self::size`] live on the handle. [`Self::analyze`] runs content
 /// analysis and caches the report here; [`Self::metadata`] applies that cache when
 /// present. Metadata snapshots themselves are not otherwise cached on the handle.

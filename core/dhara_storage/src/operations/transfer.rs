@@ -8,15 +8,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use dhara_storage_core::{
-    BytesEventThrottle, ProcessSession, SharedProcessEventReporter, StorageCancellationToken,
-    StorageProcessEvent, TransferOptions,
+    BytesEventThrottle, OpenReadOptions, OpenWriteOptions, ProcessSession,
+    SharedProcessEventReporter, StorageCancellationToken, StorageProcessEvent, TransferOptions,
 };
 
 use crate::error::StorageError;
 
-use super::common::{
-    choose_buffer_size, open_destination_file, open_source_file, prepare_destination_file,
-};
+use super::common::{choose_buffer_size, prepare_destination_file};
+use super::open::{open_for_read, open_for_write};
 
 /// One file transfer unit queued for the single writer consumer.
 #[derive(Debug, Clone)]
@@ -117,8 +116,15 @@ pub(crate) fn write_transfer_task(
 
     prepare_destination_file(&task.dest_path, overwrite, true)?;
     let chosen = choose_buffer_size(Some(task.file_size), buffer_size);
-    let mut source_file = open_source_file(&task.source_path)?;
-    let mut destination_file = open_destination_file(&task.dest_path, overwrite)?;
+    let mut source_file = open_for_read(&task.source_path, OpenReadOptions::default())?;
+    let mut destination_file = open_for_write(
+        &task.dest_path,
+        OpenWriteOptions {
+            overwrite,
+            create_parent_directories: false,
+            ..OpenWriteOptions::default()
+        },
+    )?;
 
     // Pre-allocate destination length to reduce fragmentation on large files.
     destination_file

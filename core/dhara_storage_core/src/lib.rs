@@ -32,8 +32,9 @@ pub use process::{
     TaskQueueReceiver, TaskQueueSender,
 };
 pub use types::{
-    DirectoryDeleteOptions, ReadOptions, SizeUnit, StorageAttributes, StoragePermissions,
-    StorageSize, TransferOptions, WriteOptions, format_size,
+    DirectoryDeleteOptions, FileShareMode, OpenReadOptions, OpenWriteOptions, ReadOptions,
+    SizeUnit, StorageAttributes, StoragePermissions, StorageSize, TransferOptions, WriteOptions,
+    format_size,
 };
 
 /// Generated FlatBuffers accessors (stable path for tooling).

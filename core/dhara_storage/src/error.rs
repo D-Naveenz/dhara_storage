@@ -117,6 +117,15 @@ pub enum StorageError {
         /// The watcher or debouncer failure details.
         message: String,
     },
+
+    /// Timed out waiting for a sharing/busy lock while opening a file.
+    #[error("timed out waiting to open '{path}' for {operation}")]
+    LockTimeout {
+        /// The path that remained busy until the deadline.
+        path: PathBuf,
+        /// Read or write open that was waiting.
+        operation: &'static str,
+    },
 }
 
 impl StorageError {
@@ -166,6 +175,13 @@ impl StorageError {
         Self::Watch {
             operation,
             message: message.into(),
+        }
+    }
+
+    pub(crate) fn lock_timeout(path: impl Into<PathBuf>, operation: &'static str) -> Self {
+        Self::LockTimeout {
+            path: path.into(),
+            operation,
         }
     }
 

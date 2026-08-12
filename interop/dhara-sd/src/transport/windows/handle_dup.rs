@@ -1,31 +1,41 @@
 //! Win32 DuplicateHandle helpers for the daemon data plane.
+//!
+//! Opens use [`dhara_storage::open_for_read`] / [`dhara_storage::open_for_write`], then
+//! duplicate the resulting handle into the host process.
 
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
+use std::fs::File;
+use std::os::windows::io::AsRawHandle;
 use std::path::Path;
+use std::time::Duration;
 
-use windows::Win32::Foundation::{
-    CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, GENERIC_READ, GENERIC_WRITE, HANDLE,
-    INVALID_HANDLE_VALUE,
+use dhara_storage::{
+    FileShareMode, OpenReadOptions, OpenWriteOptions, open_for_read, open_for_write,
 };
-use windows::Win32::Storage::FileSystem::{
-    CREATE_ALWAYS, CREATE_NEW, CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_DELETE,
-    FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_ALWAYS, OPEN_EXISTING,
+use windows::Win32::Foundation::{
+    CloseHandle, DUPLICATE_SAME_ACCESS, DuplicateHandle, HANDLE, INVALID_HANDLE_VALUE,
 };
 use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcess, PROCESS_DUP_HANDLE};
 
 /// Open `path` for reading and duplicate the handle into `parent_pid`.
-pub fn open_read_and_duplicate(path: &Path, parent_pid: u32) -> Result<(u64, u64), String> {
-    let source = open_file(
+pub fn open_read_and_duplicate(
+    path: &Path,
+    parent_pid: u32,
+    share: FileShareMode,
+    lock_timeout: Option<Duration>,
+) -> Result<(u64, u64), String> {
+    let file = open_for_read(
         path,
-        GENERIC_READ.0,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        OPEN_EXISTING,
-    )?;
-    let size = std::fs::metadata(path)
+        OpenReadOptions {
+            share,
+            lock_timeout,
+        },
+    )
+    .map_err(|err| err.to_string())?;
+    let size = file
+        .metadata()
         .map(|meta| meta.len())
         .map_err(|err| format!("metadata failed: {err}"))?;
-    let handle = duplicate_into_parent(source, parent_pid)?;
+    let handle = duplicate_file_into_parent(file, parent_pid)?;
     Ok((handle, size))
 }
 
@@ -35,60 +45,24 @@ pub fn open_write_and_duplicate(
     parent_pid: u32,
     overwrite: bool,
     create_parents: bool,
+    share: FileShareMode,
+    lock_timeout: Option<Duration>,
 ) -> Result<u64, String> {
-    if create_parents && let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|err| format!("create_dir_all failed: {err}"))?;
-    }
-
-    let disposition = if overwrite {
-        CREATE_ALWAYS
-    } else if path.exists() {
-        OPEN_ALWAYS
-    } else {
-        CREATE_NEW
-    };
-
-    let source = open_file(
+    let file = open_for_write(
         path,
-        GENERIC_WRITE.0,
-        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-        disposition,
-    )?;
-    duplicate_into_parent(source, parent_pid)
-}
-
-fn open_file(
-    path: &Path,
-    access: u32,
-    share: windows::Win32::Storage::FileSystem::FILE_SHARE_MODE,
-    disposition: windows::Win32::Storage::FileSystem::FILE_CREATION_DISPOSITION,
-) -> Result<HANDLE, String> {
-    let wide: Vec<u16> = OsStr::new(path)
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-
-    let source = unsafe {
-        CreateFileW(
-            windows::core::PCWSTR(wide.as_ptr()),
-            access,
+        OpenWriteOptions {
             share,
-            None,
-            disposition,
-            FILE_ATTRIBUTE_NORMAL,
-            None,
-        )
-    }
-    .map_err(|err| format!("CreateFileW failed: {err}"))?;
-
-    if source.is_invalid() {
-        return Err("CreateFileW returned INVALID_HANDLE_VALUE".into());
-    }
-
-    Ok(source)
+            overwrite,
+            create_parent_directories: create_parents,
+            lock_timeout,
+        },
+    )
+    .map_err(|err| err.to_string())?;
+    duplicate_file_into_parent(file, parent_pid)
 }
 
-fn duplicate_into_parent(source: HANDLE, parent_pid: u32) -> Result<u64, String> {
+fn duplicate_file_into_parent(file: File, parent_pid: u32) -> Result<u64, String> {
+    let source = HANDLE(file.as_raw_handle() as *mut std::ffi::c_void);
     let parent = unsafe { OpenProcess(PROCESS_DUP_HANDLE, false, parent_pid) }
         .map_err(|err| format!("OpenProcess({parent_pid}) failed: {err}"))?;
 
@@ -105,7 +79,7 @@ fn duplicate_into_parent(source: HANDLE, parent_pid: u32) -> Result<u64, String>
         )
     };
 
-    let _ = unsafe { CloseHandle(source) };
+    drop(file);
     let _ = unsafe { CloseHandle(parent) };
 
     duplicated.map_err(|err| format!("DuplicateHandle failed: {err}"))?;
