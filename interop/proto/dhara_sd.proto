@@ -173,7 +173,18 @@ message DetectedMatch {
   uint64 score = 4;
 }
 
-message OpenReadHandleRequest { string path = 1; }
+enum ShareMode {
+  SHARE_MODE_UNSPECIFIED = 0;
+  SHARED = 1;
+  EXCLUSIVE = 2;
+}
+
+message OpenReadHandleRequest {
+  string path = 1;
+  ShareMode share_mode = 2;
+  // Milliseconds to wait on sharing/busy; 0 means fail immediately.
+  uint32 lock_timeout_ms = 3;
+}
 message OpenReadHandleResponse {
   uint64 handle = 1;
   uint64 size = 2;
@@ -183,6 +194,9 @@ message OpenWriteHandleRequest {
   string path = 1;
   bool overwrite = 2;
   bool create_parent_directories = 3;
+  ShareMode share_mode = 4;
+  // Milliseconds to wait on sharing/busy; 0 means fail immediately.
+  uint32 lock_timeout_ms = 5;
 }
 message OpenWriteHandleResponse {
   uint64 handle = 1;
@@ -218,13 +232,11 @@ message CopyFileRequest {
   string source = 1;
   string destination = 2;
   bool overwrite = 3;
-  bool analyze_content = 4;
 }
 message CopyDirectoryRequest {
   string source = 1;
   string destination = 2;
   bool overwrite = 3;
-  bool analyze_content = 4;
 }
 
 message ProcessStarted {

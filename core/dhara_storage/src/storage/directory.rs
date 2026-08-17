@@ -11,15 +11,19 @@ use crate::metadata::{
 };
 use crate::operations::common::{ResolvedPaths, resolve_storage_paths};
 use crate::operations::{
-    DirectoryDeleteOptions, TransferOptions, copy_directory, copy_directory_with_options,
-    create_directory, create_directory_all, delete_directory, delete_directory_with_options,
-    move_directory, move_directory_with_options, rename_directory,
+    DirectoryDeleteOptions, TransferOptions, create_directory, create_directory_all,
+    delete_directory, delete_directory_with_options, rename_directory, start_copy_directory,
+    start_copy_directory_with_options, start_move_directory, start_move_directory_with_options,
 };
+use crate::process::StorageProcess;
 use crate::watch::{DirectoryWatchHandle, StorageWatchConfig};
 
 use super::{FileStorage, SearchScope, StorageEntry};
 
 /// Rust-native handle for directory operations and on-demand metadata.
+///
+/// Paths are resolved at construction ([`Self::new`] / [`Self::from_existing`]).
+/// Engine file opens use that absolute path and do not re-resolve.
 ///
 /// Paths and [`Self::size`] live on the handle. Recursive size walks block until
 /// complete when measured. Metadata is loaded via [`Self::metadata`].
@@ -41,17 +45,6 @@ impl DirectoryStorage {
         Self {
             absolute_path: absolute,
             relative_path: None,
-        }
-    }
-
-    fn from_destination(destination: &Path, absolute: PathBuf) -> Self {
-        Self {
-            absolute_path: absolute,
-            relative_path: if destination.is_absolute() {
-                None
-            } else {
-                Some(destination.to_path_buf())
-            },
         }
     }
 
@@ -232,39 +225,67 @@ impl DirectoryStorage {
     }
 
     /// Copy the directory tree to an exact destination path.
-    pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = copy_directory(&self.absolute_path, destination)?;
-        Ok(Self::from_destination(destination, path))
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
+    pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<(), StorageError> {
+        start_copy_directory(&self.absolute_path, destination).wait_unit()
     }
 
     /// Copy the directory tree with overwrite and progress control.
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
     pub fn copy_to_with_options(
         &self,
         destination: impl AsRef<Path>,
         options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = copy_directory_with_options(&self.absolute_path, destination, options)?;
-        Ok(Self::from_destination(destination, path))
+    ) -> Result<(), StorageError> {
+        start_copy_directory_with_options(&self.absolute_path, destination, options).wait_unit()
+    }
+
+    /// Start a directory copy and return the running [`StorageProcess`] immediately.
+    pub fn start_copy_to(&self, destination: impl AsRef<Path>) -> StorageProcess {
+        start_copy_directory(&self.absolute_path, destination)
+    }
+
+    /// Start a directory copy with options and return the running [`StorageProcess`] immediately.
+    pub fn start_copy_to_with_options(
+        &self,
+        destination: impl AsRef<Path>,
+        options: TransferOptions,
+    ) -> StorageProcess {
+        start_copy_directory_with_options(&self.absolute_path, destination, options)
     }
 
     /// Move the directory tree to an exact destination path.
-    pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = move_directory(&self.absolute_path, destination)?;
-        Ok(Self::from_destination(destination, path))
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
+    pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<(), StorageError> {
+        start_move_directory(&self.absolute_path, destination).wait_unit()
     }
 
     /// Move the directory tree with overwrite and progress control.
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
     pub fn move_to_with_options(
         &self,
         destination: impl AsRef<Path>,
         options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path = move_directory_with_options(&self.absolute_path, destination, options)?;
-        Ok(Self::from_destination(destination, path))
+    ) -> Result<(), StorageError> {
+        start_move_directory_with_options(&self.absolute_path, destination, options).wait_unit()
+    }
+
+    /// Start a directory move and return the running [`StorageProcess`] immediately.
+    pub fn start_move_to(&self, destination: impl AsRef<Path>) -> StorageProcess {
+        start_move_directory(&self.absolute_path, destination)
+    }
+
+    /// Start a directory move with options and return the running [`StorageProcess`] immediately.
+    pub fn start_move_to_with_options(
+        &self,
+        destination: impl AsRef<Path>,
+        options: TransferOptions,
+    ) -> StorageProcess {
+        start_move_directory_with_options(&self.absolute_path, destination, options)
     }
 
     /// Rename the directory inside its current parent directory.
@@ -390,32 +411,6 @@ impl DirectoryStorage {
             absolute_path: path,
             relative_path: self.relative_path.clone(),
         })
-    }
-
-    /// Async variant of [`Self::copy_to_with_options`].
-    pub async fn copy_to_async(
-        &self,
-        destination: impl AsRef<Path>,
-        options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path =
-            crate::operations::copy_directory_async(&self.absolute_path, destination, options)
-                .await?;
-        Ok(Self::from_destination(destination, path))
-    }
-
-    /// Async variant of [`Self::move_to_with_options`].
-    pub async fn move_to_async(
-        &self,
-        destination: impl AsRef<Path>,
-        options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let destination = destination.as_ref();
-        let path =
-            crate::operations::move_directory_async(&self.absolute_path, destination, options)
-                .await?;
-        Ok(Self::from_destination(destination, path))
     }
 
     /// Async variant of [`Self::rename`].

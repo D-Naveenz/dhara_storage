@@ -1,4 +1,4 @@
-//! Transfer tasks and StorageProcess-backed copy helpers.
+//! Transfer tasks and ProcessSession-backed copy helpers.
 
 use std::fs;
 use std::io::{Read, Write};
@@ -8,32 +8,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use dhara_storage_core::{
-    BytesEventThrottle, SharedProcessEventReporter, StorageCancellationToken, StorageProcess,
-    StorageProcessEvent, TransferOptions,
+    BytesEventThrottle, OpenReadOptions, OpenWriteOptions, ProcessSession,
+    SharedProcessEventReporter, StorageCancellationToken, StorageProcessEvent, TransferOptions,
 };
 
-use crate::analysis::{AnalysisReport, ContentKind, analyze_path};
 use crate::error::StorageError;
 
-use super::common::{
-    choose_buffer_size, open_destination_file, open_source_file, prepare_destination_file,
-};
-
-/// Slim content profile attached when `analyze_content` is enabled.
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ContentProfile {
-    pub top_mime_type: Option<String>,
-    pub content_kind: ContentKind,
-}
-
-impl From<&AnalysisReport> for ContentProfile {
-    fn from(report: &AnalysisReport) -> Self {
-        Self {
-            top_mime_type: report.top_mime_type.clone(),
-            content_kind: report.content_kind,
-        }
-    }
-}
+use super::common::{choose_buffer_size, prepare_destination_file};
+use super::open::{open_for_read, open_for_write};
 
 /// One file transfer unit queued for the single writer consumer.
 #[derive(Debug, Clone)]
@@ -42,20 +24,19 @@ pub(crate) struct TransferTask {
     pub dest_path: PathBuf,
     pub file_size: u64,
     pub file_index: u64,
-    pub content: Option<ContentProfile>,
 }
 
 /// Mutable byte-progress state shared by a process writer.
 pub(crate) struct ProcessWriteState {
-    pub process: StorageProcess,
+    pub session: ProcessSession,
     pub throttle: BytesEventThrottle,
     pub bytes_transferred: u64,
 }
 
 impl ProcessWriteState {
-    pub fn new(process: StorageProcess) -> Self {
+    pub fn new(session: ProcessSession) -> Self {
         Self {
-            process,
+            session,
             throttle: BytesEventThrottle::default(),
             bytes_transferred: 0,
         }
@@ -64,7 +45,7 @@ impl ProcessWriteState {
     pub fn emit_bytes_if_due(&mut self) {
         let now = Instant::now();
         if self.throttle.should_emit(self.bytes_transferred, now) {
-            self.process.emit(StorageProcessEvent::Bytes {
+            self.session.emit(StorageProcessEvent::Bytes {
                 bytes_transferred: self.bytes_transferred,
             });
             self.throttle.mark_emitted(self.bytes_transferred, now);
@@ -72,7 +53,7 @@ impl ProcessWriteState {
     }
 
     pub fn flush_bytes(&mut self) {
-        self.process.emit(StorageProcessEvent::Bytes {
+        self.session.emit(StorageProcessEvent::Bytes {
             bytes_transferred: self.bytes_transferred,
         });
         self.throttle
@@ -82,7 +63,7 @@ impl ProcessWriteState {
     pub fn begin_item(&mut self, task: &TransferTask) {
         self.flush_bytes_if_any();
         self.throttle.force_next();
-        self.process.emit(StorageProcessEvent::CurrentItem {
+        self.session.emit(StorageProcessEvent::CurrentItem {
             path: task.dest_path.clone(),
             file_size: task.file_size,
             file_index: task.file_index,
@@ -96,31 +77,24 @@ impl ProcessWriteState {
     }
 }
 
-pub(crate) fn storage_process_from_options(options: &TransferOptions) -> StorageProcess {
-    StorageProcess::new(options.cancellation_token.clone(), options.progress.clone())
+pub(crate) fn process_session_from_options(options: &TransferOptions) -> ProcessSession {
+    ProcessSession::new(options.cancellation_token.clone(), options.progress.clone())
 }
 
 pub(crate) fn build_transfer_task(
     source: &Path,
     destination: &Path,
     file_index: u64,
-    analyze_content: bool,
 ) -> Result<TransferTask, StorageError> {
     let file_size = fs::metadata(source)
         .map_err(|err| StorageError::io("read metadata for", source, err))?
         .len();
-    let content = if analyze_content {
-        Some(ContentProfile::from(&analyze_path(source)?))
-    } else {
-        None
-    };
 
     Ok(TransferTask {
         source_path: source.to_path_buf(),
         dest_path: destination.to_path_buf(),
         file_size,
         file_index,
-        content,
     })
 }
 
@@ -132,24 +106,22 @@ pub(crate) fn write_transfer_task(
     operation: &'static str,
 ) -> Result<(), StorageError> {
     state
-        .process
+        .session
         .ensure_not_cancelled(operation)
         .map_err(StorageError::from)?;
     state.begin_item(task);
-    if let Some(content) = task.content.as_ref() {
-        tracing::debug!(
-            target: "dhara_storage::operations::transfer",
-            path = %task.source_path.display(),
-            mime = ?content.top_mime_type,
-            content_kind = ?content.content_kind,
-            "transfer task includes content profile"
-        );
-    }
 
     prepare_destination_file(&task.dest_path, overwrite, true)?;
     let chosen = choose_buffer_size(Some(task.file_size), buffer_size);
-    let mut source_file = open_source_file(&task.source_path)?;
-    let mut destination_file = open_destination_file(&task.dest_path, overwrite)?;
+    let mut source_file = open_for_read(&task.source_path, OpenReadOptions::default())?;
+    let mut destination_file = open_for_write(
+        &task.dest_path,
+        OpenWriteOptions {
+            overwrite,
+            create_parent_directories: false,
+            ..OpenWriteOptions::default()
+        },
+    )?;
 
     // Pre-allocate destination length to reduce fragmentation on large files.
     destination_file
@@ -183,7 +155,7 @@ where
 
     loop {
         state
-            .process
+            .session
             .ensure_not_cancelled(operation)
             .map_err(StorageError::from)?;
         let read = reader
@@ -223,7 +195,7 @@ where
             .map_err(|err| StorageError::reader_io("copy from", err));
     }
 
-    let process = StorageProcess::new(cancellation_token.cloned(), progress.cloned());
+    let process = ProcessSession::new(cancellation_token.cloned(), progress.cloned());
     if let Some(total) = total_bytes {
         process.emit(StorageProcessEvent::Started {
             total_bytes: total,
@@ -241,6 +213,17 @@ where
         copy_reader_to_process_writer(reader, writer, buffer_size, &mut state, operation)?;
     state.flush_bytes();
     Ok(transferred)
+}
+
+/// Ensure transfer options carry a cancellation token shared with a spawned process.
+pub(crate) fn bind_process_cancellation(options: &mut TransferOptions) -> StorageCancellationToken {
+    if let Some(token) = options.cancellation_token.clone() {
+        token
+    } else {
+        let token = StorageCancellationToken::default();
+        options.cancellation_token = Some(token.clone());
+        token
+    }
 }
 
 /// Shared atomic file index allocator for producer pools.

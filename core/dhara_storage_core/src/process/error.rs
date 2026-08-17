@@ -2,7 +2,7 @@
 
 use thiserror::Error;
 
-/// Errors produced by [`super::TaskQueue`] and [`super::StorageProcess`] helpers.
+/// Errors produced by [`super::TaskQueue`] and [`super::ProcessSession`] helpers.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum ProcessError {
     /// Cooperative cancellation was observed while waiting on the queue or process.

@@ -46,10 +46,11 @@ public sealed class StorageDirectoryTests
         var progressValues = new List<StorageProcessEvent>();
         var progress = new SynchronousProgress<StorageProcessEvent>(progressValues.Add);
 
-        var copy = await directory.CopyAsync(temp.PathFor("copy"), progress, overwrite: false, cancellationToken);
+        var destination = await directory.CopyAsync(temp.PathFor("copy"), progress, overwrite: false, cancellationToken);
 
-        Assert.True(System.IO.Directory.Exists(copy.AbsolutePath));
-        Assert.True(System.IO.File.Exists(Path.Combine(copy.AbsolutePath, "nested", "file.txt")));
+        Assert.NotNull(destination);
+        Assert.True(System.IO.Directory.Exists(destination));
+        Assert.True(System.IO.File.Exists(Path.Combine(destination, "nested", "file.txt")));
         Assert.NotEmpty(progressValues);
     }
 }

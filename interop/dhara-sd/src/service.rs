@@ -10,13 +10,17 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
-    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileStorage,
-    SearchScope, SharedProcessEventReporter, ShellIcon, StorageChangeType, StorageEntry,
-    StorageMetadata, StorageProcessEvent, StorageWatchConfig, TransferOptions, WriteOptions,
-    analyze_path, copy_directory_with_options, copy_file_with_options, create_directory,
-    create_directory_all, delete_directory_with_options, delete_file, move_directory_with_options,
-    move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
+    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileShareMode,
+    FileStorage, SearchScope, SharedProcessEventReporter, ShellIcon, StorageChangeType,
+    StorageEntry, StorageMetadata, StorageProcessEvent, StorageWatchConfig, TransferOptions,
+    WriteOptions, analyze_path, create_directory, create_directory_all,
+    delete_directory_with_options, delete_file, execute_copy_directory_with_options,
+    execute_copy_file_with_options, execute_move_directory_with_options,
+    execute_move_file_with_options, read_file, rename_directory, rename_file,
+    write_file_from_reader,
 };
+#[cfg(unix)]
+use dhara_storage::{OpenReadOptions, OpenWriteOptions, open_for_read, open_for_write};
 use futures::{Stream, StreamExt};
 use tokio::sync::broadcast;
 use tokio::sync::mpsc;
@@ -422,13 +426,17 @@ impl DharaSd for DharaSdService {
             Status::failed_precondition("handshake required before OpenReadHandle")
         })?;
 
-        let path = PathBuf::from(request.into_inner().path);
+        let req = request.into_inner();
+        let path = PathBuf::from(req.path);
+        let share = map_open_share_mode(req.share_mode, FileShareMode::Shared);
+        let lock_timeout = map_open_lock_timeout_ms(req.lock_timeout_ms);
 
         #[cfg(windows)]
         {
             let parent_pid = self.state.parent_pid().expect("checked above");
             let (handle, size) =
-                handle_dup::open_read_and_duplicate(&path, parent_pid).map_err(Status::internal)?;
+                handle_dup::open_read_and_duplicate(&path, parent_pid, share, lock_timeout)
+                    .map_err(Status::internal)?;
             return Ok(Response::new(OpenReadHandleResponse { handle, size }));
         }
 
@@ -436,9 +444,18 @@ impl DharaSd for DharaSdService {
         {
             let state = self.state.clone();
             let size = tokio::task::spawn_blocking(move || {
-                let file = std::fs::File::open(&path).map_err(map_io_error)?;
+                let file = open_for_read(
+                    &path,
+                    OpenReadOptions {
+                        share,
+                        lock_timeout,
+                    },
+                )
+                .map_err(map_storage_error)?;
                 let size = file.metadata().map_err(map_io_error)?.len();
                 fd_pass::send_fd(&state, file.as_raw_fd())?;
+                // Keep FD alive until send completes; then drop closes our copy.
+                drop(file);
                 Ok::<_, Status>(size)
             })
             .await
@@ -458,6 +475,10 @@ impl DharaSd for DharaSdService {
 
         let req = request.into_inner();
         let path = PathBuf::from(req.path);
+        let overwrite = req.overwrite;
+        let create_parents = req.create_parent_directories;
+        let share = map_open_share_mode(req.share_mode, FileShareMode::Exclusive);
+        let lock_timeout = map_open_lock_timeout_ms(req.lock_timeout_ms);
 
         #[cfg(windows)]
         {
@@ -465,8 +486,10 @@ impl DharaSd for DharaSdService {
             let handle = handle_dup::open_write_and_duplicate(
                 &path,
                 parent_pid,
-                req.overwrite,
-                req.create_parent_directories,
+                overwrite,
+                create_parents,
+                share,
+                lock_timeout,
             )
             .map_err(Status::internal)?;
             return Ok(Response::new(OpenWriteHandleResponse { handle }));
@@ -475,31 +498,20 @@ impl DharaSd for DharaSdService {
         #[cfg(unix)]
         {
             let state = self.state.clone();
-            let overwrite = req.overwrite;
-            let create_parents = req.create_parent_directories;
             tokio::task::spawn_blocking(move || {
-                if create_parents && let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent).map_err(map_io_error)?;
-                }
-
-                let file = if overwrite {
-                    std::fs::OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .truncate(true)
-                        .open(&path)
-                } else if path.exists() {
-                    std::fs::OpenOptions::new().write(true).open(&path)
-                } else {
-                    std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&path)
-                }
-                .map_err(map_io_error)?;
-
+                let file = open_for_write(
+                    &path,
+                    OpenWriteOptions {
+                        share,
+                        overwrite,
+                        create_parent_directories: create_parents,
+                        lock_timeout,
+                    },
+                )
+                .map_err(map_storage_error)?;
                 let fd = file.as_raw_fd();
                 fd_pass::send_fd(&state, fd)?;
+                drop(file);
                 Ok::<_, Status>(())
             })
             .await
@@ -566,9 +578,9 @@ impl DharaSd for DharaSdService {
                 ..TransferOptions::default()
             };
             if source.is_dir() {
-                move_directory_with_options(&source, &req.destination, options)
+                execute_move_directory_with_options(&source, &req.destination, options)
             } else {
-                move_file_with_options(&source, &req.destination, options)
+                execute_move_file_with_options(&source, &req.destination, options)
             }
         })
         .await
@@ -647,10 +659,9 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
-                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
-            copy_file_with_options(&req.source, &req.destination, options)
+            execute_copy_file_with_options(&req.source, &req.destination, options)
         })))
     }
 
@@ -665,10 +676,9 @@ impl DharaSd for DharaSdService {
             let options = TransferOptions {
                 overwrite: req.overwrite,
                 progress: Some(reporter),
-                analyze_content: req.analyze_content,
                 ..TransferOptions::default()
             };
-            copy_directory_with_options(&req.source, &req.destination, options)
+            execute_copy_directory_with_options(&req.source, &req.destination, options)
         })))
     }
 
@@ -934,6 +944,24 @@ where
 fn map_storage_error(err: dhara_storage::StorageError) -> Status {
     warn!(error = %err, "storage operation failed");
     Status::internal(err.to_string())
+}
+
+/// Map proto `ShareMode`; unspecified uses `default_for_unspecified`.
+fn map_open_share_mode(value: i32, default_for_unspecified: FileShareMode) -> FileShareMode {
+    match value {
+        1 => FileShareMode::Shared,
+        2 => FileShareMode::Exclusive,
+        _ => default_for_unspecified,
+    }
+}
+
+/// Map proto lock timeout; `0` means no wait.
+fn map_open_lock_timeout_ms(ms: u32) -> Option<Duration> {
+    if ms == 0 {
+        None
+    } else {
+        Some(Duration::from_millis(u64::from(ms)))
+    }
 }
 
 #[cfg(unix)]

@@ -119,21 +119,20 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         CreateCoreAsync(createParents: true, cancellationToken);
 
     /// <inheritdoc />
-    public IStorageDirectory Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
+    public void Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         CopyAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public StorageProcess CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var source = AbsolutePath;
-        var newPath = await DaemonClient.ConsumeCopyProgressAsync(
+        return DaemonClient.StartCopyProcess(
             (client, options) => client.CopyDirectory(new CopyDirectoryRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
             progress,
             source,
             nameof(DharaSd.DharaSdClient.CopyDirectory),
-            cancellationToken).ConfigureAwait(false);
-        return new StorageDirectory(newPath);
+            cancellationToken);
     }
 
     /// <inheritdoc />
@@ -141,16 +140,21 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         MoveAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public StorageProcess MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
         var source = AbsolutePath;
-        var response = await DaemonClient.CallAsync(
-            (client, options) => client.MovePathAsync(new MovePathRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
-            cancellationToken,
-            source,
-            nameof(DharaSd.DharaSdClient.MovePath)).ConfigureAwait(false);
-        UpdatePathFromDestination(destination, response.Path);
+        return StorageProcess.Start(async ct =>
+        {
+            _ = progress;
+            var response = await DaemonClient.CallAsync(
+                (client, options) => client.MovePathAsync(new MovePathRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
+                ct,
+                source,
+                nameof(DharaSd.DharaSdClient.MovePath)).ConfigureAwait(false);
+            UpdatePathFromDestination(destination, response.Path);
+            return response.Path;
+        }, cancellationToken);
     }
 
     /// <inheritdoc />

@@ -18,9 +18,10 @@ use super::common::{
     prepare_destination_directory, same_volume, validate_single_path_name,
 };
 use super::transfer::{
-    FileIndexCounter, ProcessWriteState, TransferTask, build_transfer_task,
-    storage_process_from_options, write_transfer_task,
+    FileIndexCounter, ProcessWriteState, TransferTask, bind_process_cancellation,
+    build_transfer_task, process_session_from_options, write_transfer_task,
 };
+use crate::process::{ProcessOutcome, StorageProcess};
 
 /// Create a single directory level.
 pub fn create_directory(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
@@ -44,15 +45,57 @@ pub fn create_directory_all(path: impl AsRef<Path>) -> Result<PathBuf, StorageEr
 }
 
 /// Copy a directory tree to an exact destination path.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn copy_directory(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
-) -> Result<PathBuf, StorageError> {
-    copy_directory_with_options(source, destination, TransferOptions::default())
+) -> Result<(), StorageError> {
+    start_copy_directory(source, destination).wait_unit()
 }
 
-/// Copy a directory tree to an exact destination path with overwrite and progress control.
+/// Copy a directory tree with overwrite and progress control.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn copy_directory_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    options: TransferOptions,
+) -> Result<(), StorageError> {
+    start_copy_directory_with_options(source, destination, options).wait_unit()
+}
+
+/// Start a directory copy and return the running [`StorageProcess`] immediately.
+pub fn start_copy_directory(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+) -> StorageProcess {
+    start_copy_directory_with_options(source, destination, TransferOptions::default())
+}
+
+/// Start a directory copy with options and return the running [`StorageProcess`] immediately.
+pub fn start_copy_directory_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    mut options: TransferOptions,
+) -> StorageProcess {
+    let source = source.as_ref().to_path_buf();
+    let destination = destination.as_ref().to_path_buf();
+    let cancellation = bind_process_cancellation(&mut options);
+    StorageProcess::spawn(cancellation, move || {
+        execute_copy_directory_with_options(source, destination, options).map(|path| {
+            ProcessOutcome {
+                destination: Some(path),
+            }
+        })
+    })
+}
+
+/// Run a directory copy on the calling thread (no process spawn).
+///
+/// Prefer [`start_copy_directory_with_options`] / [`copy_directory_with_options`]
+/// for the process-first public API.
+pub fn execute_copy_directory_with_options(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
     options: TransferOptions,
@@ -66,7 +109,6 @@ pub fn copy_directory_with_options(
         overwrite = options.overwrite,
         progress = options.progress.is_some(),
         cancellable = options.cancellation_token.is_some(),
-        analyze_content = options.analyze_content,
         "copying directory"
     );
 
@@ -78,8 +120,8 @@ pub fn copy_directory_with_options(
     }
 
     lock_write_targets(&[&source, &destination], || {
-        let process = storage_process_from_options(&options);
-        process
+        let session = process_session_from_options(&options);
+        session
             .ensure_not_cancelled("copy directory")
             .map_err(StorageError::from)?;
         prepare_destination_directory(&destination, options.overwrite)?;
@@ -93,24 +135,23 @@ pub fn copy_directory_with_options(
         fs::create_dir_all(&destination)
             .map_err(|err| StorageError::io("create destination directory", &destination, err))?;
 
-        let summary = if process.has_reporter() {
+        let summary = if session.has_reporter() {
             Some(scan_directory_summary(&source)?)
         } else {
             None
         };
 
         if let Some(summary) = summary.as_ref() {
-            process.emit(StorageProcessEvent::Started {
+            session.emit(StorageProcessEvent::Started {
                 total_bytes: summary.total_size,
                 total_files: summary.file_count,
             });
         }
 
         let producer_count = recommended_producer_count();
-        let (task_tx, task_rx) = process.task_queue::<TransferTask>();
+        let (task_tx, task_rx) = session.task_queue::<TransferTask>();
         let index = FileIndexCounter::new();
-        let analyze = options.analyze_content;
-        let cancel = process.cancellation_token().clone();
+        let cancel = session.cancellation_token().clone();
 
         let result = thread::scope(|scope| -> Result<(), StorageError> {
             let task_tx_for_walk = task_tx.clone();
@@ -129,8 +170,7 @@ pub fn copy_directory_with_options(
                     slots.push(scope.spawn(move || -> Result<(), StorageError> {
                         while let Ok((source_path, dest_path)) = raw_rx.recv() {
                             let file_index = index.next();
-                            let task =
-                                build_transfer_task(&source_path, &dest_path, file_index, analyze)?;
+                            let task = build_transfer_task(&source_path, &dest_path, file_index)?;
                             task_tx
                                 .send(task, &cancel, "copy directory")
                                 .map_err(StorageError::from)?;
@@ -149,8 +189,8 @@ pub fn copy_directory_with_options(
                 Ok(())
             });
 
-            let mut state = ProcessWriteState::new(process.clone());
-            let consume_result = process.consume_tasks(
+            let mut state = ProcessWriteState::new(session.clone());
+            let consume_result = session.consume_tasks(
                 task_rx,
                 "copy directory",
                 |task| {
@@ -175,7 +215,7 @@ pub fn copy_directory_with_options(
 
         match result {
             Ok(()) => {
-                process.emit(StorageProcessEvent::Completed {
+                session.emit(StorageProcessEvent::Completed {
                     destination: Some(destination.clone()),
                 });
                 info!(
@@ -189,11 +229,11 @@ pub fn copy_directory_with_options(
             }
             Err(err) => {
                 if matches!(err, StorageError::Cancelled { .. }) {
-                    process.emit(StorageProcessEvent::Cancelled {
+                    session.emit(StorageProcessEvent::Cancelled {
                         operation: "copy directory",
                     });
                 } else {
-                    process.emit(StorageProcessEvent::Failed {
+                    session.emit(StorageProcessEvent::Failed {
                         message: err.to_string(),
                     });
                 }
@@ -204,15 +244,57 @@ pub fn copy_directory_with_options(
 }
 
 /// Move a directory tree to an exact destination path.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn move_directory(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
-) -> Result<PathBuf, StorageError> {
-    move_directory_with_options(source, destination, TransferOptions::default())
+) -> Result<(), StorageError> {
+    start_move_directory(source, destination).wait_unit()
 }
 
-/// Move a directory tree to an exact destination path with overwrite and progress control.
+/// Move a directory tree with overwrite and progress control.
+///
+/// Starts a [`StorageProcess`] immediately and waits for completion.
 pub fn move_directory_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    options: TransferOptions,
+) -> Result<(), StorageError> {
+    start_move_directory_with_options(source, destination, options).wait_unit()
+}
+
+/// Start a directory move and return the running [`StorageProcess`] immediately.
+pub fn start_move_directory(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+) -> StorageProcess {
+    start_move_directory_with_options(source, destination, TransferOptions::default())
+}
+
+/// Start a directory move with options and return the running [`StorageProcess`] immediately.
+pub fn start_move_directory_with_options(
+    source: impl AsRef<Path>,
+    destination: impl AsRef<Path>,
+    mut options: TransferOptions,
+) -> StorageProcess {
+    let source = source.as_ref().to_path_buf();
+    let destination = destination.as_ref().to_path_buf();
+    let cancellation = bind_process_cancellation(&mut options);
+    StorageProcess::spawn(cancellation, move || {
+        execute_move_directory_with_options(source, destination, options).map(|path| {
+            ProcessOutcome {
+                destination: Some(path),
+            }
+        })
+    })
+}
+
+/// Run a directory move on the calling thread (no process spawn).
+///
+/// Prefer [`start_move_directory_with_options`] / [`move_directory_with_options`]
+/// for the process-first public API.
+pub fn execute_move_directory_with_options(
     source: impl AsRef<Path>,
     destination: impl AsRef<Path>,
     options: TransferOptions,
@@ -265,7 +347,7 @@ pub fn move_directory_with_options(
             return Ok(destination.clone());
         }
 
-        copy_directory_with_options(&source, &destination, options.clone())?;
+        execute_copy_directory_with_options(&source, &destination, options.clone())?;
         fs::remove_dir_all(&source)
             .map_err(|err| StorageError::io("delete source directory after move", &source, err))?;
         info!(
@@ -290,7 +372,7 @@ pub fn rename_directory(source: impl AsRef<Path>, new_name: &str) -> Result<Path
             StorageError::path_conflict(source.clone(), "directory has no parent directory")
         })?;
 
-    move_directory(&source, &destination)
+    execute_move_directory_with_options(source, destination, TransferOptions::default())
 }
 
 /// Delete a directory tree recursively.

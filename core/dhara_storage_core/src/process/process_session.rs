@@ -1,4 +1,4 @@
-//! Long-running storage operation session: cancel, events, and task-queue helpers.
+//! In-flight process session: cancel, events, and task-queue helpers for the transfer engine.
 
 use super::cancel::StorageCancellationToken;
 use super::error::ProcessError;
@@ -6,18 +6,19 @@ use super::events::StorageProcessEvent;
 use super::queue::{DEFAULT_TASK_QUEUE_CAPACITY, TaskQueue, TaskQueueReceiver, TaskQueueSender};
 use super::reporter::SharedProcessEventReporter;
 
-/// Owns cancellation and the optional event sink for one storage operation.
+/// Engine-side session shared by producers and the single writer consumer.
 ///
-/// A process is not queued — it *runs* a [`TaskQueue`] of discrete tasks (for
-/// example one file each) with a single consumer to avoid destination write thrashing.
+/// The public awaitable executioner handle is provided by the `dhara_storage`
+/// runtime crate. A session runs a [`TaskQueue`] of discrete work items with one
+/// consumer to avoid destination write thrashing.
 #[derive(Clone)]
-pub struct StorageProcess {
+pub struct ProcessSession {
     cancellation: StorageCancellationToken,
     reporter: Option<SharedProcessEventReporter>,
 }
 
-impl StorageProcess {
-    /// Create a process with a fresh cancellation token and optional event reporter.
+impl ProcessSession {
+    /// Create a session with a fresh cancellation token and optional event reporter.
     pub fn new(
         cancellation: Option<StorageCancellationToken>,
         reporter: Option<SharedProcessEventReporter>,

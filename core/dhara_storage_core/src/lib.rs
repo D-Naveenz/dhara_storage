@@ -27,13 +27,14 @@ pub use definitions::{
 };
 pub use process::{
     BytesEventThrottle, DEFAULT_BYTES_EVENT_DELTA, DEFAULT_BYTES_EVENT_INTERVAL,
-    DEFAULT_TASK_QUEUE_CAPACITY, ProcessError, ProcessEventReporter, SharedProcessEventReporter,
-    StorageCancellationToken, StorageProcess, StorageProcessEvent, TaskQueue, TaskQueueReceiver,
-    TaskQueueSender,
+    DEFAULT_TASK_QUEUE_CAPACITY, ProcessError, ProcessEventReporter, ProcessSession,
+    SharedProcessEventReporter, StorageCancellationToken, StorageProcessEvent, TaskQueue,
+    TaskQueueReceiver, TaskQueueSender,
 };
 pub use types::{
-    DirectoryDeleteOptions, ReadOptions, SizeUnit, StorageAttributes, StoragePermissions,
-    StorageSize, TransferOptions, WriteOptions, format_size,
+    DirectoryDeleteOptions, FileShareMode, OpenReadOptions, OpenWriteOptions, ReadOptions,
+    SizeUnit, StorageAttributes, StoragePermissions, StorageSize, TransferOptions, WriteOptions,
+    format_size,
 };
 
 /// Generated FlatBuffers accessors (stable path for tooling).

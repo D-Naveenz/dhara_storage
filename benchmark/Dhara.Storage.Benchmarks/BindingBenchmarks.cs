@@ -165,16 +165,25 @@ public class BindingBenchmarks
             deadline: RpcDeadlineUtc());
         while (await call.ResponseStream.MoveNext(CancellationToken.None).ConfigureAwait(false))
         {
-            if (call.ResponseStream.Current.Completed)
+            var update = call.ResponseStream.Current;
+            switch (update.KindCase)
             {
-                if (!string.IsNullOrEmpty(call.ResponseStream.Current.ErrorMessage))
-                {
-                    throw new InvalidOperationException(call.ResponseStream.Current.ErrorMessage);
-                }
-
-                break;
+                case StorageProcessEventMessage.KindOneofCase.Completed:
+                    return;
+                case StorageProcessEventMessage.KindOneofCase.Failed:
+                    throw new InvalidOperationException(
+                        string.IsNullOrEmpty(update.Failed.Message)
+                            ? "copy failed"
+                            : update.Failed.Message);
+                case StorageProcessEventMessage.KindOneofCase.Cancelled:
+                    throw new OperationCanceledException(
+                        string.IsNullOrEmpty(update.Cancelled.Operation)
+                            ? "copy cancelled"
+                            : $"copy cancelled ({update.Cancelled.Operation})");
             }
         }
+
+        throw new InvalidOperationException("copy stream ended without a terminal event");
     }
 
     [Benchmark(Description = "B2 QueueStub 20 jobs")]

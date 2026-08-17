@@ -62,7 +62,6 @@ fn copy_file_with_progress_reports_completion() {
             buffer_size: Some(8 * 1024),
             progress: Some(reporter),
             cancellation_token: None,
-            analyze_content: false,
         },
     )
     .unwrap();
@@ -133,7 +132,6 @@ fn copy_directory_with_progress_preserves_tree() {
             buffer_size: Some(4 * 1024),
             progress: Some(reporter),
             cancellation_token: None,
-            analyze_content: false,
         },
     )
     .unwrap();
@@ -371,13 +369,14 @@ async fn async_directory_copy_roundtrip() {
     fs::write(source.join("nested").join("value.txt"), b"value").unwrap();
 
     let storage = DirectoryStorage::from_existing(&source).unwrap();
-    let copied = storage
-        .copy_to_async(&destination, TransferOptions::default())
+    let outcome = storage
+        .start_copy_to_with_options(&destination, TransferOptions::default())
         .await
         .unwrap();
 
+    let copied = outcome.destination.expect("copy should report destination");
     assert_eq!(
-        fs::read_to_string(copied.absolute_path().join("nested").join("value.txt")).unwrap(),
+        fs::read_to_string(copied.join("nested").join("value.txt")).unwrap(),
         "value"
     );
 }

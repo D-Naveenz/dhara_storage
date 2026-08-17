@@ -23,7 +23,7 @@ pub struct TaskQueueReceiver<T> {
     inner: Receiver<T>,
 }
 
-/// Bounded channel of discrete work units for a [`super::StorageProcess`].
+/// Bounded channel of discrete work units for a [`super::ProcessSession`].
 ///
 /// Producers block on [`TaskQueueSender::send`] when the queue is full so a slow
 /// single writer can throttle prep work (backpressure).

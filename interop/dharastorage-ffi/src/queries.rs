@@ -4,9 +4,11 @@ use std::ffi::c_char;
 use std::path::{Path, PathBuf};
 
 use dhara_storage::{
-    DirectoryMetadata, FileStorage, analyze_path, copy_directory, copy_file, create_directory,
-    create_directory_all, delete_directory, delete_file, move_directory, move_file, read_file,
-    read_file_to_string, rename_directory, rename_file, write_file, write_file_string,
+    DirectoryMetadata, FileStorage, analyze_path, create_directory, create_directory_all,
+    delete_directory, delete_file, execute_copy_directory_with_options,
+    execute_copy_file_with_options, execute_move_directory_with_options,
+    execute_move_file_with_options, read_file, read_file_to_string, rename_directory, rename_file,
+    write_file, write_file_string,
 };
 
 use crate::abi::DharaStatus;
@@ -360,7 +362,9 @@ pub unsafe extern "C" fn dhara_copy_file(
         out_path_len,
         out_error_ptr,
         out_error_len,
-        |source, destination| copy_file(source, destination),
+        |source, destination| {
+            execute_copy_file_with_options(source, destination, Default::default())
+        },
     ))
 }
 
@@ -386,7 +390,9 @@ pub unsafe extern "C" fn dhara_move_file(
         out_path_len,
         out_error_ptr,
         out_error_len,
-        |source, destination| move_file(source, destination),
+        |source, destination| {
+            execute_move_file_with_options(source, destination, Default::default())
+        },
     ))
 }
 
@@ -513,7 +519,9 @@ pub unsafe extern "C" fn dhara_copy_directory(
         out_path_len,
         out_error_ptr,
         out_error_len,
-        |source, destination| copy_directory(source, destination),
+        |source, destination| {
+            execute_copy_directory_with_options(source, destination, Default::default())
+        },
     ))
 }
 
@@ -539,7 +547,9 @@ pub unsafe extern "C" fn dhara_move_directory(
         out_path_len,
         out_error_ptr,
         out_error_len,
-        |source, destination| move_directory(source, destination),
+        |source, destination| {
+            execute_move_directory_with_options(source, destination, Default::default())
+        },
     ))
 }
 

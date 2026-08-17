@@ -159,48 +159,47 @@ public interface IStorageFile : IStorageItem
     /// Copies the current file to the provided destination path.
     /// </summary>
     /// <param name="destination">The destination path for the copied file.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots when the asynchronous copy path is used.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events while the copy runs.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination file; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
-    /// <returns>A new file wrapper pointing at the copied destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be copied.</exception>
-    IStorageFile Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
+    void Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
-    /// Copies the current file to the provided destination path asynchronously.
+    /// Starts copying the current file immediately and returns a running <see cref="StorageProcess"/>.
     /// </summary>
     /// <param name="destination">The destination path for the copied file.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots while the native copy operation runs.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events while the copy runs.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination file; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <param name="cancellationToken">A token used to request cooperative cancellation of the native operation.</param>
-    /// <returns>A task that completes with a new file wrapper pointing at the copied destination path.</returns>
+    /// <returns>A <see cref="StorageProcess"/> that can be awaited for the destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be copied.</exception>
-    Task<IStorageFile> CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    StorageProcess CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves the current file to the provided destination path.
     /// </summary>
     /// <param name="destination">The destination path for the moved file.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots when the asynchronous move path is used.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events when the move path reports them.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination file; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be moved.</exception>
     void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
-    /// Moves the current file to the provided destination path asynchronously.
+    /// Starts moving the current file immediately and returns a running <see cref="StorageProcess"/>.
     /// </summary>
     /// <param name="destination">The destination path for the moved file.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots while the native move operation runs.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events when the move path reports them.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination file; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <param name="cancellationToken">A token used to request cooperative cancellation of the native operation.</param>
-    /// <returns>A task that completes when the file has been moved and the wrapper path has been updated.</returns>
+    /// <returns>A <see cref="StorageProcess"/> that can be awaited for the destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the file cannot be moved.</exception>
-    Task MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    StorageProcess MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Renames the current file within its existing parent directory.

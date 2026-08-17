@@ -4,7 +4,7 @@
 //! are re-exported from [`crate::operations`].
 
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
+use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, Weak};
@@ -246,46 +246,6 @@ pub(crate) fn ensure_not_cancelled(
     }
 
     Ok(())
-}
-
-pub(crate) fn open_source_file(path: &Path) -> Result<File, StorageError> {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::OpenOptionsExt;
-
-        const FILE_SHARE_READ: u32 = 0x0000_0001;
-        const FILE_SHARE_WRITE: u32 = 0x0000_0002;
-        const FILE_SHARE_DELETE: u32 = 0x0000_0004;
-
-        OpenOptions::new()
-            .read(true)
-            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
-            .open(path)
-            .map_err(|err| StorageError::io("open file for reading", path, err))
-    }
-
-    #[cfg(not(windows))]
-    {
-        OpenOptions::new()
-            .read(true)
-            .open(path)
-            .map_err(|err| StorageError::io("open file for reading", path, err))
-    }
-}
-
-pub(crate) fn open_destination_file(path: &Path, overwrite: bool) -> Result<File, StorageError> {
-    let mut options = OpenOptions::new();
-    options.write(true).create(true);
-
-    if overwrite {
-        options.truncate(true);
-    } else {
-        options.create_new(true);
-    }
-
-    options
-        .open(path)
-        .map_err(|err| StorageError::io("open file for writing", path, err))
 }
 
 pub(crate) fn lock_write_targets<T>(
