@@ -233,6 +233,20 @@ impl From<StorageError> for FfiFailure {
                     value: None,
                 },
             },
+            StorageError::LockTimeout { path, operation } => Self {
+                status: DharaStatus::Error,
+                payload: ErrorPayload {
+                    code: "lock_timeout",
+                    message: format!(
+                        "timed out waiting to open '{}' for {operation}",
+                        path_to_string(&path)
+                    ),
+                    path: Some(path_to_string(&path)),
+                    operation: Some(operation.to_owned()),
+                    kind: None,
+                    value: None,
+                },
+            },
         }
     }
 }
