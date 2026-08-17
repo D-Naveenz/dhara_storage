@@ -19,12 +19,12 @@ pub mod error;
 pub mod metadata;
 /// File and directory mutation APIs (progress/cancel types from core, re-exported).
 pub mod operations;
+/// Awaitable storage process handle for in-flight copy/move work.
+pub mod process;
 /// Path-based storage handles layered over the core operation APIs.
 pub mod storage;
 /// Debounced directory watching primitives.
 pub mod watch;
-/// Awaitable storage process handle for in-flight copy/move work.
-pub mod process;
 
 pub use analysis::{AnalysisReport, ContentKind, DetectedDefinition, analyze_path, analyze_reader};
 pub use definitions::{

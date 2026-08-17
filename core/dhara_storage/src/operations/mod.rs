@@ -21,7 +21,6 @@ pub use dhara_storage_core::{
     ReadOptions, SharedProcessEventReporter, StorageCancellationToken, StorageProcessEvent,
     TransferOptions, WriteOptions,
 };
-pub use open::{open_for_read, open_for_write};
 pub use directory::{
     copy_directory, copy_directory_with_options, create_directory, create_directory_all,
     delete_directory, delete_directory_with_options, execute_copy_directory_with_options,
@@ -36,6 +35,7 @@ pub use file::{
     start_move_file, start_move_file_with_options, write_file, write_file_from_reader,
     write_file_string,
 };
+pub use open::{open_for_read, open_for_write};
 
 #[cfg(feature = "async-tokio")]
 pub use tokio::{

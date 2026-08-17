@@ -434,13 +434,9 @@ impl DharaSd for DharaSdService {
         #[cfg(windows)]
         {
             let parent_pid = self.state.parent_pid().expect("checked above");
-            let (handle, size) = handle_dup::open_read_and_duplicate(
-                &path,
-                parent_pid,
-                share,
-                lock_timeout,
-            )
-            .map_err(Status::internal)?;
+            let (handle, size) =
+                handle_dup::open_read_and_duplicate(&path, parent_pid, share, lock_timeout)
+                    .map_err(Status::internal)?;
             return Ok(Response::new(OpenReadHandleResponse { handle, size }));
         }
 

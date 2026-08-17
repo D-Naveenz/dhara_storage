@@ -23,7 +23,10 @@ const LOCK_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 /// # Errors
 ///
 /// Returns I/O errors from the OS, or [`StorageError::LockTimeout`] when busy past `lock_timeout`.
-pub fn open_for_read(path: impl AsRef<Path>, options: OpenReadOptions) -> Result<File, StorageError> {
+pub fn open_for_read(
+    path: impl AsRef<Path>,
+    options: OpenReadOptions,
+) -> Result<File, StorageError> {
     let path = path.as_ref();
     open_with_lock_wait(path, "read", options.lock_timeout, || {
         open_read_once(path, options.share)
@@ -80,27 +83,25 @@ fn open_with_lock_wait(
     loop {
         match attempt() {
             Ok(file) => return Ok(file),
-            Err(err) if is_sharing_busy(&err) => {
-                match deadline {
-                    None => {
-                        return Err(StorageError::io(
-                            if operation == "read" {
-                                "open file for reading"
-                            } else {
-                                "open file for writing"
-                            },
-                            path,
-                            err,
-                        ));
-                    }
-                    Some(deadline) if Instant::now() >= deadline => {
-                        return Err(StorageError::lock_timeout(path, operation));
-                    }
-                    Some(_) => {
-                        thread::sleep(LOCK_RETRY_INTERVAL);
-                    }
+            Err(err) if is_sharing_busy(&err) => match deadline {
+                None => {
+                    return Err(StorageError::io(
+                        if operation == "read" {
+                            "open file for reading"
+                        } else {
+                            "open file for writing"
+                        },
+                        path,
+                        err,
+                    ));
                 }
-            }
+                Some(deadline) if Instant::now() >= deadline => {
+                    return Err(StorageError::lock_timeout(path, operation));
+                }
+                Some(_) => {
+                    thread::sleep(LOCK_RETRY_INTERVAL);
+                }
+            },
             Err(err) => {
                 return Err(StorageError::io(
                     if operation == "read" {

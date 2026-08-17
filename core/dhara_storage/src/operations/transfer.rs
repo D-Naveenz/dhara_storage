@@ -78,10 +78,7 @@ impl ProcessWriteState {
 }
 
 pub(crate) fn process_session_from_options(options: &TransferOptions) -> ProcessSession {
-    ProcessSession::new(
-        options.cancellation_token.clone(),
-        options.progress.clone(),
-    )
+    ProcessSession::new(options.cancellation_token.clone(), options.progress.clone())
 }
 
 pub(crate) fn build_transfer_task(
@@ -219,9 +216,7 @@ where
 }
 
 /// Ensure transfer options carry a cancellation token shared with a spawned process.
-pub(crate) fn bind_process_cancellation(
-    options: &mut TransferOptions,
-) -> StorageCancellationToken {
+pub(crate) fn bind_process_cancellation(options: &mut TransferOptions) -> StorageCancellationToken {
     if let Some(token) = options.cancellation_token.clone() {
         token
     } else {

@@ -13,15 +13,15 @@ use super::common::{
     normalize_path, prepare_destination_file, same_volume, validate_single_path_name,
 };
 use super::open::{open_for_read, open_for_write};
-use dhara_storage_core::{
-    OpenReadOptions, OpenWriteOptions, ReadOptions, StorageProcessEvent, TransferOptions,
-    WriteOptions,
-};
 use super::transfer::{
     ProcessWriteState, bind_process_cancellation, build_transfer_task,
     process_session_from_options, write_transfer_task,
 };
 use crate::process::{ProcessOutcome, StorageProcess};
+use dhara_storage_core::{
+    OpenReadOptions, OpenWriteOptions, ReadOptions, StorageProcessEvent, TransferOptions,
+    WriteOptions,
+};
 
 /// Copy a file to an exact destination path.
 ///
@@ -45,10 +45,7 @@ pub fn copy_file_with_options(
 }
 
 /// Start a file copy and return the running [`StorageProcess`] immediately.
-pub fn start_copy_file(
-    source: impl AsRef<Path>,
-    destination: impl AsRef<Path>,
-) -> StorageProcess {
+pub fn start_copy_file(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> StorageProcess {
     start_copy_file_with_options(source, destination, TransferOptions::default())
 }
 
@@ -191,10 +188,7 @@ pub fn move_file_with_options(
 }
 
 /// Start a file move and return the running [`StorageProcess`] immediately.
-pub fn start_move_file(
-    source: impl AsRef<Path>,
-    destination: impl AsRef<Path>,
-) -> StorageProcess {
+pub fn start_move_file(source: impl AsRef<Path>, destination: impl AsRef<Path>) -> StorageProcess {
     start_move_file_with_options(source, destination, TransferOptions::default())
 }
 

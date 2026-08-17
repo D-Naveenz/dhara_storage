@@ -62,7 +62,7 @@ pub fn open_write_and_duplicate(
 }
 
 fn duplicate_file_into_parent(file: File, parent_pid: u32) -> Result<u64, String> {
-    let source = HANDLE(file.as_raw_handle() as *mut std::ffi::c_void);
+    let source = HANDLE(file.as_raw_handle());
     let parent = unsafe { OpenProcess(PROCESS_DUP_HANDLE, false, parent_pid) }
         .map_err(|err| format!("OpenProcess({parent_pid}) failed: {err}"))?;
 
