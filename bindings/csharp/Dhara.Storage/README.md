@@ -35,17 +35,7 @@ dotnet add package Dhara.Storage --version 0.9.24
 
 ## Usage
 
-### 1. Optional logging
-
-```csharp
-using Microsoft.Extensions.Logging;
-using Dhara.Storage;
-
-using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-DharaStorage.UseLoggerFactory(loggerFactory);
-```
-
-### 2. Open a file, analyze, and read
+### 1. Open a file, analyze, and read
 
 ```csharp
 using Dhara.Storage;
@@ -66,7 +56,7 @@ directory.StartWatching();
 directory.Changed += (_, change) => Console.WriteLine(change.Path);
 ```
 
-### 4. Copy (process-first)
+### 3. Copy (process-first)
 
 ```csharp
 using Dhara.Storage;
@@ -79,7 +69,7 @@ file.Copy(@"C:\data\copy.bin", overwrite: true);
 var destination = await file.CopyAsync(@"C:\data\copy2.bin", overwrite: true);
 ```
 
-### 5. Host lifetime (ASP.NET Core, worker services)
+### 4. Host lifetime (ASP.NET Core, worker services)
 
 Add [`Dhara.Storage.Extensions.Hosting`](https://www.nuget.org/packages/Dhara.Storage.Extensions.Hosting) to start and stop the sidecar with your application's `IHost`:
 
@@ -87,7 +77,7 @@ Add [`Dhara.Storage.Extensions.Hosting`](https://www.nuget.org/packages/Dhara.St
 builder.Services.AddDharaStorage();
 ```
 
-Shell icons are available over the sidecar when requested (`includeIcon`); display name and type name are returned as metadata fields.
+Shell icons are available over the sidecar when requested (`includeIcon`). File type labels come from content analysis when requested.
 
 ## Related
 

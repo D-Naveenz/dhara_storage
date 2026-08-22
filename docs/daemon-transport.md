@@ -37,13 +37,9 @@ VERSIONINFO is embedded with [`winresource`](https://crates.io/crates/winresourc
 
 Managed hosts that omit the new fields keep fail-fast open with those defaults.
 
-## Logging
-
-Daemon logging is owned by **`dhara-sd`**: one `tracing_subscriber` captures **`dhara_storage`** and **`dhara-sd`** events and fans them out on the parallel **`StreamLogs`** gRPC stream. The C# host maps each record's Rust `target` string to an `ILogger` category. Do not scrape stdout/stderr.
-
 ## Shell metadata
 
-`GetFileMetadata` / `GetDirectoryMetadata` accept `include_icon` and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory). Display name and type name are top-level fields on the metadata response (shell-backed on Windows when available).
+`GetFileMetadata` / `GetDirectoryMetadata` accept `include_icon` and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory). File type labels come from content analysis when requested; directories use a portable folder label.
 
 ## Product vs contrast RPCs
 
