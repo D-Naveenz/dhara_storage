@@ -18,7 +18,6 @@ internal static class DaemonModelFactory
     internal static FileMetadata ToFileMetadata(GetFileMetadataResponse response, AnalysisReport? analysis) =>
         new(
             response.Name,
-            response.DisplayName,
             ToAttributes(response.Attributes),
             ToPermissions(response.Permissions),
             response.IsSymbolicLink,
@@ -57,7 +56,6 @@ internal static class DaemonModelFactory
     internal static DirectoryMetadata ToDirectoryMetadata(GetDirectoryMetadataResponse response) =>
         new(
             response.Name,
-            response.DisplayName,
             ToAttributes(response.Attributes),
             ToPermissions(response.Permissions),
             response.IsSymbolicLink,
@@ -134,8 +132,8 @@ internal static class DaemonModelFactory
 
     private static StorageAttributes ToAttributes(StorageAttributesPayload? payload) =>
         payload is null
-            ? new StorageAttributes(false, false, false, false)
-            : new StorageAttributes(payload.ReadOnly, payload.Hidden, payload.System, payload.Archive);
+            ? new StorageAttributes(false, false, false)
+            : new StorageAttributes(payload.ReadOnly, payload.Hidden, payload.System);
 
     private static StoragePermissions ToPermissions(StoragePermissionsPayload? payload) =>
         payload is null

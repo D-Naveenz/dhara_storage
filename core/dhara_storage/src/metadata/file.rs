@@ -4,17 +4,11 @@
 //! extensions: content-based [`StorageType`] / [`FileExtension`] when enriched from
 //! a prior [`crate::storage::FileStorage::analyze`]. Size and paths live on
 //! [`crate::storage::FileStorage`].
-//!
-//! # Future work
-//!
-//! PE/ELF/Mach-O binaries may later expose `ExecutableMetadata` (architecture,
-//! format, exports, imports via the `object` crate). Not implemented today.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use once_cell::sync::OnceCell;
-use tracing::debug;
 
 use crate::analysis::AnalysisReport;
 use crate::error::StorageError;
@@ -23,14 +17,12 @@ use super::attributes::StorageAttributes;
 use super::permissions::StoragePermissions;
 use super::shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon, load_shell_icon};
 use super::traits::{CommonFields, StorageMetadata};
-use super::windows_shell::{ShellDetails, load_shell_details};
 
 /// Human type label plus optional MIME type.
 ///
 /// After enrichment from [`crate::storage::FileStorage::analyze`], both fields typically
-/// come from the analysis report (works on non-Windows hosts). Before analysis, Windows
-/// shell may fill `name` only; `mime_type` stays empty until analysis unless another
-/// source provides it.
+/// come from the analysis report. Before analysis, `name` falls back to an
+/// extension-based label; `mime_type` stays empty until analysis.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StorageType {
     /// Human-friendly type label (for example `"PNG Image"` or `"JSON Source File"`).
@@ -103,7 +95,6 @@ pub struct FileMetadata {
     common: CommonFields,
     extension: FileExtension,
     analysis: Option<AnalysisReport>,
-    shell_details: OnceCell<Option<ShellDetails>>,
     shell_icon: OnceCell<Option<ShellIcon>>,
 }
 
@@ -111,11 +102,6 @@ impl FileMetadata {
     /// Load file metadata for an absolute path without content analysis.
     pub fn load(absolute_path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let absolute_path = absolute_path.as_ref().to_path_buf();
-        debug!(
-            target: "dhara_storage::metadata::file",
-            path = %absolute_path.display(),
-            "loading file metadata"
-        );
         let (common, fs_metadata) = CommonFields::load(&absolute_path)?;
         let is_file = fs_metadata.is_file()
             || (fs_metadata.file_type().is_symlink() && absolute_path.is_file());
@@ -130,7 +116,6 @@ impl FileMetadata {
             absolute_path,
             common,
             analysis: None,
-            shell_details: OnceCell::new(),
             shell_icon: OnceCell::new(),
         })
     }
@@ -150,11 +135,6 @@ impl FileMetadata {
                 .first()
                 .map(|item| item.file_type_label.clone())
                 .filter(|value| !value.is_empty())
-                .or_else(|| {
-                    self.shell_type_name()
-                        .map(str::to_owned)
-                        .filter(|value| !value.is_empty())
-                })
                 .unwrap_or_else(|| self.fallback_type_name());
             return StorageType {
                 name,
@@ -162,13 +142,8 @@ impl FileMetadata {
             };
         }
 
-        let name = self
-            .shell_type_name()
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned)
-            .unwrap_or_else(|| self.fallback_type_name());
         StorageType {
-            name,
+            name: self.fallback_type_name(),
             mime_type: None,
         }
     }
@@ -183,45 +158,17 @@ impl FileMetadata {
         self.analysis.as_ref()
     }
 
-    fn shell_type_name(&self) -> Option<&str> {
-        self.ensure_shell()
-            .and_then(|shell| shell.type_name.as_deref())
-    }
-
-    fn ensure_shell(&self) -> Option<&ShellDetails> {
-        self.shell_details
-            .get_or_init(|| load_shell_details(&self.absolute_path))
-            .as_ref()
-    }
-
     fn fallback_type_name(&self) -> String {
         self.extension
             .source()
             .map(|ext| format!("{} File", ext.to_ascii_uppercase()))
             .unwrap_or_else(|| "File".to_owned())
     }
-
-    fn shell_display_name(&self) -> Option<&str> {
-        self.ensure_shell()
-            .and_then(|shell| shell.display_name.as_deref())
-            .filter(|value| !value.is_empty())
-    }
 }
 
 impl StorageMetadata for FileMetadata {
     fn name(&self) -> &str {
         &self.common.name
-    }
-
-    fn display_name(&self) -> &str {
-        if let Some(shell_name) = self.shell_display_name() {
-            return shell_name;
-        }
-        self.absolute_path
-            .file_stem()
-            .and_then(|value| value.to_str())
-            .filter(|value| !value.is_empty())
-            .unwrap_or_else(|| self.name())
     }
 
     fn created_at(&self) -> Option<std::time::SystemTime> {

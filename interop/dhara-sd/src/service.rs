@@ -21,12 +21,10 @@ use dhara_storage::{
 };
 #[cfg(unix)]
 use dhara_storage::{OpenReadOptions, OpenWriteOptions, open_for_read, open_for_write};
-use futures::{Stream, StreamExt};
-use tokio::sync::broadcast;
+use futures::Stream;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
-use tracing::{debug, warn};
 use uuid::Uuid;
 
 #[cfg(unix)]
@@ -34,7 +32,6 @@ use std::os::unix::io::AsRawFd;
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
 
-use crate::log_broadcast::level_rank;
 use crate::proto::dhara_sd_server::{DharaSd, DharaSdServer};
 use crate::proto::*;
 #[cfg(unix)]
@@ -42,7 +39,7 @@ use crate::transport::unix::fd_pass;
 #[cfg(windows)]
 use crate::transport::windows::handle_dup;
 
-/// Shared daemon state for handshake PID, logging, and synthetic queue stubs.
+/// Shared daemon state for handshake PID and synthetic queue stubs.
 pub struct DaemonState {
     control_endpoint: std::sync::RwLock<String>,
     #[cfg(unix)]
@@ -50,14 +47,13 @@ pub struct DaemonState {
     parent_pid: AtomicU32,
     parent_watch_started: AtomicBool,
     jobs: std::sync::Mutex<Vec<String>>,
-    log_tx: broadcast::Sender<LogRecord>,
     #[cfg(unix)]
     pub(crate) fd_pass_conn: Mutex<Option<UnixStream>>,
 }
 
 impl DaemonState {
     /// Create state for the given control endpoint path.
-    pub fn new(control_endpoint: String, log_tx: broadcast::Sender<LogRecord>) -> Self {
+    pub fn new(control_endpoint: String) -> Self {
         Self {
             control_endpoint: std::sync::RwLock::new(control_endpoint),
             #[cfg(unix)]
@@ -65,7 +61,6 @@ impl DaemonState {
             parent_pid: AtomicU32::new(0),
             parent_watch_started: AtomicBool::new(false),
             jobs: std::sync::Mutex::new(Vec::new()),
-            log_tx,
             #[cfg(unix)]
             fd_pass_conn: Mutex::new(None),
         }
@@ -158,7 +153,6 @@ impl DharaSd for DharaSdService {
         self.state
             .parent_pid
             .store(req.parent_pid, Ordering::SeqCst);
-        debug!(parent_pid = req.parent_pid, "handshake accepted");
         crate::parent_watch::spawn_parent_watchdog(self.state.clone(), req.parent_pid);
 
         Ok(Response::new(HandshakeResponse {
@@ -208,7 +202,6 @@ impl DharaSd for DharaSdService {
                     .relative_path()
                     .map(|value| value.display().to_string()),
                 name: meta.name().to_string(),
-                display_name: meta.display_name().to_string(),
                 size: Some(StorageSizePayload {
                     bytes: size.bytes,
                     formatted: size.formatted,
@@ -217,7 +210,6 @@ impl DharaSd for DharaSdService {
                     read_only: attrs.read_only,
                     hidden: attrs.hidden,
                     system: attrs.system,
-                    archive: attrs.archive,
                 }),
                 permissions: Some(StoragePermissionsPayload {
                     can_read: perms.can_read,
@@ -275,7 +267,6 @@ impl DharaSd for DharaSdService {
                         .file_name()
                         .map(|value| value.to_string_lossy().into_owned())
                         .unwrap_or_default(),
-                    display_name: String::new(),
                     exists: false,
                     attributes: None,
                     permissions: None,
@@ -322,13 +313,11 @@ impl DharaSd for DharaSdService {
                     .relative_path()
                     .map(|value| value.display().to_string()),
                 name: meta.name().to_string(),
-                display_name: meta.display_name().to_string(),
                 exists: true,
                 attributes: Some(StorageAttributesPayload {
                     read_only: attrs.read_only,
                     hidden: attrs.hidden,
                     system: attrs.system,
-                    archive: attrs.archive,
                 }),
                 permissions: Some(StoragePermissionsPayload {
                     can_read: perms.can_read,
@@ -792,30 +781,6 @@ impl DharaSd for DharaSdService {
 
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
-
-    type StreamLogsStream = ResponseStream<LogRecord>;
-
-    async fn stream_logs(
-        &self,
-        request: Request<StreamLogsRequest>,
-    ) -> Result<Response<Self::StreamLogsStream>, Status> {
-        self.state
-            .parent_pid()
-            .ok_or_else(|| Status::failed_precondition("handshake required before StreamLogs"))?;
-
-        let min_level = request.into_inner().min_level;
-        let min_level = if min_level == 0 { 3 } else { min_level };
-        let rx = self.state.log_tx.subscribe();
-        let stream = BroadcastStream::new(rx).filter_map(move |result| {
-            futures::future::ready(match result {
-                Ok(record) if level_rank(&record.level) >= min_level => Some(Ok(record)),
-                Ok(_) => None,
-                Err(_) => None,
-            })
-        });
-
-        Ok(Response::new(Box::pin(stream)))
-    }
 }
 
 fn shell_icon_to_proto(icon: ShellIcon) -> ShellIconPayload {
@@ -942,7 +907,6 @@ where
 }
 
 fn map_storage_error(err: dhara_storage::StorageError) -> Status {
-    warn!(error = %err, "storage operation failed");
     Status::internal(err.to_string())
 }
 
@@ -966,7 +930,6 @@ fn map_open_lock_timeout_ms(ms: u32) -> Option<Duration> {
 
 #[cfg(unix)]
 fn map_io_error(err: std::io::Error) -> Status {
-    warn!(error = %err, "I/O operation failed");
     Status::internal(err.to_string())
 }
 

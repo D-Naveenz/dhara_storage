@@ -3,7 +3,6 @@ using Dhara.Storage.Models.Analysis;
 using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Runtime;
 using Dhara.Storage.Sd.V1;
-using Microsoft.Extensions.Logging;
 
 namespace Dhara.Storage;
 
@@ -12,11 +11,6 @@ namespace Dhara.Storage;
 /// </summary>
 public static class DharaStorage
 {
-    /// <summary>
-    /// Registers an <see cref="ILoggerFactory"/> that receives managed wrapper logs.
-    /// </summary>
-    public static void UseLoggerFactory(ILoggerFactory? loggerFactory) => DharaStorageLogBridge.UseLoggerFactory(loggerFactory);
-
     /// <summary>
     /// Creates a path-based file wrapper.
     /// </summary>

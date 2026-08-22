@@ -4,7 +4,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-use tracing::{debug, info};
 
 use crate::error::StorageError;
 use crate::metadata::scan_directory_summary;
@@ -26,7 +25,6 @@ use crate::process::{ProcessOutcome, StorageProcess};
 /// Create a single directory level.
 pub fn create_directory(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
     let path = normalize_path(path)?;
-    info!(target: "dhara_storage::operations::directory", path = %path.display(), "creating directory");
     lock_write_targets(&[&path], || {
         fs::create_dir(&path).map_err(|err| StorageError::io("create directory", &path, err))?;
         Ok(path.clone())
@@ -36,7 +34,6 @@ pub fn create_directory(path: impl AsRef<Path>) -> Result<PathBuf, StorageError>
 /// Create a directory tree.
 pub fn create_directory_all(path: impl AsRef<Path>) -> Result<PathBuf, StorageError> {
     let path = normalize_path(path)?;
-    info!(target: "dhara_storage::operations::directory", path = %path.display(), "creating directory tree");
     lock_write_targets(&[&path], || {
         fs::create_dir_all(&path)
             .map_err(|err| StorageError::io("create directory tree", &path, err))?;
@@ -102,15 +99,6 @@ pub fn execute_copy_directory_with_options(
 ) -> Result<PathBuf, StorageError> {
     let source = normalize_existing_directory(source)?;
     let destination = normalize_path(destination)?;
-    info!(
-        target: "dhara_storage::operations::directory",
-        source = %source.display(),
-        destination = %destination.display(),
-        overwrite = options.overwrite,
-        progress = options.progress.is_some(),
-        cancellable = options.cancellation_token.is_some(),
-        "copying directory"
-    );
 
     if source == destination {
         return Err(StorageError::path_conflict(
@@ -218,13 +206,6 @@ pub fn execute_copy_directory_with_options(
                 session.emit(StorageProcessEvent::Completed {
                     destination: Some(destination.clone()),
                 });
-                info!(
-                    target: "dhara_storage::operations::directory",
-                    source = %source.display(),
-                    destination = %destination.display(),
-                    total_bytes = summary.map(|s| s.total_size).unwrap_or_default(),
-                    "completed directory copy"
-                );
                 Ok(destination.clone())
             }
             Err(err) => {
@@ -301,15 +282,6 @@ pub fn execute_move_directory_with_options(
 ) -> Result<PathBuf, StorageError> {
     let source = normalize_existing_directory(source)?;
     let destination = normalize_path(destination)?;
-    info!(
-        target: "dhara_storage::operations::directory",
-        source = %source.display(),
-        destination = %destination.display(),
-        overwrite = options.overwrite,
-        progress = options.progress.is_some(),
-        cancellable = options.cancellation_token.is_some(),
-        "moving directory"
-    );
 
     if source == destination {
         return Ok(source);
@@ -339,23 +311,12 @@ pub fn execute_move_directory_with_options(
                 });
             }
 
-            info!(
-                target: "dhara_storage::operations::directory",
-                destination = %destination.display(),
-                "moved directory using same-volume rename"
-            );
             return Ok(destination.clone());
         }
 
         execute_copy_directory_with_options(&source, &destination, options.clone())?;
         fs::remove_dir_all(&source)
             .map_err(|err| StorageError::io("delete source directory after move", &source, err))?;
-        info!(
-            target: "dhara_storage::operations::directory",
-            source = %source.display(),
-            destination = %destination.display(),
-            "moved directory using copy/delete fallback"
-        );
         Ok(destination.clone())
     })
 }
@@ -386,13 +347,6 @@ pub fn delete_directory_with_options(
     options: DirectoryDeleteOptions,
 ) -> Result<(), StorageError> {
     let path = normalize_existing_directory(path)?;
-    info!(
-        target: "dhara_storage::operations::directory",
-        path = %path.display(),
-        recursive = options.recursive,
-        cancellable = options.cancellation_token.is_some(),
-        "deleting directory"
-    );
 
     lock_write_targets(&[&path], || {
         if options.recursive {
@@ -420,12 +374,6 @@ fn walk_enqueue_files(
     senders: &[std::sync::mpsc::SyncSender<(PathBuf, PathBuf)>],
     cancellation: &StorageCancellationToken,
 ) -> Result<(), StorageError> {
-    debug!(
-        target: "dhara_storage::operations::directory",
-        source = %source.display(),
-        destination = %destination.display(),
-        "walking directory for copy enqueue"
-    );
 
     let mut next_sender = 0usize;
     walk_enqueue_recursive(source, destination, senders, &mut next_sender, cancellation)
@@ -486,11 +434,6 @@ fn delete_directory_recursive(
     path: &Path,
     cancellation_token: Option<&StorageCancellationToken>,
 ) -> Result<(), StorageError> {
-    debug!(
-        target: "dhara_storage::operations::directory",
-        path = %path.display(),
-        "walking directory for delete"
-    );
     super::common::ensure_not_cancelled(cancellation_token, "delete directory")?;
     for entry in fs::read_dir(path)
         .map_err(|err| StorageError::io("read directory for delete", path, err))?

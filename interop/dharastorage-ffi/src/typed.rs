@@ -41,8 +41,6 @@ pub struct NativeStorageAttributes {
     pub hidden: u8,
     /// Non-zero when the item is marked as a Windows system item.
     pub system: u8,
-    /// Non-zero when the item is marked with the Windows archive bit.
-    pub archive: u8,
 }
 
 /// Effective process permissions returned through the typed native ABI.
@@ -90,8 +88,6 @@ pub struct NativeFileExtension {
 pub struct NativeStorageMetadata {
     /// File or directory name.
     pub name: NativeUtf8,
-    /// Display name (shell-backed on Windows when available).
-    pub display_name: NativeUtf8,
     /// Settable attributes snapshot.
     pub attributes: NativeStorageAttributes,
     /// Effective permissions for the current process.
@@ -630,7 +626,6 @@ fn native_attributes(attrs: StorageAttributes) -> NativeStorageAttributes {
         read_only: u8::from(attrs.read_only),
         hidden: u8::from(attrs.hidden),
         system: u8::from(attrs.system),
-        archive: u8::from(attrs.archive),
     }
 }
 
@@ -668,7 +663,6 @@ fn native_storage_metadata(
     let accessed_at_utc_ms = system_time_to_unix_millis(metadata.accessed_at());
     NativeStorageMetadata {
         name: strings.push(metadata.name()),
-        display_name: strings.push(metadata.display_name()),
         attributes: native_attributes(metadata.attributes()),
         permissions: native_permissions(metadata.permissions()),
         is_symbolic_link: u8::from(metadata.is_symbolic_link()),

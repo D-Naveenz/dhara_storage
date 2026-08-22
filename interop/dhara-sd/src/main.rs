@@ -5,7 +5,6 @@
 
 #![deny(missing_docs)]
 
-mod log_broadcast;
 mod parent_watch;
 mod proto;
 mod service;
@@ -15,19 +14,12 @@ use std::env;
 use std::process;
 use std::sync::Arc;
 
-use tracing::error;
-use tracing::info;
-
-use crate::log_broadcast::init_tracing;
 use crate::service::DaemonState;
 
 fn main() {
     parent_watch::install_parent_death_signal();
-    let log_tx = init_tracing();
 
     let endpoint = env::args().nth(1).unwrap_or_else(default_endpoint);
-
-    info!(endpoint = %endpoint, pid = process::id(), "starting dhara-sd");
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -35,12 +27,11 @@ fn main() {
         .expect("tokio runtime");
 
     runtime.block_on(async move {
-        let state = Arc::new(DaemonState::new(endpoint.clone(), log_tx));
+        let state = Arc::new(DaemonState::new(endpoint.clone()));
         parent_watch::spawn_lifecycle_tasks(state.clone());
 
         let result = run_transport(&endpoint, state).await;
-        if let Err(err) = result {
-            error!(error = %err, "daemon terminated with error");
+        if let Err(_err) = result {
             process::exit(1);
         }
     });

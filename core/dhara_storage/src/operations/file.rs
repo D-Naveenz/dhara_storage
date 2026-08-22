@@ -4,7 +4,6 @@ use std::fs;
 use std::io::{Cursor, Read};
 use std::path::{Path, PathBuf};
 
-use tracing::{debug, info};
 
 use crate::error::StorageError;
 
@@ -84,15 +83,6 @@ pub fn execute_copy_file_with_options(
 ) -> Result<PathBuf, StorageError> {
     let source = normalize_existing_file(source)?;
     let destination = normalize_path(destination)?;
-    info!(
-        target: "dhara_storage::operations::file",
-        source = %source.display(),
-        destination = %destination.display(),
-        overwrite = options.overwrite,
-        progress = options.progress.is_some(),
-        cancellable = options.cancellation_token.is_some(),
-        "copying file"
-    );
     if source == destination {
         return Err(StorageError::path_conflict(
             destination,
@@ -116,11 +106,6 @@ pub fn execute_copy_file_with_options(
 
             fs::copy(&source, &destination)
                 .map_err(|err| StorageError::io("copy file to", &destination, err))?;
-            info!(
-                target: "dhara_storage::operations::file",
-                destination = %destination.display(),
-                "copied file using direct fs::copy fast path"
-            );
             return Ok(destination.clone());
         }
 
@@ -142,12 +127,6 @@ pub fn execute_copy_file_with_options(
                 session.emit(StorageProcessEvent::Completed {
                     destination: Some(destination.clone()),
                 });
-                info!(
-                    target: "dhara_storage::operations::file",
-                    destination = %destination.display(),
-                    total_bytes = task.file_size,
-                    "copied file with storage process"
-                );
                 Ok(destination.clone())
             }
             Err(err) => {
@@ -224,15 +203,6 @@ pub fn execute_move_file_with_options(
 ) -> Result<PathBuf, StorageError> {
     let source = normalize_existing_file(source)?;
     let destination = normalize_path(destination)?;
-    info!(
-        target: "dhara_storage::operations::file",
-        source = %source.display(),
-        destination = %destination.display(),
-        overwrite = options.overwrite,
-        progress = options.progress.is_some(),
-        cancellable = options.cancellation_token.is_some(),
-        "moving file"
-    );
 
     if source == destination {
         return Ok(source);
@@ -262,23 +232,12 @@ pub fn execute_move_file_with_options(
                 });
             }
 
-            info!(
-                target: "dhara_storage::operations::file",
-                destination = %destination.display(),
-                "moved file using same-volume rename"
-            );
             return Ok(destination.clone());
         }
 
         execute_copy_file_with_options(&source, &destination, options.clone())?;
         fs::remove_file(&source)
             .map_err(|err| StorageError::io("delete source file after move", &source, err))?;
-        info!(
-            target: "dhara_storage::operations::file",
-            source = %source.display(),
-            destination = %destination.display(),
-            "moved file using copy/delete fallback"
-        );
         Ok(destination.clone())
     })
 }
@@ -301,11 +260,6 @@ pub fn rename_file(source: impl AsRef<Path>, new_name: &str) -> Result<PathBuf, 
 /// Delete a file from disk.
 pub fn delete_file(path: impl AsRef<Path>) -> Result<(), StorageError> {
     let path = normalize_existing_file(path)?;
-    info!(
-        target: "dhara_storage::operations::file",
-        path = %path.display(),
-        "deleting file"
-    );
 
     lock_write_targets(&[&path], || {
         fs::remove_file(&path).map_err(|err| StorageError::io("delete file", &path, err))
@@ -314,22 +268,12 @@ pub fn delete_file(path: impl AsRef<Path>) -> Result<(), StorageError> {
 
 /// Read the entire file into memory.
 pub fn read_file(path: impl AsRef<Path>) -> Result<Vec<u8>, StorageError> {
-    debug!(
-        target: "dhara_storage::operations::file",
-        path = %path.as_ref().display(),
-        "reading file bytes"
-    );
     read_file_with_options(path, ReadOptions::default())
 }
 
 /// Read the entire file as UTF-8 text.
 pub fn read_file_to_string(path: impl AsRef<Path>) -> Result<String, StorageError> {
     let path = normalize_existing_file(path)?;
-    debug!(
-        target: "dhara_storage::operations::file",
-        path = %path.display(),
-        "reading file text"
-    );
     fs::read_to_string(&path).map_err(|err| StorageError::io("read file as text", &path, err))
 }
 
@@ -357,15 +301,6 @@ pub fn write_file_from_reader(
     options: WriteOptions,
 ) -> Result<PathBuf, StorageError> {
     let destination = normalize_path(path)?;
-    info!(
-        target: "dhara_storage::operations::file",
-        destination = %destination.display(),
-        overwrite = options.overwrite,
-        create_parent_directories = options.create_parent_directories,
-        progress = options.progress.is_some(),
-        cancellable = options.cancellation_token.is_some(),
-        "writing file from reader"
-    );
 
     lock_write_targets(&[&destination], || {
         prepare_destination_file(
@@ -385,11 +320,6 @@ pub fn write_file_from_reader(
             )?;
             std::io::copy(reader, &mut file)
                 .map_err(|err| StorageError::reader_io("write file from reader", err))?;
-            info!(
-                target: "dhara_storage::operations::file",
-                destination = %destination.display(),
-                "wrote file using direct std::io::copy fast path"
-            );
             return Ok(destination.clone());
         }
 
@@ -412,12 +342,6 @@ pub fn write_file_from_reader(
             "write file",
         )?;
 
-        info!(
-            target: "dhara_storage::operations::file",
-            destination = %destination.display(),
-            buffer_size,
-            "wrote file using buffered transfer"
-        );
         Ok(destination.clone())
     })
 }
@@ -427,13 +351,6 @@ pub(crate) fn read_file_with_options(
     options: ReadOptions,
 ) -> Result<Vec<u8>, StorageError> {
     let path = normalize_existing_file(path)?;
-    debug!(
-        target: "dhara_storage::operations::file",
-        path = %path.display(),
-        progress = options.progress.is_some(),
-        cancellable = options.cancellation_token.is_some(),
-        "reading file with options"
-    );
 
     if options.progress.is_none() && options.cancellation_token.is_none() {
         return fs::read(&path).map_err(|err| StorageError::io("read file", &path, err));
@@ -454,12 +371,5 @@ pub(crate) fn read_file_with_options(
         options.cancellation_token.as_ref(),
         "read file",
     )?;
-    debug!(
-        target: "dhara_storage::operations::file",
-        path = %path.display(),
-        total_bytes,
-        buffer_size,
-        "completed buffered file read"
-    );
     Ok(buffer)
 }

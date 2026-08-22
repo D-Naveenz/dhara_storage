@@ -5,7 +5,6 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
-use tracing::debug;
 
 use crate::analysis::{AnalysisReport, analyze_path};
 use crate::error::StorageError;
@@ -138,11 +137,6 @@ impl FileStorage {
     ///
     /// Subsequent [`Self::metadata`] calls enrich type/extension from this cache.
     pub fn analyze(&self) -> Result<AnalysisReport, StorageError> {
-        debug!(
-            target: "dhara_storage::storage::file",
-            path = %self.absolute_path.display(),
-            "analyzing file content"
-        );
         let report = analyze_path(&self.absolute_path)?;
         if let Ok(mut guard) = self.analysis.lock() {
             *guard = Some(report.clone());

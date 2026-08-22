@@ -6,7 +6,6 @@ namespace Dhara.Storage.Models.Metadata;
 /// Represents file-specific metadata returned from the native runtime.
 /// </summary>
 /// <param name="Name">Leaf file name.</param>
-/// <param name="DisplayName">Shell display name when available; otherwise a name-based fallback.</param>
 /// <param name="Attributes">Settable filesystem attributes snapshot.</param>
 /// <param name="Permissions">Effective permissions snapshot for the current process.</param>
 /// <param name="IsSymbolicLink">Whether the path is a symbolic link.</param>
@@ -21,7 +20,6 @@ namespace Dhara.Storage.Models.Metadata;
 /// <param name="Icon">Optional OS shell icon pixels when requested by the caller.</param>
 public sealed record FileMetadata(
     string Name,
-    string DisplayName,
     StorageAttributes Attributes,
     StoragePermissions Permissions,
     bool IsSymbolicLink,
@@ -34,4 +32,4 @@ public sealed record FileMetadata(
     FileExtension Extension,
     AnalysisReport? Analysis,
     ShellIcon? Icon)
-    : StorageMetadata(Name, DisplayName, Attributes, Permissions, IsSymbolicLink, LinkTarget, IsTemporary, CreatedAtUtc, ModifiedAtUtc, AccessedAtUtc);
+    : StorageMetadata(Name, Attributes, Permissions, IsSymbolicLink, LinkTarget, IsTemporary, CreatedAtUtc, ModifiedAtUtc, AccessedAtUtc);

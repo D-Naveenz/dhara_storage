@@ -36,9 +36,6 @@ service DharaSd {
 
   rpc EnqueueWork(EnqueueWorkRequest) returns (EnqueueWorkResponse);
   rpc StreamWorkEvents(StreamWorkEventsRequest) returns (stream WorkEvent);
-
-  /// Merged dhara_storage + dhara-sd tracing; parallel to unary RPCs.
-  rpc StreamLogs(StreamLogsRequest) returns (stream LogRecord);
 }
 
 message PingRequest {}
@@ -72,7 +69,6 @@ message StorageAttributesPayload {
   bool read_only = 1;
   bool hidden = 2;
   bool system = 3;
-  bool archive = 4;
 }
 
 message StoragePermissionsPayload {
@@ -103,7 +99,6 @@ message GetFileMetadataResponse {
   string absolute_path = 1;
   optional string relative_path = 2;
   string name = 3;
-  string display_name = 4;
   StorageSizePayload size = 5;
   StorageAttributesPayload attributes = 6;
   StoragePermissionsPayload permissions = 7;
@@ -129,7 +124,6 @@ message GetDirectoryMetadataResponse {
   string absolute_path = 1;
   optional string relative_path = 2;
   string name = 3;
-  string display_name = 4;
   bool exists = 5;
   StorageAttributesPayload attributes = 6;
   StoragePermissionsPayload permissions = 7;
@@ -315,18 +309,3 @@ message WorkEvent {
   int64 unix_millis = 3;
 }
 
-message StreamLogsRequest {
-  // 1=ERROR .. 5=TRACE; default 3 (INFO) when 0.
-  uint32 min_level = 1;
-}
-
-message LogRecord {
-  string level = 1;
-  string target = 2;
-  string message = 3;
-  uint64 timestamp_unix_ms = 4;
-  optional string module_path = 5;
-  optional string file = 6;
-  optional uint32 line = 7;
-  map<string, string> fields = 8;
-}
