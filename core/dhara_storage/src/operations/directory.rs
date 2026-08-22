@@ -4,7 +4,6 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::thread;
 
-
 use crate::error::StorageError;
 use crate::metadata::scan_directory_summary;
 
@@ -374,7 +373,6 @@ fn walk_enqueue_files(
     senders: &[std::sync::mpsc::SyncSender<(PathBuf, PathBuf)>],
     cancellation: &StorageCancellationToken,
 ) -> Result<(), StorageError> {
-
     let mut next_sender = 0usize;
     walk_enqueue_recursive(source, destination, senders, &mut next_sender, cancellation)
 }

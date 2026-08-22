@@ -1,18 +1,12 @@
 //! Shared [`StorageMetadata`] trait and load helpers for timestamps / links.
 
-
-
 use std::fs;
 
 use std::path::{Path, PathBuf};
 
 use std::time::SystemTime;
 
-
-
 use crate::error::StorageError;
-
-
 
 use super::attributes::{StorageAttributes, attributes_from_fs_metadata};
 
@@ -21,8 +15,6 @@ use super::permissions::{StoragePermissions, permissions_from_metadata_and_attrs
 use super::shell_icon::ShellIcon;
 
 use super::temporary::is_temporary_from_metadata;
-
-
 
 /// Common metadata contract for files and directories.
 
@@ -33,7 +25,6 @@ use super::temporary::is_temporary_from_metadata;
 /// content analysis when available; see [`crate::metadata::StorageType`].
 
 pub trait StorageMetadata {
-
     /// Last path segment (file or directory name).
 
     fn name(&self) -> &str;
@@ -77,17 +68,13 @@ pub trait StorageMetadata {
     /// Load a shell icon at an explicit pixel size without caching on `self`.
 
     fn load_icon_at(&self, size: u32) -> Option<ShellIcon>;
-
 }
-
-
 
 /// Shared fields loaded from the filesystem for metadata snapshots.
 
 #[derive(Debug, Clone)]
 
 pub(crate) struct CommonFields {
-
     pub name: String,
 
     pub attributes: StorageAttributes,
@@ -105,44 +92,25 @@ pub(crate) struct CommonFields {
     pub modified_at: Option<SystemTime>,
 
     pub accessed_at: Option<SystemTime>,
-
 }
 
-
-
 impl CommonFields {
-
     pub(crate) fn load(absolute_path: &Path) -> Result<(Self, fs::Metadata), StorageError> {
-
         let metadata = fs::symlink_metadata(absolute_path)
-
             .map_err(|err| StorageError::io("read metadata for", absolute_path, err))?;
 
-
-
         let name = absolute_path
-
             .file_name()
-
             .map(|value| value.to_string_lossy().into_owned())
-
             .unwrap_or_else(|| absolute_path.as_os_str().to_string_lossy().into_owned());
-
-
 
         let is_symbolic_link = metadata.file_type().is_symlink();
 
         let link_target = if is_symbolic_link {
-
             fs::read_link(absolute_path).ok()
-
         } else {
-
             None
-
         };
-
-
 
         let attributes = attributes_from_fs_metadata(&metadata, absolute_path);
 
@@ -150,12 +118,8 @@ impl CommonFields {
 
         let is_temporary = is_temporary_from_metadata(absolute_path, &metadata);
 
-
-
         Ok((
-
             Self {
-
                 name,
 
                 attributes,
@@ -173,14 +137,8 @@ impl CommonFields {
                 modified_at: metadata.modified().ok(),
 
                 accessed_at: metadata.accessed().ok(),
-
             },
-
             metadata,
-
         ))
-
     }
-
 }
-

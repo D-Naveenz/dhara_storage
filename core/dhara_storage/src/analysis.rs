@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::Path;
 
-
 use crate::definitions::{DefinitionRecord, database};
 use crate::error::StorageError;
 
