@@ -25,7 +25,7 @@ The package bundles a small native `dhara-sd` sidecar for supported runtimes and
 ## Install
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.10.0
+dotnet add package Dhara.Storage --version 0.10.1
 ```
 
 | OS | RIDs | Runtime status |

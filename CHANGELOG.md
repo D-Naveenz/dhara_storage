@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.10.1 - 2026-08-23
+
+### Changed
+- Documented Metadata, analyze-on-handle, process-first copy/move, and `StorageProcessEvent` on package READMEs and implementer docs; aligned architecture notes with `ProcessSession` vs public `StorageProcess`.
+
+### Fixed
+- FFI metadata tests treat a successful `dhara_get_file_metadata` pointer as optional (`as_ref`) so CodeQL no longer flags an invalid dereference; rustfmt matches the quality gate.
+
+### Technical
+- Bumped workspace / NuGet product line to **0.10.1** (0.10.0 already published).
+- Pinned DROT for Windows `package stage-native --msvc-env` (`vcvarsall` temp-batch) so Package Pipeline can stage natives.
+- Refreshed `quick-xml` and `uuid`; started tracking workspace `Cargo.lock`.
+
 ## v0.10.0 - 2026-08-23
 
 ### Added

@@ -29,7 +29,7 @@
   <PropertyGroup>
     <PackageId>Dhara.Storage</PackageId>
     <Product>Dhara Storage</Product>
-    <Version>0.10.0</Version>
+    <Version>0.10.1</Version>
     <Description>.NET bindings for Dhara Storage: content-based file intelligence, file and directory handles, transfers, watching, and metadata via the bundled sidecar daemon.</Description>
     <Authors>Naveen Dharmathunga</Authors>
     <PackageTags>storage;grpc;rust;analysis;file-handling;directory-management;watching</PackageTags>

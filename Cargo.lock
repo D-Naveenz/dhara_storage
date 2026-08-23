@@ -245,7 +245,7 @@ checksum = "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17"
 
 [[package]]
 name = "dhara-sd"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "async-stream",
  "dhara_storage",
@@ -265,7 +265,7 @@ dependencies = [
 
 [[package]]
 name = "dhara_storage"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "dhara_storage_core",
  "file_icon_provider",
@@ -280,7 +280,7 @@ dependencies = [
 
 [[package]]
 name = "dhara_storage_core"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "crossbeam-channel",
  "flatbuffers",
@@ -291,7 +291,7 @@ dependencies = [
 
 [[package]]
 name = "dharastorage-ffi"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "dhara_storage",
  "serde",
