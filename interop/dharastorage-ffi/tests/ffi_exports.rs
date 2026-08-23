@@ -78,8 +78,8 @@ fn file_metadata_returns_optional_analysis_pointer() {
 
     assert_eq!(status, DharaStatus::Ok);
     assert!(err_ptr.is_null());
-    assert!(!metadata.is_null());
-    let metadata_ref = unsafe { &*metadata };
+    let metadata_ref = unsafe { metadata.as_ref() }
+        .expect("metadata pointer must be non-null on success");
     assert!(metadata_ref.size > 0);
     assert!(!metadata_ref.analysis.is_null());
     unsafe { dhara_file_metadata_free(metadata) };
