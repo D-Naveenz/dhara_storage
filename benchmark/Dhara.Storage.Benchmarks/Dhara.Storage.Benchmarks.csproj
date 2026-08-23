@@ -18,7 +18,7 @@
     <AssemblyTitle>Dhara Storage Benchmark Tool</AssemblyTitle>
     <Product>Dhara Storage</Product>
     <Authors>Naveen Dharmathunga</Authors>
-    <Version>0.9.24</Version>
+    <Version>0.10.0</Version>
   </PropertyGroup>
 
   <!-- BenchmarkDotNet rejects attached debuggers; Release is the supported configuration. -->

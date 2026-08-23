@@ -7,34 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## v0.10.0 - 2026-08-23
+
 ### Added
 - Added engine/interop `open_for_read` / `open_for_write` with `FileShareMode`, optional `lock_timeout` (retry only on sharing/busy), and OS access errors mapped to `StorageError` (including `LockTimeout`).
 - Added public awaitable `StorageProcess` (Rust `Future` / .NET `Completion` + `GetAwaiter`) as the copy/move executioner; sync APIs wait inside and return void / `Result<()>`.
 - Added `ProcessSession` in `dhara_storage_core::process` for engine cancel/events/`TaskQueue` helpers (session is not the public awaitable handle).
 - Added bounded `TaskQueue` for long-running transfer sessions (single consumer over discrete path/size tasks).
 - Added `StorageProcessEvent` progress model (`Started` / `CurrentItem` / `Bytes` / `Completed` / `Failed` / `Cancelled`) across Rust, `dhara-sd` gRPC streams, and .NET `IProgress<StorageProcessEvent>`.
+- Expanded `dhara_storage_core` beyond DSFD: shared process primitives and portable types (transfer/read/write options, size, attributes, permissions), re-exported from `dhara_storage`.
 - Documented deferred transfer work (RAM read-ahead pool, verify, broader process-first ops) in `docs/transfer-pipeline-next.md`.
 
 ### Changed
+- Replaced Information with Metadata across Rust, `dhara-sd`, FFI, and .NET: paths and size live on storage handles; attributes, permissions, and type live on metadata.
+- Moved content analysis onto `FileStorage` / `StorageFile.Analyze()` with handle-cached state; `metadata()` enriches type/extension from that cache.
 - Daemon `OpenReadHandle` / `OpenWriteHandle` open via the runtime APIs then dup/FD-pass; proto carries optional `ShareMode` and `lock_timeout_ms` (0 = fail immediately on busy).
 - Write-handle default share is **exclusive** (clean-cut vs prior share-all daemon write); read-handle default remains shared.
 - Copy/move are process-first: work starts immediately; `CopyAsync` / `start_*` return `StorageProcess`; sync `Copy` / `copy_*` wait and return void / `Result<()>`.
 - Runtime copy/move transfers enqueue prepared tasks on a `TaskQueue` and write with a single consumer to avoid destination write thrashing.
 - Replaced snapshot `StorageProgress` / `ProgressReporter` with `StorageProcessEvent` / `ProcessEventReporter` (clean-cut on managed APIs and daemon stream messages).
-- Removed analyze-during-copy (`TransferOptions.analyze_content`); content intelligence stays on analyze/metadata APIs only.
+- Content intelligence stays on analyze/metadata APIs only (no analyze-during-copy).
 - Removed thin Tokio `spawn_blocking` wrappers for copy/move (await `StorageProcess` instead).
 
 ### Removed
 - Sync copy/move no longer return destination handles/`PathBuf` from the public sugar APIs (use `start_*` / `ProcessOutcome` / await destination when needed).
-
-## v0.9.24 - 2026-08-10
-
-### Changed
-- Expanded `dhara_storage_core` beyond DSFD: shared process primitives (progress, cancellation, reporters) and portable types (transfer/read/write options, size, attributes, permissions).
-- Runtime keeps concrete path handles and filesystem I/O; API-facing core types remain re-exported from `dhara_storage` for the usual app dependency path.
+- Removed product logging bridges (`StreamLogs`, tracing/logger wiring, `Microsoft.Extensions.Logging` integration on managed bindings).
+- Removed shell `DisplayName` and the portable `Archive` attribute from the metadata surface (icons and analysis-backed type labels remain).
 
 ### Technical
-- Bumped workspace / NuGet product line to **0.9.24**.
+- Bumped workspace / NuGet product line to **0.10.0**.
+- Added quality-run agent workflow guidance for local CI parity before push.
 
 ## v0.9.23 - 2026-08-08
 

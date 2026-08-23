@@ -1,5 +1,5 @@
 [versions]
-workspace = "0.9.24"
+workspace = "0.10.0"
 
 [product]
 authors = ["Naveen Dharmathunga"]
