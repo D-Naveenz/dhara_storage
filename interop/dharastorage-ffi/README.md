@@ -11,9 +11,9 @@ Filesystem and analysis behavior live in the core; this crate marshals results a
 ## Why this package
 
 - Immediate queries: analysis, metadata, listings, reads, writes, path mutations
-- Background ops with progress and cancellation
+- Background ops with `StorageProcessEvent` progress and cancellation
 - Directory watches with debounced typed events
-- Streaming write sessions for managed hosts
+- Streaming write sessions for C / evidence hosts (not the .NET NuGet path)
 
 ## Prerequisites
 

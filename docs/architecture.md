@@ -43,8 +43,8 @@ flowchart TB
 
 | Path | Role |
 |------|------|
-| `core/dhara_storage_core` | Framework (`definitions` = DSFD; `process` = `StorageProcess` / `TaskQueue` / `StorageProcessEvent` + cancel; `types` = options + value shapes; no embedded defs) |
-| `core/dhara_storage` | Business runtime; embeds `filedefs.dat`; concrete path handles and FS I/O |
+| `core/dhara_storage_core` | Framework (`definitions` = DSFD; `process` = `ProcessSession` / `TaskQueue` / `StorageProcessEvent` + cancel; `types` = options + value shapes; no embedded defs) |
+| `core/dhara_storage` | Business runtime; embeds `filedefs.dat`; concrete path handles, FS I/O, and public awaitable `StorageProcess` |
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`); gRPC + handle transfer |
 | `interop/dharastorage-ffi` | C ABI crate — benchmark evidence only (not NuGet) |
 | `bindings/csharp/` | `Dhara.Storage` NuGet, Hosting extensions, tests |

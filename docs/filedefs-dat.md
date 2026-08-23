@@ -194,7 +194,7 @@ normalizes to ISO `YYYY-MM-DD` in the output metadata.
 | `dhara_storage_core` | Owns DSFD layout, FlatBuffers schema, XML metadata, encode/decode (no embed) |
 | `dhara_storage` | Runtime analysis; embeds and indexes `filedefs.dat` |
 | `drot` | Builds, inspects, syncs, and assigns `packageRevision` |
-| `dharastorage` | C ABI for managed hosts; does not parse DSFD layout directly |
+| `dharastorage` | C ABI for benchmarks / non-.NET hosts (not NuGet); does not parse DSFD layout directly |
 
 Public core entry points:
 

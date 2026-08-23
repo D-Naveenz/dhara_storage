@@ -181,7 +181,7 @@ Do not force typed ABI for every byte of data. JSON is still reasonable for:
 - diagnostic-only metadata
 - rare payloads whose shape is intentionally flexible
 
-Use typed ABI for hot structured result paths such as listings, file information, directory information, analysis reports, and watch events.
+Use typed ABI for hot structured result paths such as listings, file metadata, directory metadata, analysis reports, and watch events.
 
 ## Checklist For New Typed ABI Results
 
@@ -199,7 +199,7 @@ Use typed ABI for hot structured result paths such as listings, file information
 
 ## Related docs
 
-- [dharastorage README][readme-dharastorage] — exported C entry points and logger bridge
+- [dharastorage README][readme-dharastorage] — exported C entry points (benchmark / evidence ABI)
 - [Dhara.Storage README][readme-nuget] — managed consumer API
 - [CI/CD pipelines][ci-cd] — native package verification on Windows CI
 - [Docs index][docs-index]

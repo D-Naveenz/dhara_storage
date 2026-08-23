@@ -28,7 +28,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Workspace][root-readme] | GitHub repo landing |
 | [dhara_storage][readme-dhara-storage] | crates.io |
 | [dhara_storage_core][readme-core] | crates.io |
-| [dharastorage][readme-dharastorage] | Native ABI (NuGet asset) |
+| [dharastorage][readme-dharastorage] | Native C ABI (benchmark / evidence; not NuGet) |
 | [Dhara.Storage][readme-nuget] | NuGet.org — primary package |
 | [Dhara.Storage.Extensions.Hosting][readme-hosting] | NuGet.org — Generic Host extension |
 | [drot][readme-tool] | Operator CLI/TUI (submodule) |

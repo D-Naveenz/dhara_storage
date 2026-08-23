@@ -10,11 +10,12 @@ The package bundles a small native `dhara-sd` sidecar for supported runtimes and
 ## Why use it
 
 - `DharaStorage.File` / `DharaStorage.Directory` for path-based work
-- Content-based MIME and type candidates (`AnalyzePath` / analysis on handles)
+- Content-based MIME and type candidates (`Analyze` / `AnalyzePath`); `Metadata` enriched from the handle cache
 - Sync and async read, write, copy, move, rename, delete
+- Process-first copy/move (`StorageProcess`) with `IProgress<StorageProcessEvent>`
 - Directory watching with typed change events
-- One NuGet with a bundled sidecar for supported RIDs
-- Native AOT–compatible: publish your app with `<PublishAot>true</PublishAot>`; the `dhara-sd` sidecar is deployed alongside your executable via NuGet native assets
+- One NuGet with a bundled `dhara-sd` sidecar for supported RIDs
+- Native AOT–compatible: publish your app with `<PublishAot>true</PublishAot>`; the sidecar is deployed alongside your executable via NuGet native assets
 
 ## Prerequisites
 
@@ -46,7 +47,7 @@ var metadata = file.Metadata; // enriched from the cached analysis
 var bytes = await file.ReadBytesAsync();
 ```
 
-### 3. Watch a directory
+### 2. Watch a directory
 
 ```csharp
 using Dhara.Storage;
@@ -60,13 +61,20 @@ directory.Changed += (_, change) => Console.WriteLine(change.Path);
 
 ```csharp
 using Dhara.Storage;
+using Dhara.Storage.Models.Progress;
 
 var file = DharaStorage.File(@"C:\data\input.bin");
-// Sync: starts immediately and waits inside.
-file.Copy(@"C:\data\copy.bin", overwrite: true);
+var progress = new Progress<StorageProcessEvent>(e =>
+{
+    if (e is StorageProcessBytes bytes)
+        Console.WriteLine($"{bytes.BytesTransferred} bytes");
+});
 
-// Async: starts immediately; await the StorageProcess for the destination path.
-var destination = await file.CopyAsync(@"C:\data\copy2.bin", overwrite: true);
+// Sync: starts immediately and waits inside.
+file.Copy(@"C:\data\copy.bin", progress, overwrite: true);
+
+// Async: starts immediately; await StorageProcess for the destination path.
+var destination = await file.CopyAsync(@"C:\data\copy2.bin", progress, overwrite: true);
 ```
 
 ### 4. Host lifetime (ASP.NET Core, worker services)
