@@ -13,19 +13,11 @@ use super::temporary::is_temporary_from_metadata;
 
 /// Common metadata contract for files and directories.
 ///
-/// Paths and size live on storage handles, not here. Shell details stay internal;
-/// callers use [`StorageMetadata::display_name`] and file [`crate::metadata::StorageType`].
-///
-/// # Future work
-///
-/// Executable and library binaries may grow an `ExecutableMetadata: FileMetadata`
-/// layer (via the `object` crate) for architecture, format, exports, and imports.
-/// That is intentionally out of scope for this module today.
+/// Paths and size live on storage handles, not here. File type labels come from
+/// content analysis when available; see [`crate::metadata::StorageType`].
 pub trait StorageMetadata {
     /// Last path segment (file or directory name).
     fn name(&self) -> &str;
-    /// Prefer shell display name on Windows when available; else stem/name fallbacks.
-    fn display_name(&self) -> &str;
     /// Filesystem creation timestamp when the platform exposes it.
     fn created_at(&self) -> Option<SystemTime>;
     /// Filesystem last-modified timestamp when the platform exposes it.

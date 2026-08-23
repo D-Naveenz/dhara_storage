@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 use std::thread;
 
 use once_cell::sync::OnceCell;
-use tracing::debug;
 
 use crate::error::StorageError;
 
@@ -13,7 +12,6 @@ use super::attributes::StorageAttributes;
 use super::permissions::StoragePermissions;
 use super::shell_icon::{DEFAULT_SHELL_ICON_SIZE, ShellIcon, load_shell_icon};
 use super::traits::{CommonFields, StorageMetadata};
-use super::windows_shell::{ShellDetails, load_shell_details};
 use super::{StorageSize, format_size};
 
 /// Recursive directory statistics computed on demand.
@@ -45,7 +43,6 @@ pub struct DirectoryMetadata {
     absolute_path: PathBuf,
     common: CommonFields,
     summary: OnceCell<DirectorySummary>,
-    shell_details: OnceCell<Option<ShellDetails>>,
     shell_icon: OnceCell<Option<ShellIcon>>,
 }
 
@@ -53,11 +50,6 @@ impl DirectoryMetadata {
     /// Load directory metadata without walking the tree.
     pub fn load(absolute_path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let absolute_path = absolute_path.as_ref().to_path_buf();
-        debug!(
-            target: "dhara_storage::metadata::directory",
-            path = %absolute_path.display(),
-            "loading directory metadata"
-        );
         let (common, fs_metadata) = CommonFields::load(&absolute_path)?;
         if !fs_metadata.is_dir()
             && !(fs_metadata.file_type().is_symlink() && absolute_path.is_dir())
@@ -71,51 +63,25 @@ impl DirectoryMetadata {
             absolute_path,
             common,
             summary: OnceCell::new(),
-            shell_details: OnceCell::new(),
             shell_icon: OnceCell::new(),
         })
     }
 
     /// Lazily compute and cache recursive directory statistics.
     pub fn summary(&self) -> Result<&DirectorySummary, StorageError> {
-        debug!(
-            target: "dhara_storage::metadata::directory",
-            path = %self.absolute_path.display(),
-            "loading directory summary on demand"
-        );
         self.summary
             .get_or_try_init(|| scan_directory_summary(&self.absolute_path))
     }
 
-    /// Content/identity type label (shell-backed on Windows when available).
+    /// Portable directory type label.
     pub fn file_type_name(&self) -> String {
-        self.ensure_shell()
-            .and_then(|shell| shell.type_name.as_deref())
-            .filter(|value| !value.is_empty())
-            .unwrap_or("Directory")
-            .to_owned()
-    }
-
-    fn ensure_shell(&self) -> Option<&ShellDetails> {
-        self.shell_details
-            .get_or_init(|| load_shell_details(&self.absolute_path))
-            .as_ref()
-    }
-
-    fn shell_display_name(&self) -> Option<&str> {
-        self.ensure_shell()
-            .and_then(|shell| shell.display_name.as_deref())
-            .filter(|value| !value.is_empty())
+        "Folder".to_owned()
     }
 }
 
 impl StorageMetadata for DirectoryMetadata {
     fn name(&self) -> &str {
         &self.common.name
-    }
-
-    fn display_name(&self) -> &str {
-        self.shell_display_name().unwrap_or_else(|| self.name())
     }
 
     fn created_at(&self) -> Option<std::time::SystemTime> {
@@ -163,11 +129,6 @@ impl StorageMetadata for DirectoryMetadata {
 
 /// Scan a directory tree and return recursive size/count statistics.
 pub fn scan_directory_summary(path: &Path) -> Result<DirectorySummary, StorageError> {
-    debug!(
-        target: "dhara_storage::metadata::directory",
-        path = %path.display(),
-        "scanning directory summary"
-    );
     let entries = fs::read_dir(path)
         .map_err(|err| StorageError::io("read directory for", path.to_path_buf(), err))?
         .collect::<Result<Vec<_>, _>>()
@@ -189,14 +150,6 @@ pub fn scan_directory_summary(path: &Path) -> Result<DirectorySummary, StorageEr
             summary += handle.join().expect("directory summary worker panicked")?;
         }
 
-        debug!(
-            target: "dhara_storage::metadata::directory",
-            path = %path.display(),
-            total_size = summary.total_size,
-            file_count = summary.file_count,
-            directory_count = summary.directory_count,
-            "directory summary completed"
-        );
         Ok(summary)
     })
 }

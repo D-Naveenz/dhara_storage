@@ -22,7 +22,7 @@ public sealed class ShellIconTests
             Assert.True(metadata.Icon.RgbaPixels.Length > 0);
         }
 
-        Assert.False(string.IsNullOrWhiteSpace(metadata.DisplayName)
+        Assert.False(string.IsNullOrWhiteSpace(metadata.Name)
             && string.IsNullOrWhiteSpace(metadata.FileType.Name));
     }
 }

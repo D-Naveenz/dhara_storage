@@ -43,7 +43,7 @@ Portable answer to `Windows.Storage` limits (WinRT-shaped APIs hard to reuse fro
 | Model | `StorageFile` / `StorageFolder` handles (often brokered) | `StorageFile` / `StorageDirectory` (Rust: `FileStorage` / `DirectoryStorage`) over ordinary absolute paths |
 | “Content type” | Extension association (MS docs) | Opt-in content signatures via bundled `filedefs.dat` → ranked MIME / type |
 | Platform | Windows / WinRT sandbox & pickers | Multi-RID desktop; usable from libraries |
-| Transfers / watch | Uneven progress; watch often external | Progress + cancel; debounced directory watch; shell icon RGBA (+ Windows shell details) |
+| Transfers / watch | Uneven progress; watch often external | Progress + cancel; debounced directory watch; shell icon RGBA; definition-backed type identity |
 
 ### Intentionally omitted from READMEs
 

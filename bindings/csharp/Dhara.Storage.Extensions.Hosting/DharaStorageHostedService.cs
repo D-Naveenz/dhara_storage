@@ -1,6 +1,5 @@
 using Dhara.Storage.Runtime;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 namespace Dhara.Storage.Extensions.Hosting;
 
@@ -11,7 +10,7 @@ internal sealed class DharaStorageHostedService(DharaStorageHostingOptions optio
 {
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken) =>
-        DharaRuntime.StartAsync(options.PipeName, options.DaemonExePath, options.MinLogLevel, cancellationToken);
+        DharaRuntime.StartAsync(options.PipeName, options.DaemonExePath, cancellationToken);
 
     /// <inheritdoc />
     public async Task StopAsync(CancellationToken cancellationToken)

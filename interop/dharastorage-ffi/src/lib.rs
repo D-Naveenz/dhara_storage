@@ -18,7 +18,6 @@ macro_rules! ffi_fn {
 
 mod abi;
 mod errors;
-mod logging;
 mod marshal;
 mod models;
 mod operations;
@@ -28,7 +27,6 @@ mod typed;
 mod watching;
 
 pub use abi::{DharaOperationSnapshot, DharaOperationState, DharaStatus};
-pub use logging::*;
 pub use operations::*;
 pub use queries::*;
 pub use sessions::*;

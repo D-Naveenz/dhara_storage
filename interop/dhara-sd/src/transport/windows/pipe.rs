@@ -8,7 +8,6 @@ use async_stream::stream;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::windows::named_pipe::{NamedPipeServer, ServerOptions};
 use tonic::transport::server::{Connected, Router};
-use tracing::{debug, info};
 
 /// Default pipe path used when the host does not pass an override.
 pub const DEFAULT_PIPE_NAME: &str = r"\\.\pipe\dhara-sd";
@@ -74,7 +73,6 @@ pub async fn serve_named_pipe(
         };
 
         loop {
-            debug!(pipe = %pipe_name, "waiting for named-pipe client");
             if let Err(err) = server.connect().await {
                 yield Err(err);
                 break;
@@ -88,7 +86,6 @@ pub async fn serve_named_pipe(
                 }
             };
 
-            info!(pipe = %pipe_name, "named-pipe client connected");
             let connected = std::mem::replace(&mut server, next);
             yield Ok(PipeConnection { inner: connected });
         }

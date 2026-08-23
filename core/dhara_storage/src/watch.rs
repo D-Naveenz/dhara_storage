@@ -7,7 +7,6 @@ use std::time::{Duration, SystemTime};
 
 use notify::event::{EventKind, ModifyKind, RenameMode};
 use notify::{Event, RecommendedWatcher, RecursiveMode, Watcher};
-use tracing::{debug, info};
 
 use crate::error::StorageError;
 
@@ -68,13 +67,6 @@ impl DirectoryWatchHandle {
     /// Start watching a directory for debounced change events.
     pub fn watch(path: impl AsRef<Path>, config: StorageWatchConfig) -> Result<Self, StorageError> {
         let path = path.as_ref().to_path_buf();
-        info!(
-            target: "dhara_storage::watch",
-            path = %path.display(),
-            recursive = config.recursive,
-            debounce_window_ms = config.debounce_window.as_millis() as u64,
-            "starting directory watcher"
-        );
         if !path.exists() {
             return Err(StorageError::NotFound { path });
         }
@@ -113,7 +105,6 @@ impl DirectoryWatchHandle {
 
     /// Block until the next debounced event arrives.
     pub fn recv(&self) -> Result<StorageChangeEvent, StorageError> {
-        debug!(target: "dhara_storage::watch", "waiting for watcher event");
         self.receiver
             .recv()
             .map_err(|_| StorageError::watch("receive watcher event", "watcher closed"))
@@ -149,7 +140,6 @@ impl DirectoryWatchHandle {
 
 impl Drop for DirectoryWatchHandle {
     fn drop(&mut self) {
-        info!(target: "dhara_storage::watch", "stopping directory watcher");
         self.watcher.take();
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
@@ -199,13 +189,6 @@ fn flush_batch(batch: &[Event], event_tx: &mpsc::Sender<StorageChangeEvent>) {
     }
 
     for event in emitted {
-        debug!(
-            target: "dhara_storage::watch",
-            change_type = ?event.change_type,
-            path = %event.path.display(),
-            previous_path = event.previous_path.as_ref().map(|path| path.display().to_string()).unwrap_or_default(),
-            "emitting debounced watcher event"
-        );
         if event_tx.send(event).is_err() {
             break;
         }

@@ -24,16 +24,11 @@ pub fn spawn_acceptor(
     }
 
     let listener = UnixListener::bind(path)?;
-    let path_display = path.display().to_string();
-    std::thread::spawn(move || match listener.accept() {
-        Ok((stream, _)) => {
-            if let Ok(mut guard) = state.fd_pass_conn.lock() {
-                *guard = Some(stream);
-            }
-            tracing::info!(endpoint = %path_display, "fd-pass client connected");
-        }
-        Err(err) => {
-            tracing::error!(endpoint = %path_display, error = %err, "fd-pass accept failed");
+    std::thread::spawn(move || {
+        if let Ok((stream, _)) = listener.accept()
+            && let Ok(mut guard) = state.fd_pass_conn.lock()
+        {
+            *guard = Some(stream);
         }
     });
     Ok(())

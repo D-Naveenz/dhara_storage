@@ -5,7 +5,6 @@ use std::sync::atomic::Ordering;
 use std::time::Duration;
 
 use tokio::time;
-use tracing::info;
 
 use crate::service::DaemonState;
 
@@ -16,9 +15,7 @@ pub fn install_parent_death_signal() {
         use nix::sys::prctl::set_pdeathsig;
         use nix::sys::signal::Signal;
 
-        if let Err(err) = set_pdeathsig(Signal::SIGTERM) {
-            tracing::warn!(error = %err, "PR_SET_PDEATHSIG failed; parent watchdog remains active");
-        }
+        let _ = set_pdeathsig(Signal::SIGTERM);
     }
 }
 
@@ -43,17 +40,12 @@ pub fn spawn_parent_watchdog(state: Arc<DaemonState>, parent_pid: u32) {
         return;
     }
 
-    info!(parent_pid, "parent watchdog started");
     tokio::spawn(async move {
         let mut interval = time::interval(PARENT_POLL_INTERVAL);
         loop {
             interval.tick().await;
             let pid = state.parent_pid().unwrap_or(parent_pid);
             if !is_process_alive(pid) {
-                info!(
-                    parent_pid = pid,
-                    "parent process exited; shutting down dhara-sd"
-                );
                 std::process::exit(0);
             }
         }
@@ -64,7 +56,6 @@ fn spawn_handshake_idle_watch(state: Arc<DaemonState>) {
     tokio::spawn(async move {
         time::sleep(HANDSHAKE_IDLE_TIMEOUT).await;
         if state.parent_pid().is_none() {
-            info!("handshake not received within idle timeout; shutting down dhara-sd");
             std::process::exit(0);
         }
     });

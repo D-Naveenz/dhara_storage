@@ -22,7 +22,6 @@ pub(crate) fn attributes_from_fs_metadata(
         read_only: metadata.permissions().readonly(),
         hidden: is_hidden(metadata, path),
         system: is_system(metadata),
-        archive: is_archive(metadata),
     }
 }
 
@@ -42,9 +41,8 @@ pub fn apply_storage_attributes(path: &Path, attrs: StorageAttributes) -> Result
 fn apply_attributes_windows(path: &Path, attrs: StorageAttributes) -> Result<(), StorageError> {
     use std::os::windows::ffi::OsStrExt;
     use windows::Win32::Storage::FileSystem::{
-        FILE_ATTRIBUTE_ARCHIVE, FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL,
-        FILE_ATTRIBUTE_READONLY, FILE_ATTRIBUTE_SYSTEM, FILE_FLAGS_AND_ATTRIBUTES,
-        SetFileAttributesW,
+        FILE_ATTRIBUTE_HIDDEN, FILE_ATTRIBUTE_NORMAL, FILE_ATTRIBUTE_READONLY,
+        FILE_ATTRIBUTE_SYSTEM, FILE_FLAGS_AND_ATTRIBUTES, SetFileAttributesW,
     };
     use windows::core::PCWSTR;
 
@@ -57,9 +55,6 @@ fn apply_attributes_windows(path: &Path, attrs: StorageAttributes) -> Result<(),
     }
     if attrs.system {
         flags |= FILE_ATTRIBUTE_SYSTEM.0;
-    }
-    if attrs.archive {
-        flags |= FILE_ATTRIBUTE_ARCHIVE.0;
     }
     if flags == 0 {
         flags = FILE_ATTRIBUTE_NORMAL.0;
@@ -85,8 +80,8 @@ fn apply_attributes_unix(path: &Path, attrs: StorageAttributes) -> Result<(), St
     permissions.set_readonly(attrs.read_only);
     fs::set_permissions(path, permissions)
         .map_err(|err| StorageError::io("set permissions for", path, err))?;
-    // Hidden/system/archive are not portable Unix file-mode bits; documented no-ops.
-    let _ = (attrs.hidden, attrs.system, attrs.archive);
+    // Hidden/system are not portable Unix file-mode bits; documented no-ops.
+    let _ = (attrs.hidden, attrs.system);
     Ok(())
 }
 
@@ -111,16 +106,5 @@ fn is_system(metadata: &fs::Metadata) -> bool {
 
 #[cfg(not(windows))]
 fn is_system(_metadata: &fs::Metadata) -> bool {
-    false
-}
-
-#[cfg(windows)]
-fn is_archive(metadata: &fs::Metadata) -> bool {
-    use std::os::windows::fs::MetadataExt;
-    metadata.file_attributes() & 0x20 != 0
-}
-
-#[cfg(not(windows))]
-fn is_archive(_metadata: &fs::Metadata) -> bool {
     false
 }

@@ -13,7 +13,7 @@
 /// - **Windows:** maps to Win32 file attributes (`FILE_ATTRIBUTE_*`).
 /// - **Unix:** `read_only` uses `Permissions::set_readonly`; `hidden` follows
 ///   the leading-dot name convention (renaming is not performed by setters);
-///   `system` and `archive` have no portable equivalent and are ignored on set.
+///   `system` has no portable equivalent and is ignored on set.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct StorageAttributes {
     /// Read-only bit / owner write disabled.
@@ -22,6 +22,4 @@ pub struct StorageAttributes {
     pub hidden: bool,
     /// Windows system attribute.
     pub system: bool,
-    /// Windows archive attribute.
-    pub archive: bool,
 }

@@ -12,7 +12,6 @@ mod permissions;
 mod shell_icon;
 mod temporary;
 mod traits;
-mod windows_shell;
 
 pub(crate) use attributes::attributes_from_path;
 pub use attributes::{StorageAttributes, apply_storage_attributes};

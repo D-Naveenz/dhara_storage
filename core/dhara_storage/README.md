@@ -14,7 +14,7 @@ Use this crate when you want those capabilities from Rust—with memory safety, 
 - `FileStorage` / `DirectoryStorage` handles for navigation and I/O
 - Sync-first copy / move / delete; copy/move start a `StorageProcess` (await or wait) with optional progress and cancellation
 - Debounced directory change events
-- Shell icons (RGBA) and Windows shell details where supported
+- Shell icons (RGBA) on supported desktops
 - Optional Tokio wrappers (`async-tokio`)
 
 ## Prerequisites
@@ -92,15 +92,12 @@ FileStorage::from_existing("input.bin")?.copy_to_with_options(
 # Ok::<(), dhara_storage::StorageError>(())
 ```
 
-Install a `tracing` subscriber in your app if you want structured logs.
-
 ## Platform notes
 
 | Capability | Windows | Linux | macOS |
 |------------|---------|-------|-------|
 | Analysis, I/O, watching | yes | yes | yes |
 | `ShellIcon` (RGBA) | yes | yes* | yes |
-| Shell display / type name | yes | fallback | fallback |
 
 \*Linux GTK icons may require the main thread. `ShellIcon` returns raw RGBA pixels—encode to PNG in your app if needed.
 

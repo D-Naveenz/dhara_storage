@@ -184,7 +184,7 @@ fn file_metadata_from_path_exposes_rust_native_metadata() {
 
     assert_eq!(meta.extension().source(), Some("txt"));
     assert_eq!(meta.file_type().mime_type.as_deref(), Some("text/plain"));
-    assert!(!meta.display_name().is_empty());
+    assert_eq!(meta.name(), "sample.txt");
 }
 
 #[test]
@@ -253,9 +253,9 @@ fn directory_metadata_summary_is_lazy() {
 }
 
 #[test]
-fn directory_metadata_defaults_type_name_when_no_shell_data_is_needed() {
+fn directory_metadata_defaults_type_name() {
     let temp = tempdir().unwrap();
 
     let meta = DirectoryMetadata::load(temp.path()).unwrap();
-    assert!(!meta.file_type_name().is_empty());
+    assert_eq!(meta.file_type_name(), "Folder");
 }

@@ -221,6 +221,7 @@ payload. Fields that describe provenance and build context (`package_version`,
 
 ## Related docs
 
+- [Filedefs sluice policy][sluice] — extension seed admission rules (DROT)
 - [Logging conventions][logging] — DROT audit log format
 - [dhara_storage_core README][readme-core] — crate-local quick reference
 - [drot package/ notes][package-readme] — shipped TrID build inputs
@@ -228,6 +229,7 @@ payload. Fields that describe provenance and build context (`package_version`,
 - [Docs index][docs-index]
 
 [logging]: ../tooling/drot/docs/logging.md
+[sluice]: ../tooling/drot/docs/filedefs-sluice.md
 [readme-core]: ../core/dhara_storage_core/README.md
 [package-readme]: ../tooling/drot/crates/drot_dhara_storage/package/README.md
 [ci-cd]: ci-cd-pipelines.md

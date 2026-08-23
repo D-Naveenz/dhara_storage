@@ -178,7 +178,6 @@ C# tests should exercise every typed path and compare the public managed model o
 Do not force typed ABI for every byte of data. JSON is still reasonable for:
 
 - error payloads
-- logging records
 - diagnostic-only metadata
 - rare payloads whose shape is intentionally flexible
 

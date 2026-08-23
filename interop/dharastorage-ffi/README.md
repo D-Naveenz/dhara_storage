@@ -14,7 +14,6 @@ Filesystem and analysis behavior live in the core; this crate marshals results a
 - Background ops with progress and cancellation
 - Directory watches with debounced typed events
 - Streaming write sessions for managed hosts
-- Logger bridge from `tracing` to a host callback
 
 ## Prerequisites
 
@@ -50,7 +49,7 @@ Representative entry points (see source for the full list):
 
 - Hot structured results use Rust-owned `#[repr(C)]` handles — copy what you need, then call the matching `*_free`
 - Strings are UTF-8 pointer/length slices
-- JSON is for errors, diagnostics, and logging—not hot query paths
+- JSON is for errors and diagnostics—not hot query paths
 
 Full contract: [typed C-compatible ABI][typed-abi].
 
