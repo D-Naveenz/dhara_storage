@@ -25,10 +25,10 @@ pub fn spawn_acceptor(
 
     let listener = UnixListener::bind(path)?;
     std::thread::spawn(move || {
-        if let Ok((stream, _)) = listener.accept() {
-            if let Ok(mut guard) = state.fd_pass_conn.lock() {
-                *guard = Some(stream);
-            }
+        if let Ok((stream, _)) = listener.accept()
+            && let Ok(mut guard) = state.fd_pass_conn.lock()
+        {
+            *guard = Some(stream);
         }
     });
     Ok(())
