@@ -1,4 +1,4 @@
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 using Dhara.Storage.Models.Watching;
 
@@ -13,11 +13,21 @@ namespace Dhara.Storage.Abstractions;
 public interface IStorageDirectory : IStorageItem
 {
     /// <summary>
-    /// Gets cached directory information, refreshing it on first use.
+    /// Measures the current directory size on demand.
     /// </summary>
-    /// <remarks>This property loads lightweight metadata only. Use <see cref="RefreshInformation(bool)"/> with
+    /// <remarks>Size is not part of a <see cref="DirectoryMetadata"/> snapshot; the daemon computes the
+    /// recursive total for each call rather than caching it alongside metadata.</remarks>
+    /// <returns>A <see cref="StorageSize"/> with raw bytes and a formatted label.</returns>
+    /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read the directory size.</exception>
+    StorageSize Size();
+
+    /// <summary>
+    /// Gets cached directory metadata, refreshing it on first use.
+    /// </summary>
+    /// <remarks>This property loads lightweight metadata only. Use <see cref="RefreshMetadata(bool)"/> with
     /// the method argument set to <see langword="true"/> when you need recursive counts and size totals.</remarks>
-    DirectoryInformation Information { get; }
+    DirectoryMetadata Metadata { get; }
 
     /// <summary>
     /// Occurs when a watched directory emits a debounced change notification.
@@ -33,14 +43,14 @@ public interface IStorageDirectory : IStorageItem
     bool IsWatching { get; }
 
     /// <summary>
-    /// Refreshes the cached directory information.
+    /// Refreshes the cached directory metadata.
     /// </summary>
     /// <param name="includeSummary"><see langword="true"/> to include recursive size and entry counts; otherwise,
     /// <see langword="false"/> to refresh metadata only.</param>
-    /// <returns>A new <see cref="DirectoryInformation"/> snapshot for the current directory path.</returns>
+    /// <returns>A new <see cref="DirectoryMetadata"/> snapshot for the current directory path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
-    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read directory information.</exception>
-    DirectoryInformation RefreshInformation(bool includeSummary = false);
+    /// <exception cref="Exceptions.DharaStorageException">Thrown when the native runtime cannot read directory metadata.</exception>
+    DirectoryMetadata RefreshMetadata(bool includeSummary = false);
 
     /// <summary>
     /// Enumerates child files.
@@ -125,48 +135,47 @@ public interface IStorageDirectory : IStorageItem
     /// Copies the current directory tree to the provided destination path.
     /// </summary>
     /// <param name="destination">The destination root path for the copied directory tree.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots when the asynchronous copy path is used.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events while the copy runs.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination tree; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
-    /// <returns>A new directory wrapper pointing at the copied destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be copied.</exception>
-    IStorageDirectory Copy(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false);
+    void Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
-    /// Copies the current directory tree to the provided destination path asynchronously.
+    /// Starts copying the current directory tree immediately and returns a running <see cref="StorageProcess"/>.
     /// </summary>
     /// <param name="destination">The destination root path for the copied directory tree.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots while the native copy operation runs.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events while the copy runs.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination tree; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <param name="cancellationToken">A token used to request cooperative cancellation of the native operation.</param>
-    /// <returns>A task that completes with a new directory wrapper pointing at the copied destination path.</returns>
+    /// <returns>A <see cref="StorageProcess"/> that can be awaited for the destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be copied.</exception>
-    Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    StorageProcess CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Moves the current directory tree to the provided destination path.
     /// </summary>
     /// <param name="destination">The destination root path for the moved directory tree.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots when the asynchronous move path is used.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events when the move path reports them.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination tree; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be moved.</exception>
-    void Move(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false);
+    void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false);
 
     /// <summary>
-    /// Moves the current directory tree to the provided destination path asynchronously.
+    /// Starts moving the current directory tree immediately and returns a running <see cref="StorageProcess"/>.
     /// </summary>
     /// <param name="destination">The destination root path for the moved directory tree.</param>
-    /// <param name="progress">An optional progress sink that receives transfer snapshots while the native move operation runs.</param>
+    /// <param name="progress">An optional progress sink that receives transfer events when the move path reports them.</param>
     /// <param name="overwrite"><see langword="true"/> to replace an existing destination tree; otherwise, <see langword="false"/> to fail if the destination already exists.</param>
     /// <param name="cancellationToken">A token used to request cooperative cancellation of the native operation.</param>
-    /// <returns>A task that completes when the move finishes and the wrapper path has been updated.</returns>
+    /// <returns>A <see cref="StorageProcess"/> that can be awaited for the destination path.</returns>
     /// <exception cref="ObjectDisposedException">Thrown when the wrapper has already been disposed.</exception>
     /// <exception cref="OperationCanceledException">Thrown when <paramref name="cancellationToken"/> cancels the operation.</exception>
     /// <exception cref="Exceptions.DharaStorageException">Thrown when the directory tree cannot be moved.</exception>
-    Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
+    StorageProcess MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Renames the current directory within its existing parent directory.

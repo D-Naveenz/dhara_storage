@@ -10,11 +10,12 @@ The package bundles a small native `dhara-sd` sidecar for supported runtimes and
 ## Why use it
 
 - `DharaStorage.File` / `DharaStorage.Directory` for path-based work
-- Content-based MIME and type candidates (`AnalyzePath` / analysis on handles)
+- Content-based MIME and type candidates (`Analyze` / `AnalyzePath`); `Metadata` enriched from the handle cache
 - Sync and async read, write, copy, move, rename, delete
+- Process-first copy/move (`StorageProcess`) with `IProgress<StorageProcessEvent>`
 - Directory watching with typed change events
-- One NuGet with a bundled sidecar for supported RIDs
-- Native AOT–compatible: publish your app with `<PublishAot>true</PublishAot>`; the `dhara-sd` sidecar is deployed alongside your executable via NuGet native assets
+- One NuGet with a bundled `dhara-sd` sidecar for supported RIDs
+- Native AOT–compatible: publish your app with `<PublishAot>true</PublishAot>`; the sidecar is deployed alongside your executable via NuGet native assets
 
 ## Prerequisites
 
@@ -24,7 +25,7 @@ The package bundles a small native `dhara-sd` sidecar for supported runtimes and
 ## Install
 
 ```powershell
-dotnet add package Dhara.Storage --version 0.9.23
+dotnet add package Dhara.Storage --version 0.10.1
 ```
 
 | OS | RIDs | Runtime status |
@@ -35,27 +36,18 @@ dotnet add package Dhara.Storage --version 0.9.23
 
 ## Usage
 
-### 1. Optional logging
-
-```csharp
-using Microsoft.Extensions.Logging;
-using Dhara.Storage;
-
-using var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-DharaStorage.UseLoggerFactory(loggerFactory);
-```
-
-### 2. Open a file, analyze, and read
+### 1. Open a file, analyze, and read
 
 ```csharp
 using Dhara.Storage;
 
 var file = DharaStorage.File(@"C:\data\sample.pdf");
-var info = file.RefreshInformation(includeAnalysis: true);
+var report = file.Analyze();
+var metadata = file.Metadata; // enriched from the cached analysis
 var bytes = await file.ReadBytesAsync();
 ```
 
-### 3. Watch a directory
+### 2. Watch a directory
 
 ```csharp
 using Dhara.Storage;
@@ -63,6 +55,26 @@ using Dhara.Storage;
 var directory = DharaStorage.Directory(@"C:\data");
 directory.StartWatching();
 directory.Changed += (_, change) => Console.WriteLine(change.Path);
+```
+
+### 3. Copy (process-first)
+
+```csharp
+using Dhara.Storage;
+using Dhara.Storage.Models.Progress;
+
+var file = DharaStorage.File(@"C:\data\input.bin");
+var progress = new Progress<StorageProcessEvent>(e =>
+{
+    if (e is StorageProcessBytes bytes)
+        Console.WriteLine($"{bytes.BytesTransferred} bytes");
+});
+
+// Sync: starts immediately and waits inside.
+file.Copy(@"C:\data\copy.bin", progress, overwrite: true);
+
+// Async: starts immediately; await StorageProcess for the destination path.
+var destination = await file.CopyAsync(@"C:\data\copy2.bin", progress, overwrite: true);
 ```
 
 ### 4. Host lifetime (ASP.NET Core, worker services)
@@ -73,7 +85,7 @@ Add [`Dhara.Storage.Extensions.Hosting`](https://www.nuget.org/packages/Dhara.St
 builder.Services.AddDharaStorage();
 ```
 
-Shell icons and shell details are not available over the sidecar transport yet; `Icon` and `ShellDetails` are always `null`.
+Shell icons are available over the sidecar when requested (`includeIcon`). File type labels come from content analysis when requested.
 
 ## Related
 

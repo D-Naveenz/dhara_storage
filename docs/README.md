@@ -17,6 +17,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Workspace architecture][architecture] | Agents, contributors | Storage layout, bindings, publish split; DROT pointer |
 | [Daemon transport][daemon-transport] | Implementers | `dhara-sd` named pipes / UDS plan, handle transfer |
 | [Binding benchmarks][binding-benchmarks] | Implementers | FFI vs daemon ladder, BenchmarkDotNet harness |
+| [Transfer pipeline next][transfer-pipeline-next] | Implementers | Post-pipeline findings; RAM read-ahead next cycle |
 | [Windows code signing][windows-signing] | Release engineers | winresource vs Authenticode / SAC |
 | [Multi-platform native packaging][native-packaging] | Release engineers, FFI authors | RID staging, merge/pack pitfalls, troubleshooting |
 
@@ -27,7 +28,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 | [Workspace][root-readme] | GitHub repo landing |
 | [dhara_storage][readme-dhara-storage] | crates.io |
 | [dhara_storage_core][readme-core] | crates.io |
-| [dharastorage][readme-dharastorage] | Native ABI (NuGet asset) |
+| [dharastorage][readme-dharastorage] | Native C ABI (benchmark / evidence; not NuGet) |
 | [Dhara.Storage][readme-nuget] | NuGet.org — primary package |
 | [Dhara.Storage.Extensions.Hosting][readme-hosting] | NuGet.org — Generic Host extension |
 | [drot][readme-tool] | Operator CLI/TUI (submodule) |
@@ -62,6 +63,7 @@ For onboarding, install steps, and package overviews, start at the [workspace RE
 [architecture]: architecture.md
 [daemon-transport]: daemon-transport.md
 [binding-benchmarks]: binding-benchmarks.md
+[transfer-pipeline-next]: transfer-pipeline-next.md
 [windows-signing]: windows-code-signing.md
 [native-packaging]: native-packaging.md
 [agents]: ../AGENTS.md

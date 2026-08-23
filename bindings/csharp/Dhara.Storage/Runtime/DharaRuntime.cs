@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using Dhara.Storage.Sd.V1;
 using Grpc.Net.Client;
-using Microsoft.Extensions.Logging;
 using Microsoft.Win32.SafeHandles;
 
 namespace Dhara.Storage.Runtime;
@@ -262,7 +261,6 @@ public sealed class DharaRuntime : IAsyncDisposable
 
     private readonly DaemonProcess _process;
     private readonly GrpcChannel _channel;
-    private readonly LogStreamHost _logStream;
     private readonly Socket? _fdPassSocket;
 
     private DharaRuntime(
@@ -271,7 +269,6 @@ public sealed class DharaRuntime : IAsyncDisposable
         DharaSd.DharaSdClient client,
         string controlEndpoint,
         string? fdPassEndpoint,
-        LogStreamHost logStream,
         Socket? fdPassSocket)
     {
         _process = process;
@@ -279,7 +276,6 @@ public sealed class DharaRuntime : IAsyncDisposable
         Client = client;
         ControlEndpoint = controlEndpoint;
         FdPassEndpoint = fdPassEndpoint;
-        _logStream = logStream;
         _fdPassSocket = fdPassSocket;
     }
 
@@ -316,7 +312,6 @@ public sealed class DharaRuntime : IAsyncDisposable
     public static async Task<DharaRuntime> StartAsync(
         string? endpoint = null,
         string? daemonExePath = null,
-        LogLevel minLogLevel = LogLevel.Information,
         CancellationToken cancellationToken = default)
     {
         lock (Gate)
@@ -353,14 +348,12 @@ public sealed class DharaRuntime : IAsyncDisposable
                 fdPassSocket = UnixFdPass.Connect(handshake.FdPassEndpoint);
             }
 
-            var logStream = LogStreamHost.Start(client, minLogLevel);
             var runtime = new DharaRuntime(
                 process,
                 channel,
                 client,
                 handshake.PipeName,
                 string.IsNullOrWhiteSpace(handshake.FdPassEndpoint) ? null : handshake.FdPassEndpoint,
-                logStream,
                 fdPassSocket);
 
             lock (Gate)
@@ -431,7 +424,7 @@ public sealed class DharaRuntime : IAsyncDisposable
     }
 
     /// <inheritdoc />
-    public async ValueTask DisposeAsync()
+    public ValueTask DisposeAsync()
     {
         lock (Gate)
         {
@@ -441,10 +434,10 @@ public sealed class DharaRuntime : IAsyncDisposable
             }
         }
 
-        await _logStream.DisposeAsync().ConfigureAwait(false);
         _fdPassSocket?.Dispose();
         _channel.Dispose();
         _process.Dispose();
+        return ValueTask.CompletedTask;
     }
 
     private static string CreateDefaultEndpointArgument()

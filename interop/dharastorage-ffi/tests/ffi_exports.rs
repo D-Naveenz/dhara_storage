@@ -3,9 +3,9 @@ use std::ptr;
 use std::slice;
 
 use dharastorage::{
-    DharaStatus, NativeAnalysisReport, NativeFileInformation, NativeStorageEntryList,
+    DharaStatus, NativeAnalysisReport, NativeFileMetadata, NativeStorageEntryList,
     dhara_analysis_report_free, dhara_analyze_path, dhara_bytes_free, dhara_create_directory_all,
-    dhara_delete_file, dhara_file_info_free, dhara_get_file_info, dhara_list_entries,
+    dhara_delete_file, dhara_file_metadata_free, dhara_get_file_metadata, dhara_list_entries,
     dhara_read_file, dhara_rename_file, dhara_storage_entry_list_free, dhara_string_free,
     dhara_write_file_text,
 };
@@ -57,20 +57,20 @@ fn analyze_path_returns_typed_report() {
 }
 
 #[test]
-fn file_info_returns_optional_analysis_pointer() {
+fn file_metadata_returns_optional_analysis_pointer() {
     let fixture = std::fs::canonicalize(fixture_path()).unwrap();
     let fixture = CString::new(fixture.to_string_lossy().as_bytes()).unwrap();
-    let mut info: *mut NativeFileInformation = ptr::null_mut();
+    let mut metadata: *mut NativeFileMetadata = ptr::null_mut();
     let mut err_ptr: *mut u8 = ptr::null_mut();
     let mut err_len = 0;
 
     let status = unsafe {
-        dhara_get_file_info(
+        dhara_get_file_metadata(
             fixture.as_ptr(),
             1,
             0,
             0,
-            &mut info,
+            &mut metadata,
             &mut err_ptr,
             &mut err_len,
         )
@@ -78,11 +78,11 @@ fn file_info_returns_optional_analysis_pointer() {
 
     assert_eq!(status, DharaStatus::Ok);
     assert!(err_ptr.is_null());
-    assert!(!info.is_null());
-    let info_ref = unsafe { &*info };
-    assert!(info_ref.size > 0);
-    assert!(!info_ref.analysis.is_null());
-    unsafe { dhara_file_info_free(info) };
+    let metadata_ref =
+        unsafe { metadata.as_ref() }.expect("metadata pointer must be non-null on success");
+    assert!(metadata_ref.size > 0);
+    assert!(!metadata_ref.analysis.is_null());
+    unsafe { dhara_file_metadata_free(metadata) };
 }
 
 #[test]

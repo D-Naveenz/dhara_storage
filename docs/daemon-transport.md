@@ -8,7 +8,7 @@ Foreign-language bindings use **`dhara-sd`** as a sidecar: gRPC for control, OS 
 |---------|-----------|
 | Control plane | Named pipe + HTTP/2 gRPC (`tonic` / `Grpc.Net.Client`) |
 | Default pipe | `\\.\pipe\dhara-sd` (override via CLI arg / host options) |
-| Data plane | `OpenReadHandle` / `OpenWriteHandle` → `DuplicateHandle` into the host after `Handshake(parent_pid)` |
+| Data plane | `OpenReadHandle` / `OpenWriteHandle` → runtime `open_for_*` then `DuplicateHandle` into the host after `Handshake(parent_pid)` |
 | Accept loop | Create the **next** listening instance **before** yielding a connected pipe |
 | Host stdio | Do **not** redirect unread daemon stdout/stderr (full pipe blocks the process) |
 
@@ -19,17 +19,27 @@ VERSIONINFO is embedded with [`winresource`](https://crates.io/crates/winresourc
 | Concern | Mechanism |
 |---------|-----------|
 | Control plane | Unix domain socket (`grpc.sock`) + HTTP/2 gRPC |
-| Data plane | `SCM_RIGHTS` FD passing on a dedicated `fd.sock` after `Handshake` |
+| Data plane | Runtime `open_for_*` then `SCM_RIGHTS` FD passing on a dedicated `fd.sock` after `Handshake` |
 | Endpoint layout | Host passes a directory; daemon creates `{dir}/grpc.sock` and `{dir}/fd.sock` |
 | CI | Stage `dhara-sd` per RID; managed tests run on Linux under `xvfb-run` |
 
-## Logging
+## Unified open (handle/FD RPCs)
 
-Daemon logging is owned by **`dhara-sd`**: one `tracing_subscriber` captures **`dhara_storage`** and **`dhara-sd`** events and fans them out on the parallel **`StreamLogs`** gRPC stream. The C# host maps each record's Rust `target` string to an `ILogger` category. Do not scrape stdout/stderr.
+`OpenReadHandle` / `OpenWriteHandle` share one open path with in-process ops:
+
+| Topic | Behavior |
+|-------|----------|
+| Path | Caller supplies a usable absolute path (storage resolve happens before open) |
+| Share defaults | Read: **shared**; write: **exclusive** |
+| Proto | Optional `ShareMode` + `lock_timeout_ms` (`0` / unset = fail immediately on busy) |
+| Busy file | Sharing/lock busy only may retry until `lock_timeout_ms` expires → error; other OS errors fail once |
+| Access | OS at open time (access denied, read-only, not found, etc.) |
+
+Managed hosts that omit the new fields keep fail-fast open with those defaults.
 
 ## Shell metadata
 
-`GetFileInfo` / `GetDirectoryInfo` accept `include_shell_details`, `include_icon`, and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory).
+`GetFileMetadata` / `GetDirectoryMetadata` accept `include_icon` and `icon_size`. Icons are RGBA bytes in the unary RPC response (not shared memory). File type labels come from content analysis when requested; directories use a portable folder label.
 
 ## Product vs contrast RPCs
 

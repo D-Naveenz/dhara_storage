@@ -10,17 +10,17 @@ internal static partial class FfiBaseline
     private const string LibraryName = "dharastorage";
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
-    private static partial int dhara_get_file_info(
+    private static partial int dhara_get_file_metadata(
         string path,
         byte includeAnalysis,
         byte includeIcon,
         uint iconSize,
-        out nint outInfo,
+        out nint outMetadata,
         out nint errorPtr,
         out nuint errorLen);
 
     [LibraryImport(LibraryName)]
-    private static partial void dhara_file_info_free(nint info);
+    private static partial void dhara_file_metadata_free(nint metadata);
 
     [LibraryImport(LibraryName, StringMarshalling = StringMarshalling.Utf8)]
     private static partial int dhara_analyze_path(
@@ -57,22 +57,22 @@ internal static partial class FfiBaseline
     [LibraryImport(LibraryName)]
     private static partial void dhara_string_free(nint ptr, nuint len);
 
-    public static void GetFileInfo(string path)
+    public static void GetFileMetadata(string path)
     {
-        var code = dhara_get_file_info(path, 0, 0, 0, out var info, out var errPtr, out var errLen);
+        var code = dhara_get_file_metadata(path, 0, 0, 0, out var metadata, out var errPtr, out var errLen);
         FreeError(errPtr, errLen);
         try
         {
-            if (code != 0 || info == 0)
+            if (code != 0 || metadata == 0)
             {
-                throw new InvalidOperationException($"dhara_get_file_info failed: {code}");
+                throw new InvalidOperationException($"dhara_get_file_metadata failed: {code}");
             }
         }
         finally
         {
-            if (info != 0)
+            if (metadata != 0)
             {
-                dhara_file_info_free(info);
+                dhara_file_metadata_free(metadata);
             }
         }
     }

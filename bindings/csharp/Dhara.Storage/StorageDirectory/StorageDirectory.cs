@@ -1,6 +1,6 @@
 using Dhara.Storage.Abstractions;
 using Dhara.Storage.Core;
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 using Dhara.Storage.Models.Watching;
 using Dhara.Storage.Runtime;
@@ -19,8 +19,8 @@ namespace Dhara.Storage;
 /// </remarks>
 public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
 {
-    private DirectoryInformation? _cachedInformation;
-    private DirectoryInformation? _cachedInformationWithSummary;
+    private DirectoryMetadata? _cachedMetadata;
+    private DirectoryMetadata? _cachedMetadataWithSummary;
     private CancellationTokenSource? _watchCancellationSource;
     private AsyncServerStreamingCall<WatchEvent>? _watchCall;
     private Task? _watchLoopTask;
@@ -34,10 +34,26 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     }
 
     /// <inheritdoc />
-    public override bool Exists => Directory.Exists(FullPath);
+    public override bool Exists => Directory.Exists(AbsolutePath);
 
     /// <inheritdoc />
-    public DirectoryInformation Information => _cachedInformation ??= LoadInformation(includeSummary: false);
+    public StorageSize Size()
+    {
+        EnsureNotDisposed();
+        var path = AbsolutePath;
+        var response = DaemonClient.Call(
+            (client, options) => client.GetDirectoryMetadata(
+                new GetDirectoryMetadataRequest { Path = path, IncludeSummary = true },
+                options),
+            path,
+            nameof(DharaSd.DharaSdClient.GetDirectoryMetadata));
+        return response.Size is null
+            ? new StorageSize(0, "0 B")
+            : DaemonModelFactory.ToStorageSize(response.Size);
+    }
+
+    /// <inheritdoc />
+    public DirectoryMetadata Metadata => _cachedMetadata ??= LoadMetadata(includeSummary: false);
 
     /// <inheritdoc />
     public event EventHandler<StorageChangedEventArgs>? Changed;
@@ -46,18 +62,18 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     public bool IsWatching => _watchLoopTask is not null && !_watchLoopTask.IsCompleted;
 
     /// <inheritdoc />
-    public DirectoryInformation RefreshInformation(bool includeSummary = false)
+    public DirectoryMetadata RefreshMetadata(bool includeSummary = false)
     {
         EnsureNotDisposed();
-        var info = LoadInformation(includeSummary);
+        var info = LoadMetadata(includeSummary);
         if (includeSummary)
         {
-            _cachedInformationWithSummary = info;
-            _cachedInformation = info with { Summary = null };
+            _cachedMetadataWithSummary = info;
+            _cachedMetadata = info with { Summary = null };
         }
         else
         {
-            _cachedInformation = info;
+            _cachedMetadata = info;
         }
 
         return info;
@@ -78,14 +94,14 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     public StorageFile GetFile(string relativePath)
     {
         EnsureNotDisposed();
-        return new StorageFile(Path.GetFullPath(Path.Combine(FullPath, relativePath)));
+        return new StorageFile(Path.GetFullPath(Path.Combine(AbsolutePath, relativePath)));
     }
 
     /// <inheritdoc />
     public StorageDirectory GetDirectory(string relativePath)
     {
         EnsureNotDisposed();
-        return new StorageDirectory(Path.GetFullPath(Path.Combine(FullPath, relativePath)));
+        return new StorageDirectory(Path.GetFullPath(Path.Combine(AbsolutePath, relativePath)));
     }
 
     /// <inheritdoc />
@@ -103,38 +119,42 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
         CreateCoreAsync(createParents: true, cancellationToken);
 
     /// <inheritdoc />
-    public IStorageDirectory Copy(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false) =>
+    public void Copy(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         CopyAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task<IStorageDirectory> CopyAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public StorageProcess CopyAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var source = FullPath;
-        var newPath = await DaemonClient.ConsumeCopyProgressAsync(
+        var source = AbsolutePath;
+        return DaemonClient.StartCopyProcess(
             (client, options) => client.CopyDirectory(new CopyDirectoryRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
             progress,
             source,
             nameof(DharaSd.DharaSdClient.CopyDirectory),
-            cancellationToken).ConfigureAwait(false);
-        return new StorageDirectory(newPath);
+            cancellationToken);
     }
 
     /// <inheritdoc />
-    public void Move(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false) =>
+    public void Move(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false) =>
         MoveAsync(destination, progress, overwrite).GetAwaiter().GetResult();
 
     /// <inheritdoc />
-    public async Task MoveAsync(string destination, IProgress<StorageProgress>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
+    public StorageProcess MoveAsync(string destination, IProgress<StorageProcessEvent>? progress = null, bool overwrite = false, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var source = FullPath;
-        var response = await DaemonClient.CallAsync(
-            (client, options) => client.MovePathAsync(new MovePathRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
-            cancellationToken,
-            source,
-            nameof(DharaSd.DharaSdClient.MovePath)).ConfigureAwait(false);
-        UpdatePath(response.Path);
+        var source = AbsolutePath;
+        return StorageProcess.Start(async ct =>
+        {
+            _ = progress;
+            var response = await DaemonClient.CallAsync(
+                (client, options) => client.MovePathAsync(new MovePathRequest { Source = source, Destination = destination, Overwrite = overwrite }, options),
+                ct,
+                source,
+                nameof(DharaSd.DharaSdClient.MovePath)).ConfigureAwait(false);
+            UpdatePathFromDestination(destination, response.Path);
+            return response.Path;
+        }, cancellationToken);
     }
 
     /// <inheritdoc />
@@ -144,13 +164,13 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     public async Task RenameAsync(string newName, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = await DaemonClient.CallAsync(
             (client, options) => client.RenamePathAsync(new RenamePathRequest { Path = path, NewName = newName }, options),
             cancellationToken,
             path,
             nameof(DharaSd.DharaSdClient.RenamePath)).ConfigureAwait(false);
-        UpdatePath(response.Path);
+        UpdatePathAbsolute(response.Path);
     }
 
     /// <inheritdoc />
@@ -160,7 +180,7 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     public async Task DeleteAsync(bool recursive = true, CancellationToken cancellationToken = default)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         await DaemonClient.CallAsync(
             (client, options) => client.DeletePathAsync(new DeletePathRequest { Path = path, Recursive = recursive }, options),
             cancellationToken,
@@ -179,7 +199,7 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
             return;
         }
 
-        var path = FullPath;
+        var path = AbsolutePath;
         _watchCancellationSource = new CancellationTokenSource();
         var cancellationToken = _watchCancellationSource.Token;
 
@@ -233,26 +253,31 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     /// <inheritdoc />
     protected override void InvalidateCaches()
     {
-        _cachedInformation = null;
-        _cachedInformationWithSummary = null;
+        _cachedMetadata = null;
+        _cachedMetadataWithSummary = null;
     }
 
-    private DirectoryInformation LoadInformation(bool includeSummary)
+    private DirectoryMetadata LoadMetadata(bool includeSummary)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = DaemonClient.Call(
-            (client, options) => client.GetDirectoryInfo(new GetDirectoryInfoRequest { Path = path }, options),
+            (client, options) => client.GetDirectoryMetadata(
+                new GetDirectoryMetadataRequest
+                {
+                    Path = path,
+                    IncludeSummary = includeSummary,
+                },
+                options),
             path,
-            nameof(DharaSd.DharaSdClient.GetDirectoryInfo));
-        var summary = includeSummary ? DaemonModelFactory.BuildDirectorySummary(path) : null;
-        return DaemonModelFactory.ToDirectoryInformation(response, summary);
+            nameof(DharaSd.DharaSdClient.GetDirectoryMetadata));
+        return DaemonModelFactory.ToDirectoryMetadata(response);
     }
 
     private IReadOnlyList<StorageEntry> ListEntries(bool recursive)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = DaemonClient.Call(
             (client, options) => client.ListEntries(new ListEntriesRequest { Path = path, Recursive = recursive }, options),
             path,
@@ -263,13 +288,13 @@ public sealed class StorageDirectory : StorageItemBase, IStorageDirectory
     private async Task<StorageDirectory> CreateCoreAsync(bool createParents, CancellationToken cancellationToken)
     {
         EnsureNotDisposed();
-        var path = FullPath;
+        var path = AbsolutePath;
         var response = await DaemonClient.CallAsync(
             (client, options) => client.CreateDirectoryAsync(new CreateDirectoryRequest { Path = path, CreateParents = createParents }, options),
             cancellationToken,
             path,
             nameof(DharaSd.DharaSdClient.CreateDirectory)).ConfigureAwait(false);
-        UpdatePath(response.Path);
+        RefreshResolvedPath(response.Path);
         return this;
     }
 

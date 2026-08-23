@@ -3,7 +3,6 @@ using Dhara.Storage.Exceptions;
 using Dhara.Storage.Models.Progress;
 using Dhara.Storage.Sd.V1;
 using Grpc.Core;
-using Microsoft.Extensions.Logging;
 
 namespace Dhara.Storage.Runtime;
 
@@ -13,13 +12,9 @@ namespace Dhara.Storage.Runtime;
 /// </summary>
 /// <remarks>Starts the daemon on first use via <see cref="DharaRuntime.EnsureStarted"/> and
 /// translates <see cref="RpcException"/> failures into <see cref="DharaStorageException"/> so
-/// callers observe the same exception type the previous FFI boundary produced. Operational logs
-/// from the daemon arrive on the parallel <c>StreamLogs</c> gRPC stream started by
-/// <see cref="DharaRuntime"/>.</remarks>
+/// callers observe the same exception type the previous FFI boundary produced.</remarks>
 internal static class DaemonClient
 {
-    private const string LogCategory = "Dhara.Storage.DaemonClient";
-
     /// <summary>Gets the active gRPC client, starting <c>dhara-sd</c> if it has not been started yet.</summary>
     internal static DharaSd.DharaSdClient Client => DharaRuntime.EnsureStarted().Client;
 
@@ -29,16 +24,12 @@ internal static class DaemonClient
         string? path = null,
         string? operation = null)
     {
-        var label = operation ?? "daemon RPC";
         try
         {
-            var response = call(Client, new CallOptions());
-            DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"{label} completed successfully.");
-            return response;
+            return call(Client, new CallOptions());
         }
         catch (RpcException ex)
         {
-            DharaStorageLogBridge.LogManaged(LogLevel.Error, LogCategory, $"{label} failed: {ex.Status.Detail}", ex);
             throw ToStorageException(ex, path, operation);
         }
     }
@@ -50,57 +41,82 @@ internal static class DaemonClient
         string? path = null,
         string? operation = null)
     {
-        var label = operation ?? "daemon RPC";
-        DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"Invoking {label}.");
         try
         {
             using var asyncCall = call(Client, new CallOptions(cancellationToken: cancellationToken));
-            var response = await asyncCall.ResponseAsync.ConfigureAwait(false);
-            DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"{label} completed successfully.");
-            return response;
+            return await asyncCall.ResponseAsync.ConfigureAwait(false);
         }
         catch (RpcException ex)
         {
-            DharaStorageLogBridge.LogManaged(LogLevel.Error, LogCategory, $"{label} failed: {ex.Status.Detail}", ex);
             throw ToStorageException(ex, path, operation);
         }
     }
 
     /// <summary>
+    /// Starts a copy stream immediately and returns a <see cref="StorageProcess"/> completed from terminal events.
+    /// </summary>
+    internal static StorageProcess StartCopyProcess(
+        Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<StorageProcessEventMessage>> call,
+        IProgress<StorageProcessEvent>? progress,
+        string? path,
+        string? operation,
+        CancellationToken cancellationToken) =>
+        StorageProcess.Start(
+            ct => ConsumeCopyProgressAsync(call, progress, path, operation, ct),
+            cancellationToken);
+
+    /// <summary>
     /// Consumes a <c>CopyFile</c> / <c>CopyDirectory</c> progress stream, reporting each update and
     /// returning the final destination path once the daemon reports completion.
     /// </summary>
-    internal static async Task<string> ConsumeCopyProgressAsync(
-        Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<CopyFileProgress>> call,
-        IProgress<StorageProgress>? progress,
+    internal static async Task<string?> ConsumeCopyProgressAsync(
+        Func<DharaSd.DharaSdClient, CallOptions, AsyncServerStreamingCall<StorageProcessEventMessage>> call,
+        IProgress<StorageProcessEvent>? progress,
         string? path,
         string? operation,
         CancellationToken cancellationToken)
     {
         var label = operation ?? "daemon copy RPC";
-        DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"Waiting for {label} to complete.");
         try
         {
             using var streamingCall = call(Client, new CallOptions(cancellationToken: cancellationToken));
             string? destination = null;
             string? errorMessage = null;
+            string? cancelledOperation = null;
 
             while (await streamingCall.ResponseStream.MoveNext(cancellationToken).ConfigureAwait(false))
             {
                 var update = streamingCall.ResponseStream.Current;
-                if (update.Completed)
+                var processEvent = DaemonModelFactory.ToProcessEvent(update);
+                if (processEvent is null)
                 {
-                    destination = update.HasDestination ? update.Destination : null;
-                    errorMessage = update.HasErrorMessage ? update.ErrorMessage : null;
-                    break;
+                    continue;
                 }
 
-                progress?.Report(DaemonModelFactory.ToProgress(update));
+                progress?.Report(processEvent);
+
+                switch (processEvent)
+                {
+                    case StorageProcessCompleted completed:
+                        destination = completed.Destination;
+                        goto Done;
+                    case StorageProcessFailed failed:
+                        errorMessage = failed.Message;
+                        goto Done;
+                    case StorageProcessCancelled cancelled:
+                        cancelledOperation = cancelled.Operation;
+                        goto Done;
+                }
+            }
+
+        Done:
+            if (cancelledOperation is not null)
+            {
+                throw new OperationCanceledException($"{label} was cancelled ({cancelledOperation}).");
             }
 
             if (errorMessage is not null)
             {
-                DharaStorageLogBridge.LogManaged(LogLevel.Error, LogCategory, $"{label} failed: {errorMessage}");
                 throw new DharaStorageException(errorMessage, "Internal", path, operation);
             }
 
@@ -109,17 +125,14 @@ internal static class DaemonClient
                 throw new DharaStorageException("The copy operation completed without reporting a destination path.", "Internal", path, operation);
             }
 
-            DharaStorageLogBridge.LogManaged(LogLevel.Trace, LogCategory, $"{label} completed successfully.");
             return destination;
         }
         catch (OperationCanceledException)
         {
-            DharaStorageLogBridge.LogManaged(LogLevel.Warning, LogCategory, $"{label} was cancelled.");
             throw;
         }
         catch (RpcException ex)
         {
-            DharaStorageLogBridge.LogManaged(LogLevel.Error, LogCategory, $"{label} failed: {ex.Status.Detail}", ex);
             throw ToStorageException(ex, path, operation);
         }
     }

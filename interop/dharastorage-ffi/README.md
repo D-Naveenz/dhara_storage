@@ -11,10 +11,9 @@ Filesystem and analysis behavior live in the core; this crate marshals results a
 ## Why this package
 
 - Immediate queries: analysis, metadata, listings, reads, writes, path mutations
-- Background ops with progress and cancellation
+- Background ops with `StorageProcessEvent` progress and cancellation
 - Directory watches with debounced typed events
-- Streaming write sessions for managed hosts
-- Logger bridge from `tracing` to a host callback
+- Streaming write sessions for C / evidence hosts (not the .NET NuGet path)
 
 ## Prerequisites
 
@@ -42,7 +41,7 @@ Build the `cdylib` for your target, then load it from your host language.
 Representative entry points (see source for the full list):
 
 - `dhara_analyze_path`
-- `dhara_get_file_info` / `dhara_get_directory_info`
+- `dhara_get_file_metadata` / `dhara_get_directory_metadata`
 - `dhara_list_files` / `dhara_list_directories` / `dhara_list_entries`
 - Watch helpers: `dhara_watch_try_recv_event`, `dhara_watch_recv_event`, …
 
@@ -50,7 +49,7 @@ Representative entry points (see source for the full list):
 
 - Hot structured results use Rust-owned `#[repr(C)]` handles — copy what you need, then call the matching `*_free`
 - Strings are UTF-8 pointer/length slices
-- JSON is for errors, diagnostics, and logging—not hot query paths
+- JSON is for errors and diagnostics—not hot query paths
 
 Full contract: [typed C-compatible ABI][typed-abi].
 

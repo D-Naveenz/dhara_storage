@@ -3,6 +3,7 @@
 use std::io;
 use std::path::PathBuf;
 
+use dhara_storage_core::ProcessError;
 use thiserror::Error;
 
 /// Errors produced by Dhara storage analysis and metadata operations.
@@ -99,6 +100,15 @@ pub enum StorageError {
         message: String,
     },
 
+    /// Task-queue / process orchestration failed unexpectedly.
+    #[error("process orchestration failed while attempting to {operation}: {message}")]
+    Process {
+        /// The high-level operation that depended on the process queue.
+        operation: &'static str,
+        /// Framework-level failure details.
+        message: String,
+    },
+
     /// A storage watcher failed to initialize or deliver events.
     #[error("watch error while attempting to {operation}: {message}")]
     Watch {
@@ -106,6 +116,15 @@ pub enum StorageError {
         operation: &'static str,
         /// The watcher or debouncer failure details.
         message: String,
+    },
+
+    /// Timed out waiting for a sharing/busy lock while opening a file.
+    #[error("timed out waiting to open '{path}' for {operation}")]
+    LockTimeout {
+        /// The path that remained busy until the deadline.
+        path: PathBuf,
+        /// Read or write open that was waiting.
+        operation: &'static str,
     },
 }
 
@@ -157,5 +176,28 @@ impl StorageError {
             operation,
             message: message.into(),
         }
+    }
+
+    pub(crate) fn lock_timeout(path: impl Into<PathBuf>, operation: &'static str) -> Self {
+        Self::LockTimeout {
+            path: path.into(),
+            operation,
+        }
+    }
+
+    pub(crate) fn from_process(err: ProcessError) -> Self {
+        match err {
+            ProcessError::Cancelled { operation } => Self::cancelled(operation),
+            ProcessError::Disconnected => Self::Process {
+                operation: "process queue",
+                message: "task queue disconnected unexpectedly".into(),
+            },
+        }
+    }
+}
+
+impl From<ProcessError> for StorageError {
+    fn from(value: ProcessError) -> Self {
+        Self::from_process(value)
     }
 }

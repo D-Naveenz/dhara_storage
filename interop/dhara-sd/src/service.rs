@@ -10,19 +10,21 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use dhara_storage::{
-    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryInfo, DirectoryStorage,
-    FileInfo, SearchScope, SharedProgressReporter, ShellIcon, StorageChangeType, StorageEntry,
-    StorageProgress, StorageWatchConfig, TransferOptions, WriteOptions, analyze_path,
-    copy_directory_with_options, copy_file_with_options, create_directory, create_directory_all,
-    delete_directory_with_options, delete_file, move_directory_with_options,
-    move_file_with_options, read_file, rename_directory, rename_file, write_file_from_reader,
+    ContentKind, DEFAULT_SHELL_ICON_SIZE, DirectoryDeleteOptions, DirectoryStorage, FileShareMode,
+    FileStorage, SearchScope, SharedProcessEventReporter, ShellIcon, StorageChangeType,
+    StorageEntry, StorageMetadata, StorageProcessEvent, StorageWatchConfig, TransferOptions,
+    WriteOptions, analyze_path, create_directory, create_directory_all,
+    delete_directory_with_options, delete_file, execute_copy_directory_with_options,
+    execute_copy_file_with_options, execute_move_directory_with_options,
+    execute_move_file_with_options, read_file, rename_directory, rename_file,
+    write_file_from_reader,
 };
-use futures::{Stream, StreamExt};
-use tokio::sync::broadcast;
+#[cfg(unix)]
+use dhara_storage::{OpenReadOptions, OpenWriteOptions, open_for_read, open_for_write};
+use futures::Stream;
 use tokio::sync::mpsc;
-use tokio_stream::wrappers::{BroadcastStream, ReceiverStream};
+use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
-use tracing::{debug, warn};
 use uuid::Uuid;
 
 #[cfg(unix)]
@@ -30,7 +32,6 @@ use std::os::unix::io::AsRawFd;
 #[cfg(unix)]
 use std::os::unix::net::UnixStream;
 
-use crate::log_broadcast::level_rank;
 use crate::proto::dhara_sd_server::{DharaSd, DharaSdServer};
 use crate::proto::*;
 #[cfg(unix)]
@@ -38,7 +39,7 @@ use crate::transport::unix::fd_pass;
 #[cfg(windows)]
 use crate::transport::windows::handle_dup;
 
-/// Shared daemon state for handshake PID, logging, and synthetic queue stubs.
+/// Shared daemon state for handshake PID and synthetic queue stubs.
 pub struct DaemonState {
     control_endpoint: std::sync::RwLock<String>,
     #[cfg(unix)]
@@ -46,14 +47,13 @@ pub struct DaemonState {
     parent_pid: AtomicU32,
     parent_watch_started: AtomicBool,
     jobs: std::sync::Mutex<Vec<String>>,
-    log_tx: broadcast::Sender<LogRecord>,
     #[cfg(unix)]
     pub(crate) fd_pass_conn: Mutex<Option<UnixStream>>,
 }
 
 impl DaemonState {
     /// Create state for the given control endpoint path.
-    pub fn new(control_endpoint: String, log_tx: broadcast::Sender<LogRecord>) -> Self {
+    pub fn new(control_endpoint: String) -> Self {
         Self {
             control_endpoint: std::sync::RwLock::new(control_endpoint),
             #[cfg(unix)]
@@ -61,7 +61,6 @@ impl DaemonState {
             parent_pid: AtomicU32::new(0),
             parent_watch_started: AtomicBool::new(false),
             jobs: std::sync::Mutex::new(Vec::new()),
-            log_tx,
             #[cfg(unix)]
             fd_pass_conn: Mutex::new(None),
         }
@@ -154,7 +153,6 @@ impl DharaSd for DharaSdService {
         self.state
             .parent_pid
             .store(req.parent_pid, Ordering::SeqCst);
-        debug!(parent_pid = req.parent_pid, "handshake accepted");
         crate::parent_watch::spawn_parent_watchdog(self.state.clone(), req.parent_pid);
 
         Ok(Response::new(HandshakeResponse {
@@ -164,14 +162,14 @@ impl DharaSd for DharaSdService {
         }))
     }
 
-    async fn get_file_info(
+    async fn get_file_metadata(
         &self,
-        request: Request<GetFileInfoRequest>,
-    ) -> Result<Response<GetFileInfoResponse>, Status> {
+        request: Request<GetFileMetadataRequest>,
+    ) -> Result<Response<GetFileMetadataResponse>, Status> {
         let req = request.into_inner();
         let path = req.path;
-        let include_shell = req.include_shell_details;
         let include_icon = req.include_icon;
+        let include_analysis = req.include_analysis;
         let icon_size = if req.icon_size == 0 {
             DEFAULT_SHELL_ICON_SIZE
         } else {
@@ -179,28 +177,63 @@ impl DharaSd for DharaSdService {
         };
 
         let response = tokio::task::spawn_blocking(move || {
-            let info = FileInfo::from_path(&path)?;
-            let (shell_display_name, shell_type_name) = if include_shell {
-                info.shell_details()
-                    .map(|details| (details.display_name.clone(), details.type_name.clone()))
-                    .unwrap_or((None, None))
-            } else {
-                (None, None)
-            };
+            let storage = FileStorage::from_existing(&path)?;
+            if include_analysis {
+                storage.analyze()?;
+            }
+            let meta = storage.metadata()?;
+            let analysis = meta
+                .analysis()
+                .map(|report| analysis_report_to_proto(report.clone()));
+            let size = storage.size()?;
+            let attrs = meta.attributes();
+            let perms = meta.permissions();
+            let file_type = meta.file_type();
+            let extension = meta.extension();
             let icon = if include_icon {
-                info.load_icon_at(icon_size).map(shell_icon_to_proto)
+                meta.load_icon_at(icon_size).map(shell_icon_to_proto)
             } else {
                 None
             };
-            Ok::<_, dhara_storage::StorageError>(GetFileInfoResponse {
-                path: info.path().display().to_string(),
-                name: info.name().to_string(),
-                size: info.size(),
-                extension: info.filename_extension().map(str::to_string),
-                is_read_only: info.metadata().is_read_only(),
-                shell_display_name,
-                shell_type_name,
+
+            Ok::<_, dhara_storage::StorageError>(GetFileMetadataResponse {
+                absolute_path: storage.absolute_path().display().to_string(),
+                relative_path: storage
+                    .relative_path()
+                    .map(|value| value.display().to_string()),
+                name: meta.name().to_string(),
+                size: Some(StorageSizePayload {
+                    bytes: size.bytes,
+                    formatted: size.formatted,
+                }),
+                attributes: Some(StorageAttributesPayload {
+                    read_only: attrs.read_only,
+                    hidden: attrs.hidden,
+                    system: attrs.system,
+                }),
+                permissions: Some(StoragePermissionsPayload {
+                    can_read: perms.can_read,
+                    can_write: perms.can_write,
+                    can_modify: perms.can_modify,
+                    can_execute: perms.can_execute,
+                }),
+                is_symbolic_link: meta.is_symbolic_link(),
+                link_target: meta.link_target().map(|value| value.display().to_string()),
+                is_temporary: meta.is_temporary(),
+                created_at_unix_ms: system_time_to_unix_ms(meta.created_at()),
+                modified_at_unix_ms: system_time_to_unix_ms(meta.modified_at()),
+                accessed_at_unix_ms: system_time_to_unix_ms(meta.accessed_at()),
+                file_type: Some(StorageTypePayload {
+                    name: file_type.name,
+                    mime_type: file_type.mime_type,
+                }),
+                extension: Some(FileExtensionPayload {
+                    source: extension.source().map(str::to_string),
+                    detected: extension.detected().map(str::to_string),
+                    display: extension.to_string(),
+                }),
                 icon,
+                analysis,
             })
         })
         .await
@@ -210,14 +243,14 @@ impl DharaSd for DharaSdService {
         Ok(Response::new(response))
     }
 
-    async fn get_directory_info(
+    async fn get_directory_metadata(
         &self,
-        request: Request<GetDirectoryInfoRequest>,
-    ) -> Result<Response<GetDirectoryInfoResponse>, Status> {
+        request: Request<GetDirectoryMetadataRequest>,
+    ) -> Result<Response<GetDirectoryMetadataResponse>, Status> {
         let req = request.into_inner();
         let path = req.path;
-        let include_shell = req.include_shell_details;
         let include_icon = req.include_icon;
+        let include_summary = req.include_summary;
         let icon_size = if req.icon_size == 0 {
             DEFAULT_SHELL_ICON_SIZE
         } else {
@@ -227,39 +260,81 @@ impl DharaSd for DharaSdService {
         let response = tokio::task::spawn_blocking(move || {
             let exists = std::path::Path::new(&path).is_dir();
             if !exists {
-                return Ok(GetDirectoryInfoResponse {
-                    path: path.clone(),
+                return Ok(GetDirectoryMetadataResponse {
+                    absolute_path: path.clone(),
+                    relative_path: None,
                     name: std::path::Path::new(&path)
                         .file_name()
                         .map(|value| value.to_string_lossy().into_owned())
                         .unwrap_or_default(),
                     exists: false,
-                    shell_display_name: None,
-                    shell_type_name: None,
+                    attributes: None,
+                    permissions: None,
+                    is_symbolic_link: false,
+                    link_target: None,
+                    is_temporary: false,
+                    created_at_unix_ms: None,
+                    modified_at_unix_ms: None,
+                    accessed_at_unix_ms: None,
+                    type_name: String::new(),
+                    size: None,
+                    file_count: None,
+                    directory_count: None,
                     icon: None,
                 });
             }
 
-            let info = DirectoryInfo::from_path(&path)?;
-            let (shell_display_name, shell_type_name) = if include_shell {
-                info.shell_details()
-                    .map(|details| (details.display_name.clone(), details.type_name.clone()))
-                    .unwrap_or((None, None))
+            let storage = DirectoryStorage::from_existing(&path)?;
+            let meta = storage.metadata()?;
+            let attrs = meta.attributes();
+            let perms = meta.permissions();
+            let (size, file_count, directory_count) = if include_summary {
+                let summary = storage.summary()?;
+                (
+                    Some(StorageSizePayload {
+                        bytes: summary.total_size,
+                        formatted: summary.formatted_size(),
+                    }),
+                    Some(summary.file_count),
+                    Some(summary.directory_count),
+                )
             } else {
-                (None, None)
+                (None, None, None)
             };
             let icon = if include_icon {
-                info.load_icon_at(icon_size).map(shell_icon_to_proto)
+                meta.load_icon_at(icon_size).map(shell_icon_to_proto)
             } else {
                 None
             };
 
-            Ok(GetDirectoryInfoResponse {
-                path: info.path().display().to_string(),
-                name: info.name().to_string(),
+            Ok(GetDirectoryMetadataResponse {
+                absolute_path: storage.absolute_path().display().to_string(),
+                relative_path: storage
+                    .relative_path()
+                    .map(|value| value.display().to_string()),
+                name: meta.name().to_string(),
                 exists: true,
-                shell_display_name,
-                shell_type_name,
+                attributes: Some(StorageAttributesPayload {
+                    read_only: attrs.read_only,
+                    hidden: attrs.hidden,
+                    system: attrs.system,
+                }),
+                permissions: Some(StoragePermissionsPayload {
+                    can_read: perms.can_read,
+                    can_write: perms.can_write,
+                    can_modify: perms.can_modify,
+                    can_execute: perms.can_execute,
+                }),
+                is_symbolic_link: meta.is_symbolic_link(),
+                link_target: meta.link_target().map(|value| value.display().to_string()),
+                is_temporary: meta.is_temporary(),
+                created_at_unix_ms: system_time_to_unix_ms(meta.created_at()),
+                modified_at_unix_ms: system_time_to_unix_ms(meta.modified_at()),
+                accessed_at_unix_ms: system_time_to_unix_ms(meta.accessed_at()),
+                type_name: meta.file_type_name(),
+                size,
+                file_count,
+                directory_count,
                 icon,
             })
         })
@@ -287,9 +362,9 @@ impl DharaSd for DharaSdService {
             .into_iter()
             .map(|entry| {
                 let is_directory = matches!(entry, StorageEntry::Directory(_));
-                let path = entry.path().display().to_string();
+                let path = entry.absolute_path().display().to_string();
                 let name = entry
-                    .path()
+                    .absolute_path()
                     .file_name()
                     .map(|value| value.to_string_lossy().into_owned())
                     .unwrap_or_default();
@@ -340,13 +415,17 @@ impl DharaSd for DharaSdService {
             Status::failed_precondition("handshake required before OpenReadHandle")
         })?;
 
-        let path = PathBuf::from(request.into_inner().path);
+        let req = request.into_inner();
+        let path = PathBuf::from(req.path);
+        let share = map_open_share_mode(req.share_mode, FileShareMode::Shared);
+        let lock_timeout = map_open_lock_timeout_ms(req.lock_timeout_ms);
 
         #[cfg(windows)]
         {
             let parent_pid = self.state.parent_pid().expect("checked above");
             let (handle, size) =
-                handle_dup::open_read_and_duplicate(&path, parent_pid).map_err(Status::internal)?;
+                handle_dup::open_read_and_duplicate(&path, parent_pid, share, lock_timeout)
+                    .map_err(Status::internal)?;
             return Ok(Response::new(OpenReadHandleResponse { handle, size }));
         }
 
@@ -354,9 +433,18 @@ impl DharaSd for DharaSdService {
         {
             let state = self.state.clone();
             let size = tokio::task::spawn_blocking(move || {
-                let file = std::fs::File::open(&path).map_err(map_io_error)?;
+                let file = open_for_read(
+                    &path,
+                    OpenReadOptions {
+                        share,
+                        lock_timeout,
+                    },
+                )
+                .map_err(map_storage_error)?;
                 let size = file.metadata().map_err(map_io_error)?.len();
                 fd_pass::send_fd(&state, file.as_raw_fd())?;
+                // Keep FD alive until send completes; then drop closes our copy.
+                drop(file);
                 Ok::<_, Status>(size)
             })
             .await
@@ -376,6 +464,10 @@ impl DharaSd for DharaSdService {
 
         let req = request.into_inner();
         let path = PathBuf::from(req.path);
+        let overwrite = req.overwrite;
+        let create_parents = req.create_parent_directories;
+        let share = map_open_share_mode(req.share_mode, FileShareMode::Exclusive);
+        let lock_timeout = map_open_lock_timeout_ms(req.lock_timeout_ms);
 
         #[cfg(windows)]
         {
@@ -383,8 +475,10 @@ impl DharaSd for DharaSdService {
             let handle = handle_dup::open_write_and_duplicate(
                 &path,
                 parent_pid,
-                req.overwrite,
-                req.create_parent_directories,
+                overwrite,
+                create_parents,
+                share,
+                lock_timeout,
             )
             .map_err(Status::internal)?;
             return Ok(Response::new(OpenWriteHandleResponse { handle }));
@@ -393,31 +487,20 @@ impl DharaSd for DharaSdService {
         #[cfg(unix)]
         {
             let state = self.state.clone();
-            let overwrite = req.overwrite;
-            let create_parents = req.create_parent_directories;
             tokio::task::spawn_blocking(move || {
-                if create_parents && let Some(parent) = path.parent() {
-                    std::fs::create_dir_all(parent).map_err(map_io_error)?;
-                }
-
-                let file = if overwrite {
-                    std::fs::OpenOptions::new()
-                        .write(true)
-                        .create(true)
-                        .truncate(true)
-                        .open(&path)
-                } else if path.exists() {
-                    std::fs::OpenOptions::new().write(true).open(&path)
-                } else {
-                    std::fs::OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .open(&path)
-                }
-                .map_err(map_io_error)?;
-
+                let file = open_for_write(
+                    &path,
+                    OpenWriteOptions {
+                        share,
+                        overwrite,
+                        create_parent_directories: create_parents,
+                        lock_timeout,
+                    },
+                )
+                .map_err(map_storage_error)?;
                 let fd = file.as_raw_fd();
                 fd_pass::send_fd(&state, fd)?;
+                drop(file);
                 Ok::<_, Status>(())
             })
             .await
@@ -484,9 +567,9 @@ impl DharaSd for DharaSdService {
                 ..TransferOptions::default()
             };
             if source.is_dir() {
-                move_directory_with_options(&source, &req.destination, options)
+                execute_move_directory_with_options(&source, &req.destination, options)
             } else {
-                move_file_with_options(&source, &req.destination, options)
+                execute_move_file_with_options(&source, &req.destination, options)
             }
         })
         .await
@@ -554,7 +637,7 @@ impl DharaSd for DharaSdService {
         }))
     }
 
-    type CopyFileStream = ResponseStream<CopyFileProgress>;
+    type CopyFileStream = ResponseStream<StorageProcessEventMessage>;
 
     async fn copy_file(
         &self,
@@ -567,11 +650,11 @@ impl DharaSd for DharaSdService {
                 progress: Some(reporter),
                 ..TransferOptions::default()
             };
-            copy_file_with_options(&req.source, &req.destination, options)
+            execute_copy_file_with_options(&req.source, &req.destination, options)
         })))
     }
 
-    type CopyDirectoryStream = ResponseStream<CopyFileProgress>;
+    type CopyDirectoryStream = ResponseStream<StorageProcessEventMessage>;
 
     async fn copy_directory(
         &self,
@@ -584,7 +667,7 @@ impl DharaSd for DharaSdService {
                 progress: Some(reporter),
                 ..TransferOptions::default()
             };
-            copy_directory_with_options(&req.source, &req.destination, options)
+            execute_copy_directory_with_options(&req.source, &req.destination, options)
         })))
     }
 
@@ -698,30 +781,6 @@ impl DharaSd for DharaSdService {
 
         Ok(Response::new(Box::pin(ReceiverStream::new(rx))))
     }
-
-    type StreamLogsStream = ResponseStream<LogRecord>;
-
-    async fn stream_logs(
-        &self,
-        request: Request<StreamLogsRequest>,
-    ) -> Result<Response<Self::StreamLogsStream>, Status> {
-        self.state
-            .parent_pid()
-            .ok_or_else(|| Status::failed_precondition("handshake required before StreamLogs"))?;
-
-        let min_level = request.into_inner().min_level;
-        let min_level = if min_level == 0 { 3 } else { min_level };
-        let rx = self.state.log_tx.subscribe();
-        let stream = BroadcastStream::new(rx).filter_map(move |result| {
-            futures::future::ready(match result {
-                Ok(record) if level_rank(&record.level) >= min_level => Some(Ok(record)),
-                Ok(_) => None,
-                Err(_) => None,
-            })
-        });
-
-        Ok(Response::new(Box::pin(stream)))
-    }
 }
 
 fn shell_icon_to_proto(icon: ShellIcon) -> ShellIconPayload {
@@ -732,60 +791,145 @@ fn shell_icon_to_proto(icon: ShellIcon) -> ShellIconPayload {
     }
 }
 
-fn spawn_copy_progress<F>(work: F) -> ResponseStream<CopyFileProgress>
+fn system_time_to_unix_ms(value: Option<SystemTime>) -> Option<i64> {
+    value.and_then(|time| {
+        time.duration_since(UNIX_EPOCH)
+            .ok()
+            .map(|duration| duration.as_millis() as i64)
+    })
+}
+
+fn analysis_report_to_proto(report: dhara_storage::AnalysisReport) -> AnalyzePathResponse {
+    AnalyzePathResponse {
+        top_mime_type: report.top_mime_type,
+        top_detected_extension: report.top_detected_extension,
+        content_kind: content_kind_to_u32(report.content_kind),
+        bytes_scanned: report.bytes_scanned as u64,
+        file_size: report.file_size,
+        matches: report
+            .matches
+            .into_iter()
+            .map(|item| DetectedMatch {
+                file_type_label: item.file_type_label,
+                mime_type: item.mime_type,
+                confidence: item.confidence,
+                score: item.score,
+            })
+            .collect(),
+    }
+}
+
+fn spawn_copy_progress<F>(work: F) -> ResponseStream<StorageProcessEventMessage>
 where
-    F: FnOnce(SharedProgressReporter) -> Result<PathBuf, dhara_storage::StorageError>
+    F: FnOnce(SharedProcessEventReporter) -> Result<PathBuf, dhara_storage::StorageError>
         + Send
         + 'static,
 {
-    let (tx, rx) = mpsc::channel::<Result<CopyFileProgress, Status>>(256);
+    let (tx, rx) = mpsc::channel::<Result<StorageProcessEventMessage, Status>>(256);
     tokio::task::spawn_blocking(move || {
         let progress_tx = tx.clone();
-        let reporter: SharedProgressReporter = Arc::new(move |progress: StorageProgress| {
-            let _ = progress_tx.blocking_send(Ok(CopyFileProgress {
-                bytes_transferred: progress.bytes_transferred,
-                total_bytes: progress.total_bytes,
-                bytes_per_second: progress.bytes_per_second,
-                completed: false,
-                destination: None,
-                error_message: None,
-            }));
+        let reporter: SharedProcessEventReporter = Arc::new(move |event: StorageProcessEvent| {
+            let message = match event {
+                StorageProcessEvent::Started {
+                    total_bytes,
+                    total_files,
+                } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Started(
+                        ProcessStarted {
+                            total_bytes,
+                            total_files,
+                        },
+                    )),
+                },
+                StorageProcessEvent::CurrentItem {
+                    path,
+                    file_size,
+                    file_index,
+                } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::CurrentItem(
+                        ProcessCurrentItem {
+                            path: path.display().to_string(),
+                            file_size,
+                            file_index,
+                        },
+                    )),
+                },
+                StorageProcessEvent::Bytes { bytes_transferred } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Bytes(ProcessBytes {
+                        bytes_transferred,
+                    })),
+                },
+                StorageProcessEvent::Completed { destination } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Completed(
+                        ProcessCompleted {
+                            destination: destination.map(|path| path.display().to_string()),
+                        },
+                    )),
+                },
+                StorageProcessEvent::Failed { message } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Failed(ProcessFailed {
+                        message,
+                    })),
+                },
+                StorageProcessEvent::Cancelled { operation } => StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Cancelled(
+                        ProcessCancelled {
+                            operation: operation.to_owned(),
+                        },
+                    )),
+                },
+            };
+            let _ = progress_tx.blocking_send(Ok(message));
         });
 
-        match work(reporter) {
-            Ok(destination) => {
-                let _ = tx.blocking_send(Ok(CopyFileProgress {
-                    bytes_transferred: 0,
-                    total_bytes: None,
-                    bytes_per_second: 0.0,
-                    completed: true,
-                    destination: Some(destination.display().to_string()),
-                    error_message: None,
-                }));
-            }
-            Err(err) => {
-                let _ = tx.blocking_send(Ok(CopyFileProgress {
-                    bytes_transferred: 0,
-                    total_bytes: None,
-                    bytes_per_second: 0.0,
-                    completed: true,
-                    destination: None,
-                    error_message: Some(err.to_string()),
-                }));
-            }
+        // Runtime emits Completed on success. On early failures (before a process
+        // terminal event) surface a Failed/Cancelled so the stream always ends cleanly.
+        if let Err(err) = work(reporter) {
+            let message = if matches!(err, dhara_storage::StorageError::Cancelled { .. }) {
+                StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Cancelled(
+                        ProcessCancelled {
+                            operation: "copy".into(),
+                        },
+                    )),
+                }
+            } else {
+                StorageProcessEventMessage {
+                    kind: Some(storage_process_event_message::Kind::Failed(ProcessFailed {
+                        message: err.to_string(),
+                    })),
+                }
+            };
+            let _ = tx.blocking_send(Ok(message));
         }
     });
     Box::pin(ReceiverStream::new(rx))
 }
 
 fn map_storage_error(err: dhara_storage::StorageError) -> Status {
-    warn!(error = %err, "storage operation failed");
     Status::internal(err.to_string())
+}
+
+/// Map proto `ShareMode`; unspecified uses `default_for_unspecified`.
+fn map_open_share_mode(value: i32, default_for_unspecified: FileShareMode) -> FileShareMode {
+    match value {
+        1 => FileShareMode::Shared,
+        2 => FileShareMode::Exclusive,
+        _ => default_for_unspecified,
+    }
+}
+
+/// Map proto lock timeout; `0` means no wait.
+fn map_open_lock_timeout_ms(ms: u32) -> Option<Duration> {
+    if ms == 0 {
+        None
+    } else {
+        Some(Duration::from_millis(u64::from(ms)))
+    }
 }
 
 #[cfg(unix)]
 fn map_io_error(err: std::io::Error) -> Status {
-    warn!(error = %err, "I/O operation failed");
     Status::internal(err.to_string())
 }
 

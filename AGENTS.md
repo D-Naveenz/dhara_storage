@@ -13,7 +13,7 @@ This is a **hybrid** repository: product code lives in this git history; the ope
 | `docs/**` | Implementers | ABI, CI maps, DSFD, and other **storage** deep reference |
 | [`tooling/drot/AGENTS.md`](tooling/drot/AGENTS.md) + [`tooling/drot/docs/`](tooling/drot/docs/) | Humans + AI | **DROT** tool intent, TUI/CLI, operator logging — owned by the submodule |
 
-**Agents:** follow the global **`project-docs`** skill, then [`.cursor/rules/project-docs.mdc`](.cursor/rules/project-docs.mdc) (repo customizations) for README / AGENTS / `docs/`. For source **documentation comments**, headers, and why-comments, follow **`inline-code-docs`**. Project/registry READMEs have priority over the root README. No folder-container READMEs. Submodule project READMEs use the same convention.
+**Agents:** follow the global **`project-docs`** skill, then [`.cursor/rules/project-docs.mdc`](.cursor/rules/project-docs.mdc) (repo customizations) for README / AGENTS / `docs/`. For source **documentation comments**, headers, and why-comments, follow **`inline-code-docs`**. Before opening or updating a PR (or when asked to verify / quality / CI parity), follow [`.cursor/skills/quality-run/SKILL.md`](.cursor/skills/quality-run/SKILL.md) — run `quality run`, fix failures, and commit so first-push `quality.yml` stays green. Project/registry READMEs have priority over the root README. No folder-container READMEs. Submodule project READMEs use the same convention.
 
 **DROT work:** edit docs and Cursor rules **inside** [`tooling/drot`](tooling/drot). Do not add DROT-deep essays under storage `docs/` — link to the submodule instead.
 
@@ -43,7 +43,7 @@ Portable answer to `Windows.Storage` limits (WinRT-shaped APIs hard to reuse fro
 | Model | `StorageFile` / `StorageFolder` handles (often brokered) | `StorageFile` / `StorageDirectory` (Rust: `FileStorage` / `DirectoryStorage`) over ordinary absolute paths |
 | “Content type” | Extension association (MS docs) | Opt-in content signatures via bundled `filedefs.dat` → ranked MIME / type |
 | Platform | Windows / WinRT sandbox & pickers | Multi-RID desktop; usable from libraries |
-| Transfers / watch | Uneven progress; watch often external | Progress + cancel; debounced directory watch; shell icon RGBA (+ Windows shell details) |
+| Transfers / watch | Uneven progress; watch often external | Progress + cancel; debounced directory watch; shell icon RGBA; definition-backed type identity |
 
 ### Intentionally omitted from READMEs
 
@@ -79,7 +79,7 @@ Agents editing READMEs must **not** add:
 | Path | Role |
 |------|------|
 | `core/dhara_storage` | Business runtime — analysis, storage handles, ops, watching, metadata; embeds `filedefs.dat` |
-| `core/dhara_storage_core` | Framework / abstraction layer for the runtime (DSFD definitions today; planned: process/queue primitives) |
+| `core/dhara_storage_core` | Framework layer — DSFD, process (`ProcessSession` / `TaskQueue` / `StorageProcessEvent`, cancel), portable types/options |
 | `interop/dhara-sd` | Sidecar daemon (`dhara-sd`) — gRPC control + handle transfer for foreign bindings |
 | `interop/dharastorage-ffi` | C ABI (`dharastorage` cdylib) — **benchmark / evidence only**; not shipped via NuGet |
 | `bindings/csharp/Dhara.Storage` | .NET 10 NuGet — managed API over `dhara-sd` |
@@ -90,7 +90,9 @@ Agents editing READMEs must **not** add:
 
 **Design choices**
 
-- `dhara_storage_core` is the framework; `dhara_storage` holds business process. DSFD is the first shipped core slice — not the whole story. Planned core additions include primitives such as `StorageProcess` and `ProcessingQueue` (not shipped yet).
+- `dhara_storage_core` is the framework; `dhara_storage` holds business process. Shipped core slices: **DSFD**, **process** (`ProcessSession`, bounded `TaskQueue`, `StorageProcessEvent` stream, cancel/reporter), and **types** (options + portable attribute/permission/size shapes). The runtime’s public **`StorageProcess`** is the awaitable copy/move executioner (start immediately; sync waits inside). Transfers run a single-writer consumer over the task queue so destination writes do not thrash HDDs; progress is an event stream (`Started` / `CurrentItem` / `Bytes` / terminal), not percentage snapshots. Next-cycle transfer work (RAM read-ahead): [docs/transfer-pipeline-next.md](docs/transfer-pipeline-next.md).
+- Concrete `FileStorage` / `DirectoryStorage` stay in the runtime. Paths and size live on handles; attributes/permissions/type live on **Metadata**. Content analysis is handle-cached (`analyze` / `Analyze()`), and `metadata()` enriches type/extension from that cache. Extension crates (for example a future archives crate) may depend on `dhara_storage`, compose those handles, and define their own types. No product-level storage-object enum or `dyn` handle trait in core — closed mixed collections are consumer-owned enums.
+- Engine opens use `open_for_read` / `open_for_write` with `FileShareMode` and optional `lock_timeout` (write default is exclusive). Product logging bridges are intentionally omitted — hosts own their own logging.
 - Keep `dhara_storage` Rust-native; foreign hosts use **`dhara-sd`** (not in-process FFI for the NuGet).
 - Windows is the primary **developer workstation**; ship all five 64-bit RIDs via CI (`package stage-native` per OS + `native merge`).
 - Product / NuGet semver: [`dhara.config.toml`](dhara.config.toml) `[versions]`. DROT tool version: [`tooling/drot/Cargo.toml`](tooling/drot/Cargo.toml). Storage pins the tool via submodule gitlink.
@@ -103,7 +105,7 @@ Deep reference: [docs/README.md](docs/README.md).
 
 - Init submodule: `git submodule update --init --recursive`
 - Ensure production-shaped CLI/TUI: `./tooling/scripts/run-drot.ps1` (no subcommand opens **TUI**; pass a subcommand or `--help` for the Direct CLI; use `-Force` / `--force-build` to rebuild from submodule). Dist is gated by `tooling/drot` git `HEAD` via `target/dist/.drot-git-rev` (not Cargo semver).
-- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot --yes quality run`
+- Full local check (CI parity): `./tooling/scripts/verify-local.ps1` — runs `run-drot --yes quality run` (agent workflow: [`.cursor/skills/quality-run`](.cursor/skills/quality-run/SKILL.md))
 - Full repository build (CLI): `./tooling/scripts/run-drot.ps1 --yes build run` (config → defs → quality → native → verify; skip flags available)
 - Windows GitHub SSH + LFS: `./tooling/scripts/setup-github-ssh.ps1` (analyze by default; `-Repair` or `-Recreate` to act)
 - Active DROT development: work in the orchestration repo (or `tooling/drot` submodule); follow [tooling/drot/AGENTS.md](tooling/drot/AGENTS.md). Local: `cargo build --manifest-path tooling/drot/Cargo.toml -p drot --profile dist`

@@ -4,77 +4,148 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 
 use crate::error::StorageError;
-use crate::info::DirectoryInfo;
-use crate::operations::common::normalize_path;
-use crate::operations::{
-    DirectoryDeleteOptions, TransferOptions, copy_directory, copy_directory_with_options,
-    create_directory, create_directory_all, delete_directory, delete_directory_with_options,
-    move_directory, move_directory_with_options, rename_directory,
+use crate::metadata::{
+    DirectoryMetadata, DirectorySummary, StorageAttributes, StoragePermissions, StorageSize,
+    apply_storage_attributes, attributes_from_path, is_temporary_path, permissions_from_path,
+    scan_directory_summary,
 };
+use crate::operations::common::{ResolvedPaths, resolve_storage_paths};
+use crate::operations::{
+    DirectoryDeleteOptions, TransferOptions, create_directory, create_directory_all,
+    delete_directory, delete_directory_with_options, rename_directory, start_copy_directory,
+    start_copy_directory_with_options, start_move_directory, start_move_directory_with_options,
+};
+use crate::process::StorageProcess;
 use crate::watch::{DirectoryWatchHandle, StorageWatchConfig};
 
 use super::{FileStorage, SearchScope, StorageEntry};
 
-/// Rust-native handle for directory operations and metadata lookups.
+/// Rust-native handle for directory operations and on-demand metadata.
 ///
-/// The handle itself is lightweight and path-based. Expensive recursive summary
-/// work remains opt-in through [`DirectoryInfo`].
+/// Paths are resolved at construction ([`Self::new`] / [`Self::from_existing`]).
+/// Engine file opens use that absolute path and do not re-resolve.
+///
+/// Paths and [`Self::size`] live on the handle. Recursive size walks block until
+/// complete when measured. Metadata is loaded via [`Self::metadata`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DirectoryStorage {
-    path: PathBuf,
+    absolute_path: PathBuf,
+    relative_path: Option<PathBuf>,
 }
 
 impl DirectoryStorage {
-    /// Create a path-based directory handle without touching the file system.
+    fn from_resolved(resolved: ResolvedPaths) -> Self {
+        Self {
+            absolute_path: resolved.absolute,
+            relative_path: resolved.relative,
+        }
+    }
+
+    fn from_absolute(absolute: PathBuf) -> Self {
+        Self {
+            absolute_path: absolute,
+            relative_path: None,
+        }
+    }
+
+    /// Create a path-based directory handle without requiring the directory to exist yet.
     pub fn new(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        Ok(Self {
-            path: normalize_path(path)?,
-        })
+        Ok(Self::from_resolved(resolve_storage_paths(path)?))
     }
 
     /// Create a directory handle for an existing directory.
     pub fn from_existing(path: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = normalize_path(path)?;
-        if !path.exists() {
-            return Err(StorageError::NotFound { path });
+        let resolved = resolve_storage_paths(path)?;
+        if !resolved.absolute.exists() {
+            return Err(StorageError::NotFound {
+                path: resolved.absolute,
+            });
         }
-        if !path.is_dir() {
-            return Err(StorageError::NotADirectory { path });
+        if !resolved.absolute.is_dir() {
+            return Err(StorageError::NotADirectory {
+                path: resolved.absolute,
+            });
         }
-
-        Ok(Self { path })
+        Ok(Self::from_resolved(resolved))
     }
 
-    /// Absolute path represented by this handle.
-    pub fn path(&self) -> &Path {
-        &self.path
+    /// Create a temporary directory and return a handle for it.
+    pub fn create_temporary() -> Result<Self, StorageError> {
+        let dir = tempfile::TempDir::new().map_err(|err| {
+            StorageError::io("create temporary directory in", std::env::temp_dir(), err)
+        })?;
+        let path = dir.keep();
+        Self::from_existing(path)
+    }
+
+    /// Resolved absolute path used for I/O.
+    pub fn absolute_path(&self) -> &Path {
+        &self.absolute_path
+    }
+
+    /// Original relative path when this handle was initialized with a relative input.
+    pub fn relative_path(&self) -> Option<&Path> {
+        self.relative_path.as_deref()
     }
 
     /// Directory name.
     pub fn name(&self) -> Option<&str> {
-        self.path.file_name().and_then(|value| value.to_str())
+        self.absolute_path
+            .file_name()
+            .and_then(|value| value.to_str())
+    }
+
+    /// Measure recursive directory size on the spot (blocks until the walk finishes).
+    pub fn size(&self) -> Result<StorageSize, StorageError> {
+        Ok(scan_directory_summary(&self.absolute_path)?.to_storage_size())
+    }
+
+    /// Recursive summary (size + counts); blocks until complete.
+    pub fn summary(&self) -> Result<DirectorySummary, StorageError> {
+        scan_directory_summary(&self.absolute_path)
+    }
+
+    /// Load on-demand directory metadata (no recursive walk until summary/size).
+    pub fn metadata(&self) -> Result<DirectoryMetadata, StorageError> {
+        DirectoryMetadata::load(&self.absolute_path)
+    }
+
+    /// Read settable attributes for this directory.
+    pub fn attributes(&self) -> Result<StorageAttributes, StorageError> {
+        attributes_from_path(&self.absolute_path)
+    }
+
+    /// Apply settable attributes to this directory.
+    pub fn set_attributes(&self, attributes: StorageAttributes) -> Result<(), StorageError> {
+        apply_storage_attributes(&self.absolute_path, attributes)
+    }
+
+    /// Effective permissions for the current process.
+    pub fn permissions(&self) -> Result<StoragePermissions, StorageError> {
+        permissions_from_path(&self.absolute_path)
+    }
+
+    /// Whether this path looks temporary by attribute and/or temp location.
+    pub fn is_temporary(&self) -> Result<bool, StorageError> {
+        is_temporary_path(&self.absolute_path)
     }
 
     /// Create this directory if it does not already exist.
     pub fn create(&self) -> Result<Self, StorageError> {
-        let path = create_directory(&self.path)?;
-        Ok(Self { path })
+        let path = create_directory(&self.absolute_path)?;
+        Ok(Self {
+            absolute_path: path,
+            relative_path: self.relative_path.clone(),
+        })
     }
 
     /// Create this directory and any missing parents.
     pub fn create_all(&self) -> Result<Self, StorageError> {
-        let path = create_directory_all(&self.path)?;
-        Ok(Self { path })
-    }
-
-    /// Load cheap directory metadata without walking the tree.
-    pub fn info(&self) -> Result<DirectoryInfo, StorageError> {
-        DirectoryInfo::from_path(&self.path)
-    }
-
-    /// Load directory metadata and precompute the recursive summary in parallel.
-    pub fn info_with_summary(&self) -> Result<DirectoryInfo, StorageError> {
-        DirectoryInfo::from_path_with_summary(&self.path)
+        let path = create_directory_all(&self.absolute_path)?;
+        Ok(Self {
+            absolute_path: path,
+            relative_path: self.relative_path.clone(),
+        })
     }
 
     /// Enumerate child files in this directory.
@@ -88,7 +159,7 @@ impl DirectoryStorage {
         pattern: &str,
         scope: SearchScope,
     ) -> Result<Vec<FileStorage>, StorageError> {
-        collect_matching_paths(&self.path, pattern, scope, EntryFilter::Files)?
+        collect_matching_paths(&self.absolute_path, pattern, scope, EntryFilter::Files)?
             .into_iter()
             .map(FileStorage::from_existing)
             .collect()
@@ -105,10 +176,15 @@ impl DirectoryStorage {
         pattern: &str,
         scope: SearchScope,
     ) -> Result<Vec<DirectoryStorage>, StorageError> {
-        collect_matching_paths(&self.path, pattern, scope, EntryFilter::Directories)?
-            .into_iter()
-            .map(DirectoryStorage::from_existing)
-            .collect()
+        collect_matching_paths(
+            &self.absolute_path,
+            pattern,
+            scope,
+            EntryFilter::Directories,
+        )?
+        .into_iter()
+        .map(DirectoryStorage::from_existing)
+        .collect()
     }
 
     /// Enumerate files and directories together.
@@ -122,7 +198,7 @@ impl DirectoryStorage {
         pattern: &str,
         scope: SearchScope,
     ) -> Result<Vec<StorageEntry>, StorageError> {
-        collect_matching_paths(&self.path, pattern, scope, EntryFilter::All)?
+        collect_matching_paths(&self.absolute_path, pattern, scope, EntryFilter::All)?
             .into_iter()
             .map(StorageEntry::from_existing)
             .collect()
@@ -130,7 +206,7 @@ impl DirectoryStorage {
 
     /// Resolve a file relative to this directory.
     pub fn get_file(&self, relative_path: impl AsRef<Path>) -> Result<FileStorage, StorageError> {
-        let path = resolve_relative_child(&self.path, relative_path.as_ref())?;
+        let path = resolve_relative_child(&self.absolute_path, relative_path.as_ref())?;
         FileStorage::from_existing(path)
     }
 
@@ -139,65 +215,93 @@ impl DirectoryStorage {
         &self,
         relative_path: impl AsRef<Path>,
     ) -> Result<DirectoryStorage, StorageError> {
-        let path = resolve_relative_child(&self.path, relative_path.as_ref())?;
+        let path = resolve_relative_child(&self.absolute_path, relative_path.as_ref())?;
         DirectoryStorage::from_existing(path)
     }
 
     /// Start a debounced watcher for this directory.
     pub fn watch(&self, config: StorageWatchConfig) -> Result<DirectoryWatchHandle, StorageError> {
-        DirectoryWatchHandle::watch(&self.path, config)
+        DirectoryWatchHandle::watch(&self.absolute_path, config)
     }
 
     /// Copy the directory tree to an exact destination path.
-    pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = copy_directory(&self.path, destination)?;
-        Ok(Self { path })
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
+    pub fn copy_to(&self, destination: impl AsRef<Path>) -> Result<(), StorageError> {
+        start_copy_directory(&self.absolute_path, destination).wait_unit()
     }
 
     /// Copy the directory tree with overwrite and progress control.
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
     pub fn copy_to_with_options(
         &self,
         destination: impl AsRef<Path>,
         options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let path = copy_directory_with_options(&self.path, destination, options)?;
-        Ok(Self { path })
+    ) -> Result<(), StorageError> {
+        start_copy_directory_with_options(&self.absolute_path, destination, options).wait_unit()
+    }
+
+    /// Start a directory copy and return the running [`StorageProcess`] immediately.
+    pub fn start_copy_to(&self, destination: impl AsRef<Path>) -> StorageProcess {
+        start_copy_directory(&self.absolute_path, destination)
+    }
+
+    /// Start a directory copy with options and return the running [`StorageProcess`] immediately.
+    pub fn start_copy_to_with_options(
+        &self,
+        destination: impl AsRef<Path>,
+        options: TransferOptions,
+    ) -> StorageProcess {
+        start_copy_directory_with_options(&self.absolute_path, destination, options)
     }
 
     /// Move the directory tree to an exact destination path.
     ///
-    /// The original handle is not mutated; a new handle for the destination path is returned.
-    pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<Self, StorageError> {
-        let path = move_directory(&self.path, destination)?;
-        Ok(Self { path })
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
+    pub fn move_to(&self, destination: impl AsRef<Path>) -> Result<(), StorageError> {
+        start_move_directory(&self.absolute_path, destination).wait_unit()
     }
 
     /// Move the directory tree with overwrite and progress control.
+    ///
+    /// Starts a [`StorageProcess`] immediately and waits for completion.
     pub fn move_to_with_options(
         &self,
         destination: impl AsRef<Path>,
         options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let path = move_directory_with_options(&self.path, destination, options)?;
-        Ok(Self { path })
+    ) -> Result<(), StorageError> {
+        start_move_directory_with_options(&self.absolute_path, destination, options).wait_unit()
+    }
+
+    /// Start a directory move and return the running [`StorageProcess`] immediately.
+    pub fn start_move_to(&self, destination: impl AsRef<Path>) -> StorageProcess {
+        start_move_directory(&self.absolute_path, destination)
+    }
+
+    /// Start a directory move with options and return the running [`StorageProcess`] immediately.
+    pub fn start_move_to_with_options(
+        &self,
+        destination: impl AsRef<Path>,
+        options: TransferOptions,
+    ) -> StorageProcess {
+        start_move_directory_with_options(&self.absolute_path, destination, options)
     }
 
     /// Rename the directory inside its current parent directory.
-    ///
-    /// The original handle is not mutated; a new handle for the renamed path is returned.
     pub fn rename(&self, new_name: &str) -> Result<Self, StorageError> {
-        let path = rename_directory(&self.path, new_name)?;
-        Ok(Self { path })
+        let path = rename_directory(&self.absolute_path, new_name)?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Delete the directory recursively.
     pub fn delete(&self) -> Result<(), StorageError> {
-        delete_directory(&self.path)
+        delete_directory(&self.absolute_path)
     }
 
     /// Delete the directory with explicit recursive control.
     pub fn delete_with_options(&self, options: DirectoryDeleteOptions) -> Result<(), StorageError> {
-        delete_directory_with_options(&self.path, options)
+        delete_directory_with_options(&self.absolute_path, options)
     }
 }
 
@@ -293,46 +397,30 @@ fn resolve_relative_child(root: &Path, relative_path: &Path) -> Result<PathBuf, 
 impl DirectoryStorage {
     /// Async variant of [`Self::create`].
     pub async fn create_async(&self) -> Result<Self, StorageError> {
-        let path = crate::operations::create_directory_async(&self.path).await?;
-        Ok(Self { path })
+        let path = crate::operations::create_directory_async(&self.absolute_path).await?;
+        Ok(Self {
+            absolute_path: path,
+            relative_path: self.relative_path.clone(),
+        })
     }
 
     /// Async variant of [`Self::create_all`].
     pub async fn create_all_async(&self) -> Result<Self, StorageError> {
-        let path = crate::operations::create_directory_all_async(&self.path).await?;
-        Ok(Self { path })
-    }
-
-    /// Async variant of [`Self::copy_to_with_options`].
-    pub async fn copy_to_async(
-        &self,
-        destination: impl AsRef<Path>,
-        options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let path =
-            crate::operations::copy_directory_async(&self.path, destination, options).await?;
-        Ok(Self { path })
-    }
-
-    /// Async variant of [`Self::move_to_with_options`].
-    pub async fn move_to_async(
-        &self,
-        destination: impl AsRef<Path>,
-        options: TransferOptions,
-    ) -> Result<Self, StorageError> {
-        let path =
-            crate::operations::move_directory_async(&self.path, destination, options).await?;
-        Ok(Self { path })
+        let path = crate::operations::create_directory_all_async(&self.absolute_path).await?;
+        Ok(Self {
+            absolute_path: path,
+            relative_path: self.relative_path.clone(),
+        })
     }
 
     /// Async variant of [`Self::rename`].
     pub async fn rename_async(&self, new_name: impl Into<String>) -> Result<Self, StorageError> {
-        let path = crate::operations::rename_directory_async(&self.path, new_name).await?;
-        Ok(Self { path })
+        let path = crate::operations::rename_directory_async(&self.absolute_path, new_name).await?;
+        Ok(Self::from_absolute(path))
     }
 
     /// Async variant of [`Self::delete_with_options`].
     pub async fn delete_async(&self, options: DirectoryDeleteOptions) -> Result<(), StorageError> {
-        crate::operations::delete_directory_async(&self.path, options).await
+        crate::operations::delete_directory_async(&self.absolute_path, options).await
     }
 }

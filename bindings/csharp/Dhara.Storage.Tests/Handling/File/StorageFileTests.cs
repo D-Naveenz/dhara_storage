@@ -15,21 +15,38 @@ public sealed class StorageFileTests
 
         Assert.True(file.Exists);
         Assert.Equal("hello world", file.ReadText());
-        Assert.True(file.Information.Size > 0);
+        Assert.True(file.Size().Bytes > 0);
     }
 
     [Fact]
-    public void RefreshInformation_WithAnalysis_ReturnsTypedAnalysis()
+    public void Analyze_CachesReport_AndEnrichesSubsequentMetadata()
     {
         using var temp = new TemporaryDirectory();
         var path = temp.PathFor("sample.txt");
         System.IO.File.WriteAllText(path, "typed analysis");
         var file = DharaStorage.File(path);
 
-        var info = file.RefreshInformation(includeAnalysis: true);
+        var report = file.Analyze();
+        var metadata = file.Metadata;
 
-        Assert.NotNull(info.Analysis);
-        Assert.True(info.Analysis.BytesScanned > 0);
+        Assert.True(report.BytesScanned > 0);
+        Assert.NotNull(metadata.Analysis);
+        Assert.Equal(report.TopMimeType, metadata.Analysis.TopMimeType);
+        Assert.False(string.IsNullOrWhiteSpace(metadata.FileType.Name));
+    }
+
+    [Fact]
+    public void RefreshMetadata_WithAnalysis_ReturnsTypedAnalysis()
+    {
+        using var temp = new TemporaryDirectory();
+        var path = temp.PathFor("sample.txt");
+        System.IO.File.WriteAllText(path, "typed analysis");
+        var file = DharaStorage.File(path);
+
+        var metadata = file.RefreshMetadata(includeAnalysis: true);
+
+        Assert.NotNull(metadata.Analysis);
+        Assert.True(metadata.Analysis.BytesScanned > 0);
     }
 
     [Fact]
@@ -40,14 +57,17 @@ public sealed class StorageFileTests
         var sourcePath = temp.PathFor("source.bin");
         await System.IO.File.WriteAllBytesAsync(sourcePath, Enumerable.Repeat((byte)42, 512 * 1024).ToArray(), cancellationToken);
         var file = DharaStorage.File(sourcePath);
-        var reported = new List<StorageProgress>();
-        var progress = new SynchronousProgress<StorageProgress>(reported.Add);
+        var reported = new List<StorageProcessEvent>();
+        var progress = new SynchronousProgress<StorageProcessEvent>(reported.Add);
 
-        var copy = await file.CopyAsync(temp.PathFor("copy.bin"), progress, overwrite: false, cancellationToken);
+        var destination = await file.CopyAsync(temp.PathFor("copy.bin"), progress, overwrite: false, cancellationToken);
 
-        Assert.True(System.IO.File.Exists(copy.FullPath));
+        Assert.NotNull(destination);
+        Assert.True(System.IO.File.Exists(destination));
         Assert.NotEmpty(reported);
-        Assert.True(reported[^1].BytesTransferred > 0);
+        Assert.Contains(reported, e => e is StorageProcessStarted);
+        Assert.Contains(reported, e => e is StorageProcessBytes { BytesTransferred: > 0 });
+        Assert.Contains(reported, e => e is StorageProcessCompleted);
     }
 
     [Fact]

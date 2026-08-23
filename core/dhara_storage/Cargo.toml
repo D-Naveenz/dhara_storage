@@ -24,9 +24,9 @@ notify = "8.2"
 once_cell = "1.21"
 file_icon_provider = "1.0"
 dhara_storage_core.workspace = true
+tempfile = "3.27"
 thiserror = "2.0"
 tokio = { version = "1.53", features = ["rt"], optional = true }
-tracing = "0.1"
 
 [dev-dependencies]
 tempfile = "3.27"
@@ -36,6 +36,4 @@ tokio = { version = "1.53", features = ["macros", "rt-multi-thread"] }
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
-    "Win32_UI_Shell",
-    "Win32_UI_WindowsAndMessaging",
 ] }

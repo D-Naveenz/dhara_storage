@@ -6,10 +6,11 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
+use std::time::Instant;
 
 use dhara_storage::{
-    DirectoryDeleteOptions, StorageCancellationToken, StorageProgress, TransferOptions,
-    WriteOptions,
+    DirectoryDeleteOptions, ProcessEventReporter, StorageCancellationToken, StorageProcessEvent,
+    TransferOptions, WriteOptions,
 };
 
 use crate::errors::{ErrorPayload, FfiFailure};
@@ -63,6 +64,7 @@ pub(crate) struct SharedProgressState {
     pub(crate) total_bytes: Option<u64>,
     pub(crate) bytes_transferred: u64,
     pub(crate) bytes_per_second: f64,
+    pub(crate) started_at: Option<Instant>,
 }
 
 #[derive(Debug)]
@@ -96,12 +98,32 @@ pub struct NativeWriteSession {
     pub(crate) completed: AtomicBool,
 }
 
-impl dhara_storage::ProgressReporter for NativeProgressReporter {
-    fn report(&self, progress: StorageProgress) {
+impl ProcessEventReporter for NativeProgressReporter {
+    fn report(&self, event: StorageProcessEvent) {
         if let Ok(mut state) = self.state.progress.lock() {
-            state.total_bytes = progress.total_bytes;
-            state.bytes_transferred = progress.bytes_transferred;
-            state.bytes_per_second = progress.bytes_per_second;
+            match event {
+                StorageProcessEvent::Started { total_bytes, .. } => {
+                    state.total_bytes = Some(total_bytes);
+                    state.bytes_transferred = 0;
+                    state.bytes_per_second = 0.0;
+                    state.started_at = Some(Instant::now());
+                }
+                StorageProcessEvent::Bytes { bytes_transferred } => {
+                    state.bytes_transferred = bytes_transferred;
+                    if let Some(started_at) = state.started_at {
+                        let elapsed = started_at.elapsed().as_secs_f64();
+                        state.bytes_per_second = if elapsed > 0.0 {
+                            bytes_transferred as f64 / elapsed
+                        } else {
+                            0.0
+                        };
+                    }
+                }
+                StorageProcessEvent::CurrentItem { .. }
+                | StorageProcessEvent::Completed { .. }
+                | StorageProcessEvent::Failed { .. }
+                | StorageProcessEvent::Cancelled { .. } => {}
+            }
         }
     }
 }
@@ -114,6 +136,7 @@ impl NativeOperationHandle {
                 total_bytes: None,
                 bytes_transferred: 0,
                 bytes_per_second: 0.0,
+                started_at: None,
             }),
             result: Mutex::new(None),
             error: Mutex::new(None),
@@ -235,7 +258,7 @@ impl NativeWriteSession {
 
 pub(crate) fn progress_reporter(
     handle: &Arc<NativeOperationHandle>,
-) -> Arc<dyn dhara_storage::ProgressReporter> {
+) -> Arc<dyn ProcessEventReporter> {
     Arc::new(NativeProgressReporter {
         state: handle.clone(),
     })

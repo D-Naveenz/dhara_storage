@@ -1,4 +1,4 @@
-//! File-definition package support (DSFD) — first shipped framework slice.
+//! File-definition package support (DSFD) — framework definitions slice.
 //!
 //! Owns the on-disk package format, FlatBuffers schema, owned model types, and
 //! encode/decode helpers. The compile-time embedded `filedefs.dat` asset lives

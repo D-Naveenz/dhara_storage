@@ -4,7 +4,6 @@ use std::collections::BTreeSet;
 
 use dhara_storage_core as core_pkg;
 use once_cell::sync::Lazy;
-use tracing::{debug, info};
 
 use crate::error::StorageError;
 
@@ -103,7 +102,6 @@ impl DefinitionDatabase {
 ///
 /// Returns an error when the embedded `filedefs.dat` asset cannot be decoded.
 pub fn bundled_definition_package() -> Result<&'static DefinitionPackage, StorageError> {
-    debug!(target: "dhara_storage::definitions", "loading bundled definition package");
     BUNDLED_PACKAGE
         .as_ref()
         .map_err(|message| StorageError::DefinitionsLoad {
@@ -117,11 +115,6 @@ pub fn bundled_definition_package() -> Result<&'static DefinitionPackage, Storag
 ///
 /// Returns an error when the package cannot be parsed, validated, or deserialized.
 pub fn decode_definition_package(bytes: &[u8]) -> Result<DefinitionPackage, StorageError> {
-    info!(
-        target: "dhara_storage::definitions",
-        byte_len = bytes.len(),
-        "decoding DSFD definition package"
-    );
     core_pkg::decode_definition_package(bytes).map_err(|err| StorageError::DefinitionsLoad {
         message: err.to_string(),
     })

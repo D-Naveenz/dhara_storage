@@ -12,10 +12,12 @@ Use this crate when you want those capabilities from Rust—with memory safety, 
 
 - Signature-based typing via bundled `filedefs.dat` (not extension-only guessing)
 - `FileStorage` / `DirectoryStorage` handles for navigation and I/O
-- Sync-first copy / move / delete with optional progress and cancellation
+- Analyze on the handle (`analyze`), then `metadata()` for attrs/perms/type enriched from the cache
+- Sync-first copy / move / delete; copy/move start a `StorageProcess` (await or wait) with `StorageProcessEvent` progress and cancellation
+- Shared opens via `open_for_read` / `open_for_write` (`FileShareMode`, optional lock timeout; write default exclusive)
 - Debounced directory change events
-- Shell icons (RGBA) and Windows shell details where supported
-- Optional Tokio wrappers (`async-tokio`)
+- Shell icons (RGBA) on supported desktops
+- Optional Tokio wrappers (`async-tokio`) for non–copy/move helpers
 
 ## Prerequisites
 
@@ -25,13 +27,13 @@ Use this crate when you want those capabilities from Rust—with memory safety, 
 
 ```toml
 [dependencies]
-dhara_storage = "0.9.23"
+dhara_storage = "0.10.1"
 ```
 
 Optional async:
 
 ```toml
-dhara_storage = { version = "0.9.23", features = ["async-tokio"] }
+dhara_storage = { version = "0.10.1", features = ["async-tokio"] }
 ```
 
 ## Usage
@@ -45,7 +47,19 @@ let report = analyze_path("sample.png")?;
 # Ok::<(), dhara_storage::StorageError>(())
 ```
 
-### 2. Open a file handle and read
+### 2. Analyze on a handle, then read metadata
+
+```rust
+use dhara_storage::FileStorage;
+
+let file = FileStorage::from_existing("sample.png")?;
+let report = file.analyze()?;
+let metadata = file.metadata()?; // type / extension enriched from the cached analysis
+let _ = (report, metadata);
+# Ok::<(), dhara_storage::StorageError>(())
+```
+
+### 3. Open a file handle and read
 
 ```rust
 use dhara_storage::FileStorage;
@@ -54,7 +68,7 @@ let bytes = FileStorage::from_existing("sample.png")?.read()?;
 # Ok::<(), dhara_storage::StorageError>(())
 ```
 
-### 3. List a directory
+### 4. List a directory
 
 ```rust
 use dhara_storage::DirectoryStorage;
@@ -63,29 +77,34 @@ let files = DirectoryStorage::from_existing(".")?.files()?;
 # Ok::<(), dhara_storage::StorageError>(())
 ```
 
-### 4. Copy with progress
+### 5. Copy with process events
 
 ```rust
 use std::sync::Arc;
-use dhara_storage::{FileStorage, StorageProgress, TransferOptions};
+use dhara_storage::{FileStorage, StorageProcessEvent, TransferOptions};
 
-let progress = Arc::new(|update: StorageProgress| {
-    println!("{} bytes", update.bytes_transferred);
+let progress = Arc::new(|event: StorageProcessEvent| {
+    if let StorageProcessEvent::Bytes { bytes_transferred } = event {
+        println!("{bytes_transferred} bytes");
+    }
 });
 
+// Sync: starts a process and waits inside (returns ()).
 FileStorage::from_existing("input.bin")?.copy_to_with_options(
     "output.bin",
     TransferOptions {
         overwrite: true,
-        buffer_size: None,
         progress: Some(progress),
-        cancellation_token: None,
+        ..TransferOptions::default()
     },
 )?;
+
+// Or start and await the process (destination on ProcessOutcome).
+// let outcome = FileStorage::from_existing("input.bin")?
+//     .start_copy_to_with_options("output.bin", TransferOptions { overwrite: true, ..Default::default() })
+//     .await?;
 # Ok::<(), dhara_storage::StorageError>(())
 ```
-
-Install a `tracing` subscriber in your app if you want structured logs.
 
 ## Platform notes
 
@@ -93,15 +112,16 @@ Install a `tracing` subscriber in your app if you want structured logs.
 |------------|---------|-------|-------|
 | Analysis, I/O, watching | yes | yes | yes |
 | `ShellIcon` (RGBA) | yes | yes* | yes |
-| `ShellDetails` | yes | no | no |
 
 \*Linux GTK icons may require the main thread. `ShellIcon` returns raw RGBA pixels—encode to PNG in your app if needed.
 
 ## Related
 
-- DSFD framework: [dhara_storage_core][core]
+- Framework crate (DSFD, process session / events, portable types): [dhara_storage_core][core]
 - Product overview: [Dhara Storage][root]
 - API docs: [docs.rs/dhara_storage][docs-rs]
+
+Extension crates may depend on this runtime and compose `FileStorage` / `DirectoryStorage` (for example a future archives crate). Apps that need a closed mixed collection of handle kinds should use a consumer-owned enum.
 
 ## License
 

@@ -22,17 +22,17 @@ public sealed class StorageDirectoryTests
     }
 
     [Fact]
-    public void RefreshInformation_WithSummary_ReturnsTypedSummary()
+    public void RefreshMetadata_WithSummary_ReturnsTypedSummary()
     {
         using var temp = new TemporaryDirectory();
         System.IO.Directory.CreateDirectory(temp.PathFor("docs"));
         System.IO.File.WriteAllText(temp.PathFor("docs", "a.txt"), "A");
         var directory = DharaStorage.Directory(temp.PathFor("docs"));
 
-        var info = directory.RefreshInformation(includeSummary: true);
+        var metadata = directory.RefreshMetadata(includeSummary: true);
 
-        Assert.NotNull(info.Summary);
-        Assert.True(info.Summary.FileCount >= 1);
+        Assert.NotNull(metadata.Summary);
+        Assert.True(metadata.Summary.FileCount >= 1);
     }
 
     [Fact]
@@ -43,13 +43,14 @@ public sealed class StorageDirectoryTests
         System.IO.Directory.CreateDirectory(temp.PathFor("source", "nested"));
         System.IO.File.WriteAllText(temp.PathFor("source", "nested", "file.txt"), "payload");
         var directory = DharaStorage.Directory(temp.PathFor("source"));
-        var progressValues = new List<StorageProgress>();
-        var progress = new SynchronousProgress<StorageProgress>(progressValues.Add);
+        var progressValues = new List<StorageProcessEvent>();
+        var progress = new SynchronousProgress<StorageProcessEvent>(progressValues.Add);
 
-        var copy = await directory.CopyAsync(temp.PathFor("copy"), progress, overwrite: false, cancellationToken);
+        var destination = await directory.CopyAsync(temp.PathFor("copy"), progress, overwrite: false, cancellationToken);
 
-        Assert.True(System.IO.Directory.Exists(copy.FullPath));
-        Assert.True(System.IO.File.Exists(Path.Combine(copy.FullPath, "nested", "file.txt")));
+        Assert.NotNull(destination);
+        Assert.True(System.IO.Directory.Exists(destination));
+        Assert.True(System.IO.File.Exists(Path.Combine(destination, "nested", "file.txt")));
         Assert.NotEmpty(progressValues);
     }
 }

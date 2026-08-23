@@ -1,5 +1,5 @@
 using Dhara.Storage.Models.Analysis;
-using Dhara.Storage.Models.Information;
+using Dhara.Storage.Models.Metadata;
 using Dhara.Storage.Models.Progress;
 using Dhara.Storage.Models.Watching;
 using Dhara.Storage.Sd.V1;
@@ -9,98 +9,64 @@ namespace Dhara.Storage.Core;
 /// <summary>
 /// Builds public model records from <c>dhara-sd</c> gRPC responses.
 /// </summary>
-/// <remarks>The daemon and this process always run on the same host, so metadata the current
-/// protocol does not carry yet (OS attributes, timestamps, link targets) is filled in from
-/// <see cref="FileSystemInfo"/> instead of round-tripping for it.</remarks>
+/// <remarks><c>GetFileMetadata</c> / <c>GetDirectoryMetadata</c> responses already carry attributes,
+/// permissions, timestamps, link targets, and (for directories) recursive summaries computed natively;
+/// this factory only maps the wire shapes onto public records, it does not re-derive metadata locally.</remarks>
 internal static class DaemonModelFactory
 {
-    private static readonly string[] SizeUnits = ["B", "KB", "MB", "GB", "TB", "PB"];
-
-    /// <summary>Builds a <see cref="FileInformation"/> snapshot from a <c>GetFileInfo</c> response.</summary>
-    internal static FileInformation ToFileInformation(GetFileInfoResponse response, AnalysisReport? analysis)
-    {
-        var attributes = TryGetAttributes(response.Path);
-        var (created, modified, accessed) = TryGetTimestamps(response.Path);
-        var linkTarget = TryGetLinkTarget(response.Path, isDirectory: false);
-        var extension = response.HasExtension ? response.Extension : NormalizeExtension(Path.GetExtension(response.Path));
-
-        return new FileInformation(
-            response.Path,
+    /// <summary>Builds a <see cref="FileMetadata"/> snapshot from a <c>GetFileMetadata</c> response.</summary>
+    internal static FileMetadata ToFileMetadata(GetFileMetadataResponse response, AnalysisReport? analysis) =>
+        new(
             response.Name,
-            response.IsReadOnly,
-            attributes.HasFlag(FileAttributes.Hidden),
-            attributes.HasFlag(FileAttributes.System),
-            attributes.HasFlag(FileAttributes.Temporary),
-            linkTarget is not null,
-            linkTarget,
-            created,
-            modified,
-            accessed,
-            response.Name,
-            response.Size,
-            FormatSize(response.Size),
-            extension,
+            ToAttributes(response.Attributes),
+            ToPermissions(response.Permissions),
+            response.IsSymbolicLink,
+            response.HasLinkTarget ? response.LinkTarget : null,
+            response.IsTemporary,
+            ToTimestamp(response.HasCreatedAtUnixMs, response.CreatedAtUnixMs),
+            ToTimestamp(response.HasModifiedAtUnixMs, response.ModifiedAtUnixMs),
+            ToTimestamp(response.HasAccessedAtUnixMs, response.AccessedAtUnixMs),
+            ToStorageType(response.FileType),
+            ToFileExtension(response.Extension),
             analysis,
-            ToShellIcon(response.Icon),
-            ToShellDetails(
-                response.HasShellDisplayName ? response.ShellDisplayName : null,
-                response.HasShellTypeName ? response.ShellTypeName : null));
-    }
+            ToShellIcon(response.Icon));
 
-    /// <summary>Builds a <see cref="DirectoryInformation"/> snapshot from a <c>GetDirectoryInfo</c> response.</summary>
-    internal static DirectoryInformation ToDirectoryInformation(GetDirectoryInfoResponse response, DirectorySummary? summary)
+    /// <summary>
+    /// Enriches a metadata snapshot from a handle-cached <see cref="AnalysisReport"/>
+    /// (type name, MIME, and detected extension), matching native <c>FileMetadata::apply_analysis</c>.
+    /// </summary>
+    internal static FileMetadata EnrichFileMetadata(FileMetadata metadata, AnalysisReport analysis)
     {
-        var attributes = TryGetAttributes(response.Path);
-        var (created, modified, accessed) = TryGetTimestamps(response.Path);
-        var linkTarget = TryGetLinkTarget(response.Path, isDirectory: true);
-
-        return new DirectoryInformation(
-            response.Path,
-            response.Name,
-            attributes.HasFlag(FileAttributes.ReadOnly),
-            attributes.HasFlag(FileAttributes.Hidden),
-            attributes.HasFlag(FileAttributes.System),
-            attributes.HasFlag(FileAttributes.Temporary),
-            linkTarget is not null,
-            linkTarget,
-            created,
-            modified,
-            accessed,
-            response.Name,
-            summary,
-            ToShellIcon(response.Icon),
-            ToShellDetails(
-                response.HasShellDisplayName ? response.ShellDisplayName : null,
-                response.HasShellTypeName ? response.ShellTypeName : null));
-    }
-
-    /// <summary>Computes a recursive size/count summary for <paramref name="path"/> from the local filesystem.</summary>
-    /// <remarks>There is no daemon RPC for this yet; since the daemon and this process share a
-    /// filesystem, walking the tree locally avoids a chatty per-entry round trip.</remarks>
-    internal static DirectorySummary BuildDirectorySummary(string path)
-    {
-        ulong totalSize = 0;
-        ulong fileCount = 0;
-        ulong directoryCount = 0;
-
-        if (Directory.Exists(path))
+        var topLabel = analysis.Matches.Count > 0 ? analysis.Matches[0].FileTypeLabel : null;
+        var typeName = string.IsNullOrEmpty(topLabel) ? metadata.FileType.Name : topLabel;
+        var fileType = new StorageType(typeName, analysis.TopMimeType ?? metadata.FileType.MimeType);
+        var extension = new FileExtension(
+            metadata.Extension.Source,
+            analysis.TopDetectedExtension,
+            FormatExtensionDisplay(metadata.Extension.Source, analysis.TopDetectedExtension));
+        return metadata with
         {
-            foreach (var entry in EnumerateFileSystemInfosSafely(path))
-            {
-                if (entry is FileInfo file)
-                {
-                    fileCount++;
-                    totalSize += (ulong)file.Length;
-                }
-                else if (entry is DirectoryInfo)
-                {
-                    directoryCount++;
-                }
-            }
-        }
-
-        return new DirectorySummary(totalSize, fileCount, directoryCount, FormatSize(totalSize));
+            FileType = fileType,
+            Extension = extension,
+            Analysis = analysis,
+        };
     }
+
+    /// <summary>Builds a <see cref="DirectoryMetadata"/> snapshot from a <c>GetDirectoryMetadata</c> response.</summary>
+    internal static DirectoryMetadata ToDirectoryMetadata(GetDirectoryMetadataResponse response) =>
+        new(
+            response.Name,
+            ToAttributes(response.Attributes),
+            ToPermissions(response.Permissions),
+            response.IsSymbolicLink,
+            response.HasLinkTarget ? response.LinkTarget : null,
+            response.IsTemporary,
+            ToTimestamp(response.HasCreatedAtUnixMs, response.CreatedAtUnixMs),
+            ToTimestamp(response.HasModifiedAtUnixMs, response.ModifiedAtUnixMs),
+            ToTimestamp(response.HasAccessedAtUnixMs, response.AccessedAtUnixMs),
+            response.TypeName,
+            ToDirectorySummary(response),
+            ToShellIcon(response.Icon));
 
     /// <summary>Builds an <see cref="AnalysisReport"/> from an <c>AnalyzePath</c> response.</summary>
     internal static AnalysisReport ToAnalysisReport(AnalyzePathResponse response, string path)
@@ -136,22 +102,68 @@ internal static class DaemonModelFactory
             ToChangeType(watchEvent.ChangeType),
             DateTimeOffset.FromUnixTimeMilliseconds(watchEvent.ObservedUnixMillis));
 
-    /// <summary>Converts a streamed <c>CopyFileProgress</c> update into the public <see cref="StorageProgress"/> model.</summary>
-    internal static StorageProgress ToProgress(CopyFileProgress progress) =>
-        new(progress.HasTotalBytes ? progress.TotalBytes : null, progress.BytesTransferred, progress.BytesPerSecond);
-
-    /// <summary>Formats a byte count using the same binary (1024-based) unit ladder as the native runtime.</summary>
-    internal static string FormatSize(ulong bytes)
-    {
-        double size = bytes;
-        var unitIndex = 0;
-        while (size >= 1024 && unitIndex < SizeUnits.Length - 1)
+    /// <summary>Converts a streamed <c>StorageProcessEventMessage</c> into the public process event model.</summary>
+    internal static StorageProcessEvent? ToProcessEvent(StorageProcessEventMessage message) =>
+        message.KindCase switch
         {
-            size /= 1024;
-            unitIndex++;
+            StorageProcessEventMessage.KindOneofCase.Started =>
+                new StorageProcessStarted(message.Started.TotalBytes, message.Started.TotalFiles),
+            StorageProcessEventMessage.KindOneofCase.CurrentItem =>
+                new StorageProcessCurrentItem(
+                    message.CurrentItem.Path,
+                    message.CurrentItem.FileSize,
+                    message.CurrentItem.FileIndex),
+            StorageProcessEventMessage.KindOneofCase.Bytes =>
+                new StorageProcessBytes(message.Bytes.BytesTransferred),
+            StorageProcessEventMessage.KindOneofCase.Completed =>
+                new StorageProcessCompleted(message.Completed.HasDestination ? message.Completed.Destination : null),
+            StorageProcessEventMessage.KindOneofCase.Failed =>
+                new StorageProcessFailed(message.Failed.Message),
+            StorageProcessEventMessage.KindOneofCase.Cancelled =>
+                new StorageProcessCancelled(message.Cancelled.Operation),
+            _ => null,
+        };
+
+    /// <summary>Maps a wire size payload onto the public <see cref="StorageSize"/> model.</summary>
+    /// <remarks>Byte counts and formatted labels are computed natively; this factory does not
+    /// re-derive formatting locally.</remarks>
+    internal static StorageSize ToStorageSize(StorageSizePayload payload) =>
+        new(payload.Bytes, payload.Formatted);
+
+    private static StorageAttributes ToAttributes(StorageAttributesPayload? payload) =>
+        payload is null
+            ? new StorageAttributes(false, false, false)
+            : new StorageAttributes(payload.ReadOnly, payload.Hidden, payload.System);
+
+    private static StoragePermissions ToPermissions(StoragePermissionsPayload? payload) =>
+        payload is null
+            ? new StoragePermissions(false, false, false, false)
+            : new StoragePermissions(payload.CanRead, payload.CanWrite, payload.CanModify, payload.CanExecute);
+
+    private static StorageType ToStorageType(StorageTypePayload? payload) =>
+        payload is null
+            ? new StorageType(string.Empty, null)
+            : new StorageType(payload.Name, payload.HasMimeType ? payload.MimeType : null);
+
+    private static FileExtension ToFileExtension(FileExtensionPayload? payload) =>
+        payload is null
+            ? new FileExtension(null, null, string.Empty)
+            : new FileExtension(
+                payload.HasSource ? payload.Source : null,
+                payload.HasDetected ? payload.Detected : null,
+                payload.Display);
+
+    private static DirectorySummary? ToDirectorySummary(GetDirectoryMetadataResponse response)
+    {
+        if (response.Size is null)
+        {
+            return null;
         }
 
-        return unitIndex == 0 ? $"{bytes} {SizeUnits[0]}" : $"{size:0.##} {SizeUnits[unitIndex]}";
+        return new DirectorySummary(
+            new StorageSize(response.Size.Bytes, response.Size.Formatted),
+            response.HasFileCount ? response.FileCount : 0,
+            response.HasDirectoryCount ? response.DirectoryCount : 0);
     }
 
     private static ShellIcon? ToShellIcon(ShellIconPayload? payload)
@@ -167,15 +179,8 @@ internal static class DaemonModelFactory
             payload.RgbaPixels.Memory);
     }
 
-    private static ShellDetails? ToShellDetails(string? displayName, string? typeName)
-    {
-        if (displayName is null && typeName is null)
-        {
-            return null;
-        }
-
-        return new ShellDetails(displayName, typeName);
-    }
+    private static DateTimeOffset? ToTimestamp(bool hasValue, long unixMillis) =>
+        hasValue ? DateTimeOffset.FromUnixTimeMilliseconds(unixMillis) : null;
 
     private static StorageChangeType ToChangeType(uint value) => value switch
     {
@@ -196,98 +201,20 @@ internal static class DaemonModelFactory
     private static string? NormalizeExtension(string? extension) =>
         string.IsNullOrEmpty(extension) ? null : extension.TrimStart('.');
 
-    private static FileAttributes TryGetAttributes(string path)
+    private static string FormatExtensionDisplay(string? source, string? detected)
     {
-        try
-        {
-            return File.GetAttributes(path);
-        }
-        catch (IOException)
-        {
-            return FileAttributes.Normal;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return FileAttributes.Normal;
-        }
-    }
+        static string? Upper(string? value) =>
+            string.IsNullOrEmpty(value) ? null : value.ToUpperInvariant();
 
-    private static (DateTimeOffset? Created, DateTimeOffset? Modified, DateTimeOffset? Accessed) TryGetTimestamps(string path)
-    {
-        try
+        var src = Upper(source);
+        var det = Upper(detected);
+        return (src, det) switch
         {
-            return (
-                new DateTimeOffset(File.GetCreationTimeUtc(path), TimeSpan.Zero),
-                new DateTimeOffset(File.GetLastWriteTimeUtc(path), TimeSpan.Zero),
-                new DateTimeOffset(File.GetLastAccessTimeUtc(path), TimeSpan.Zero));
-        }
-        catch (IOException)
-        {
-            return (null, null, null);
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return (null, null, null);
-        }
-    }
-
-    private static string? TryGetLinkTarget(string path, bool isDirectory)
-    {
-        try
-        {
-            FileSystemInfo info = isDirectory ? new DirectoryInfo(path) : new FileInfo(path);
-            return info.LinkTarget;
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
-
-    private static IEnumerable<FileSystemInfo> EnumerateFileSystemInfosSafely(string path)
-    {
-        IEnumerator<FileSystemInfo>? enumerator = null;
-        try
-        {
-            enumerator = new DirectoryInfo(path).EnumerateFileSystemInfos("*", SearchOption.AllDirectories).GetEnumerator();
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-
-        if (enumerator is null)
-        {
-            yield break;
-        }
-
-        using (enumerator)
-        {
-            while (true)
-            {
-                FileSystemInfo current;
-                try
-                {
-                    if (!enumerator.MoveNext())
-                    {
-                        break;
-                    }
-
-                    current = enumerator.Current;
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    break;
-                }
-
-                yield return current;
-            }
-        }
+            (null, null) => string.Empty,
+            (not null, null) => src,
+            (null, not null) => det,
+            (not null, not null) when src == det => src,
+            _ => $"{src} ({det})",
+        };
     }
 }

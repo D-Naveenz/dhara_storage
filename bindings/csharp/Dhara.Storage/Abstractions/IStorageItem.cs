@@ -16,7 +16,15 @@ public interface IStorageItem : IDisposable
     /// <remarks>The path is normalized to a full path when the wrapper is created or when an operation
     /// changes the item's location. The value may continue to point to a missing path after delete or move
     /// operations until the instance is refreshed by the API that changed it.</remarks>
-    string FullPath { get; }
+    string AbsolutePath { get; }
+
+    /// <summary>
+    /// Gets the original relative path this instance was constructed or relocated with, when one was supplied.
+    /// </summary>
+    /// <remarks>This mirrors <see cref="AbsolutePath"/> resolution: it is <see langword="null"/> when the
+    /// wrapper was constructed from (or last relocated to) an absolute path, and is cleared by operations that
+    /// resolve to a definite location (for example rename).</remarks>
+    string? RelativePath { get; }
 
     /// <summary>
     /// Gets the last path segment for the current item.

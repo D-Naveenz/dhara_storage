@@ -29,9 +29,7 @@ prost = "0.14"
 futures = "0.3"
 async-stream = "0.3"
 tokio-stream = { version = "0.1", features = ["sync"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-uuid = { version = "1.24", features = ["v4"] }
+uuid = { version = "1.25", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
