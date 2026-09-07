@@ -32,7 +32,7 @@ jobs:
       - name: Probe for existing drot-linux-x64 artifact
         id: probe
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           github_token: ${{ secrets.DROT_ARTIFACTS_TOKEN }}
           repo: D-Naveenz/dhara_repo_orchestration

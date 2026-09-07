@@ -91,7 +91,7 @@ jobs:
 
       - name: Download PR CI native stage
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: package-pipeline.yml
           commit: ${{ steps.artifact-commit.outputs.sha }}
@@ -101,7 +101,7 @@ jobs:
 
       - name: Download NuGet package artifact
         continue-on-error: true
-        uses: dawidd6/action-download-artifact@v21
+        uses: dawidd6/action-download-artifact@v24
         with:
           workflow: package-pipeline.yml
           commit: ${{ steps.artifact-commit.outputs.sha }}
