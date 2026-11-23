@@ -40,7 +40,7 @@ windows = { version = "0.62", features = [
 ] }
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.31", features = ["socket", "uio", "signal", "process"] }
+nix = { version = "0.32", features = ["socket", "uio", "signal", "process"] }
 
 [build-dependencies]
 tonic-prost-build = "0.14"
